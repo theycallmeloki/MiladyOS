@@ -1,0 +1,56 @@
+jenkins:
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "SLACK_API_KEY"
+            value: "${SLACK_API_KEY}"
+          - key: "GITHUB_TOKEN"
+            value: "${GITHUB_TOKEN}"
+          - key: "CONTAINER_REGISTRY"
+            value: "${CONTAINER_REGISTRY}"
+          - key: "DOCKERHUB_USERNAME"
+            value: "${DOCKERHUB_USERNAME}"
+          - key: "DOCKERHUB_PASSWORD"
+            value: "${DOCKERHUB_PASSWORD}"
+          - key: "PUSHBULLET_API_KEY"
+            value: "${PUSHBULLET_API_KEY}"
+  systemMessage: "Milady can stay irrational longer than Jenkins can stay solvent\n\n"
+  numExecutors: 5
+  scmCheckoutRetryCount: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+      - id: ${JENKINS_ADMIN_ID}
+        password: ${JENKINS_ADMIN_PASSWORD}
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+      - "Overall/Administer:admin"
+      - "Overall/Read:authenticated"
+  remotingSecurity:
+    enabled: true
+security:
+  queueItemAuthenticator:
+    authenticators:
+    - global:
+        strategy: triggeringUsersAuthorizationStrategy
+groovy:
+  - script: >
+      import hudson.model.User;
+      import jenkins.security.ApiTokenProperty;
+      import groovy.json.JsonOutput;
+      import java.io.OutputStreamWriter;
+
+      def token = System.getenv("API_TOKEN");
+
+      // Get the user and ApiTokenProperty;
+      def user = User.get('admin');
+      def apiTokenProperty = user.getProperty(ApiTokenProperty.class);
+
+      // Generate new fixed token
+      def result = apiTokenProperty.tokenStore.addFixedNewToken("admin-token", token);
+
+      // Log the token (this is sensitive information, be careful);
+      println("Token: " + result.plainValue);
