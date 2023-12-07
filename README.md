@@ -1,4 +1,7 @@
 # MiladyOS
+
+![F_HolYpbEAA8RPg](https://github.com/theycallmeloki/MiladyOS/assets/3431687/b472633c-37f7-4ab2-8b80-abc639a8ea3c)
+
 milady skinned jenkins with optimized defaults for maximizing gpu utilization accross a cluster
 
 
