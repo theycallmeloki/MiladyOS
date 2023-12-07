@@ -27,7 +27,7 @@ jobs:
       uses: docker/build-push-action@v3
       with:
         push: true
-        tags: ogmiladyloki/yourimage:latest
+        tags: ogmiladyloki/miladyos:latest
 
     - name: Logout of Docker Hub
       run: docker logout
