@@ -54,7 +54,6 @@ docker-java-api
 docker-plugin
 docker-workflow
 durable-task
-dynamic-extended-choice-parameter
 dynamic-search-view
 echarts-api
 envinject-api
