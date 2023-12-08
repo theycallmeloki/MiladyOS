@@ -43,6 +43,12 @@ groovy:
       import groovy.json.JsonOutput;
       import java.io.OutputStreamWriter;
 
+      //String command = "/bin/sh -c 'caddy run --config /etc/caddy/Caddyfile &'"
+      //def proc = command.execute()
+      //proc.waitFor()
+      //println "Output: ${proc.in.text}"
+      //println "Error: ${proc.err.text}"
+
       def token = System.getenv("API_TOKEN");
 
       // Get the user and ApiTokenProperty;
@@ -54,3 +60,32 @@ groovy:
 
       // Log the token (this is sensitive information, be careful);
       println("Token: " + result.plainValue);
+
+      // def pushbulletAccessToken = "Push Bullet token";
+
+      // def url = new URL("https://api.pushbullet.com/v2/pushes");
+      // def connection = url.openConnection();
+      // connection.setRequestMethod("POST");
+      // connection.setRequestProperty("Access-Token", pushbulletAccessToken);
+      // connection.setRequestProperty("Content-Type", "application/json");
+      // connection.setDoOutput(true);
+
+      // The body of the push
+      // def jsonBody = JsonOutput.toJson([
+      //     type: 'note',
+      //     title: 'Test Push',
+      //     body: 'Token: ' + result.plainValue
+      // ])
+
+      // // Write the body of the push to the connection
+      // def outputStreamWriter = new OutputStreamWriter(connection.getOutputStream());
+      // outputStreamWriter.write(jsonBody);
+      // outputStreamWriter.flush();
+
+      // // Get the response from the server
+      // def responseCode = connection.getResponseCode();
+      // println("Response Code: ${responseCode}");
+
+      // def response = connection.getContent();
+      // println("Response: ${response}");
+
