@@ -32,8 +32,6 @@ build-environment
 build-steps-from-json
 caffeine-api
 checks-api
-cloudbees-bitbucket-branch-source
-cloudbees-folder
 cloud-stats
 command-launcher
 commons-lang3-api
