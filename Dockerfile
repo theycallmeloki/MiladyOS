@@ -40,8 +40,14 @@ RUN ARCH=$(dpkg --print-architecture) && curl -LO "https://dl.k8s.io/release/$(c
 RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 \
     && chmod +x get_helm.sh && ./get_helm.sh
 
-# Copy your plugins to the Jenkins plugins reference directory
-COPY plugins/*.hpi /usr/share/jenkins/ref/plugins/
+# Install the CLI package
+RUN curl -L https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.10.0/jenkins-plugin-manager-2.10.0.jar -o /opt/jenkins-plugin-manager.jar 
+
+# Add the Jenkins Configuration as Code (JCasC) plugin
+COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+
+# Install plugins using plugins.txt
+RUN java -jar /opt/jenkins-plugin-manager.jar --plugin-file /usr/share/jenkins/ref/plugins.txt --verbose
 
 # Switch back to the jenkins user
 USER jenkins
