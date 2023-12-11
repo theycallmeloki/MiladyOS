@@ -19,6 +19,8 @@ milady skinned jenkins with optimized defaults for maximizing gpu utilization ac
 
 ## Pachyderm bootrstrapped from [edith-cli](https://github.com/theycallmeloki/edith-cli)
 
+### You will need [this script](https://gist.github.com/theycallmeloki/aa4df404c3df85c31dac91216e22f678) at the end of the edith-cli installation
+
 Add the following to the Dockerfile in the root section and build yourself a container, checkout builder.sh
 
 ```
