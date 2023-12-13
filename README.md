@@ -2,7 +2,7 @@
 
 ![F_HolYpbEAA8RPg](https://github.com/theycallmeloki/MiladyOS/assets/3431687/b472633c-37f7-4ab2-8b80-abc639a8ea3c)
 
-milady skinned jenkins with optimized defaults for maximizing gpu utilization accross a cluster
+milady skinned jenkins with optimized defaults for maximizing gpu utilization across a cluster
 
 
 ## Instructions to Build:
@@ -15,6 +15,15 @@ milady skinned jenkins with optimized defaults for maximizing gpu utilization ac
 ## Instructions to Run: 
 ```
 # docker run -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=admin --env JENKINS_ADMIN_PASSWORD=password -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
+```
+
+## Instructions to Ingress (Proof-Of-Work - Full node): 
+
+Look for the Caddyfile in the repo and update it to point to your domain
+You would also set the A record to point to your IP address on your domain provider
+
+```
+yourfancydomain.com
 ```
 
 ## Pachyderm bootrstrapped from [edith-cli](https://github.com/theycallmeloki/edith-cli)
