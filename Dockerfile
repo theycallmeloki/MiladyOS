@@ -45,21 +45,6 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master
 # Install iproute2 and avahi-daemon
 RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 
-# Install k3s CLI
-# RUN curl -sfL https://get.k3s.io -o install_k3s.sh && \
-#     chmod +x install_k3s.sh && \
-#     INSTALL_K3S_VERSION=${K3S_VERSION} \
-#     INSTALL_K3S_SKIP_START=true \
-#     INSTALL_K3S_SKIP_ENABLE=true \
-#     K3S_KUBECONFIG_MODE="644" \
-#     INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-init  --snapshotter=zfs --container-runtime-endpoint unix:///run/containerd/containerd.sock" \
-#     sh install_k3s.sh
-
-RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true \
-    INSTALL_K3S_VERSION=${K3S_VERSION} \
-    K3S_KUBECONFIG_MODE="644" \
-    INSTALL_K3S_SKIP_ENABLE=true sh -s - --docker
-
 # Install k3sup
 RUN curl -sLS https://get.k3sup.dev | sh
 

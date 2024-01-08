@@ -71,34 +71,6 @@ fi
 echo "Discovering Kubernetes server..."
 SERVER_IP=$(discover_k8s_server)
 
-# Switch to root user for k3s commands
-gosu root
-
-# Determine if this node will be a server or an agent
-if [ -n "$SERVER_IP" ] && [ "$SERVER_IP" != "$HOST_IP" ]; then
-    echo "Kubernetes server found at $SERVER_IP. Attempting to join as an agent..."
-    # Start k3s as agent
-    /usr/local/bin/k3s agent --server https://${SERVER_IP}:6443 --docker --token milady &
-else
-    echo "No Kubernetes server found or self is server. Bootstrapping a new cluster as server..."
-    # Start k3s server
-    /usr/local/bin/k3s server --node-name grill --docker --debug --bind-address ${HOST_IP} --node-ip ${HOST_IP} --flannel-backend none --disable-network-policy --cluster-init  --snapshotter zfs --https-listen-port 6443 --token milady &
-fi
-
-sleep 120
-
-# Check if k3s is running
-if ! pgrep -x "k3s" > /dev/null; then
-    echo "k3s did not start successfully. Exiting."
-    exit 1
-fi
-
-
-# Switch back to the jenkins user
-gosu jenkins
-
-# Sleep to allow k3s to initialize
-sleep 10
 
 # Start Jenkins in the foreground
 /usr/local/bin/jenkins.sh
