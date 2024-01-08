@@ -71,6 +71,5 @@ fi
 echo "Discovering Kubernetes server..."
 SERVER_IP=$(discover_k8s_server)
 
-
 # Start Jenkins in the foreground
 /usr/local/bin/jenkins.sh

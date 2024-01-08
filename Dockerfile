@@ -54,9 +54,6 @@ RUN apt-get update && apt-get install -y gosu
 # Install libcap2-bin for setcap utility
 RUN apt-get update && apt-get install -y libcap2-bin
 
-# Set capabilities on the k3s binary
-RUN setcap 'cap_net_bind_service=+ep' /usr/local/bin/k3s
-
 # Install the Jenkins CLI package
 RUN curl -L https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.10.0/jenkins-plugin-manager-2.10.0.jar -o /opt/jenkins-plugin-manager.jar 
 
