@@ -4,7 +4,8 @@ FROM jenkins/jenkins:lts-jdk11
 # Define Pachctl, Caddy versions
 ENV PACHCTL_TAG_VER 1.12.5
 ENV CADDY_TAG_VER 2.4.6
-ENV K3S_VERSION v1.20.4+k3s1
+ENV K3S_VERSION v1.29.0+k3s1
+ENV K3SUP_VERSION 0.13.5
 
 # Switch to root to install additional packages
 USER root
@@ -41,20 +42,28 @@ RUN ARCH=$(dpkg --print-architecture) && curl -LO "https://dl.k8s.io/release/$(c
 RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 \
     && chmod +x get_helm.sh && ./get_helm.sh
 
-# Install Avahi (mDNS)
-RUN apt-get update && apt-get install -y avahi-daemon avahi-discover avahi-utils libnss-mdns mdns-scan && \
-    systemctl enable avahi-daemon
+# Install iproute2 and avahi-daemon
+RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 
 # Install k3s CLI
-RUN curl -sfL https://get.k3s.io -o install_k3s.sh && \
-    chmod +x install_k3s.sh && \
-    INSTALL_K3S_VERSION=${K3S_VERSION} \
-    INSTALL_K3S_SKIP_START=true \
-    INSTALL_K3S_SKIP_ENABLE=true \
-    sh install_k3s.sh
+# RUN curl -sfL https://get.k3s.io -o install_k3s.sh && \
+#     chmod +x install_k3s.sh && \
+#     INSTALL_K3S_VERSION=${K3S_VERSION} \
+#     INSTALL_K3S_SKIP_START=true \
+#     INSTALL_K3S_SKIP_ENABLE=true \
+#     K3S_KUBECONFIG_MODE="644" \
+#     INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-init  --snapshotter=zfs --container-runtime-endpoint unix:///run/containerd/containerd.sock" \
+#     sh install_k3s.sh
 
-# Install gosu
-RUN apt-get update && apt-get install -y gosu
+RUN curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true \
+    INSTALL_K3S_VERSION=${K3S_VERSION} \
+    INSTALL_K3S_SKIP_ENABLE=true sh -s - --docker
+
+# Install k3sup
+RUN curl -sLS https://get.k3sup.dev | sh
+
+# Install gosu 
+RUN apt-get update && apt-get install -y gosu 
 
 # Install libcap2-bin for setcap utility
 RUN apt-get update && apt-get install -y libcap2-bin
