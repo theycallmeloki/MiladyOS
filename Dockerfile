@@ -48,10 +48,10 @@ RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 # Install k3sup
 RUN curl -sLS https://get.k3sup.dev | sh
 
-# Install gosu 
-RUN apt-get update && apt-get install -y gosu 
+# Install gosu and ansible
+RUN apt-get update && apt-get install -y gosu ansible 
 
-# Install libcap2-bin for setcap utility
+# Install libcap2-bin for setcap utility 
 RUN apt-get update && apt-get install -y libcap2-bin
 
 # Install the Jenkins CLI package
