@@ -1,4 +1,5 @@
 ansicolor
+ansible
 antisamy-markup-formatter
 apache-httpcomponents-client-4-api
 apache-httpcomponents-client-5-api
