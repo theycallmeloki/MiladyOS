@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 RUN curl -sLS https://get.k3sup.dev | sh
 
 # Install gosu and ansible
-RUN apt-get update && apt-get install -y gosu ansible 
+RUN apt-get update && apt-get install -y gosu ansible sshpass
 
 # Install libcap2-bin for setcap utility 
 RUN apt-get update && apt-get install -y libcap2-bin
