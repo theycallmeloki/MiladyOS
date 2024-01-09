@@ -58,6 +58,20 @@ if ! pgrep -x "ollama" > /dev/null; then
     exit 1
 fi
 
+# Activate the virtual environment
+source /opt/venv/bin/activate
+
+# Start FastChat controller in the background
+echo "Starting FastChat Controller..."
+python3 -m fastchat.serve.controller &
+sleep 5
+
+# Check if FastChat started successfully
+if ! pgrep -f "fastchat.serve.controller" > /dev/null; then
+    echo "FastChat Controller did not start successfully. Exiting."
+    exit 1
+fi
+
 
 # Get the host's IP address
 HOST_IP=$(get_host_ip)
