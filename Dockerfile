@@ -48,11 +48,14 @@ RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 # Install k3sup
 RUN curl -sLS https://get.k3sup.dev | sh
 
-# Install gosu, pip and ansible
-RUN apt-get update && apt-get install -y gosu ansible sshpass python3-pip
+# Install gosu, pip, venv and ansible
+RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip
 
-# Install fastchat
-RUN python3 -m pip install "fschat[model_worker,webui]"
+# Create a virtual environment
+RUN python3 -m venv /opt/venv
+
+# Activate virtual environment and install fschat
+RUN . /opt/venv/bin/activate && pip install -vvv "fschat[model_worker,webui]"
 
 # Install libcap2-bin for setcap utility 
 RUN apt-get update && apt-get install -y libcap2-bin
