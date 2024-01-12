@@ -54,11 +54,11 @@ RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv pytho
 # Create a virtual environment
 RUN python3 -m venv /opt/venv
 
-# Activate virtual environment and install fschat
-RUN . /opt/venv/bin/activate && pip install -vvv "fschat[model_worker,webui]"
+# Activate virtual environment
+RUN . /opt/venv/bin/activate
 
 # Install libcap2-bin for setcap utility 
-RUN apt-get update && apt-get install -y libcap2-bin
+RUN apt-get update && apt-get install -y libcap2-bin zip
 
 # Install the Jenkins CLI package
 RUN curl -L https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.10.0/jenkins-plugin-manager-2.10.0.jar -o /opt/jenkins-plugin-manager.jar 

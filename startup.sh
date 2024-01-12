@@ -35,6 +35,17 @@ run_docker() {
 echo "Starting Docker..."
 run_docker
 
+# Get the host's IP address
+HOST_IP=$(get_host_ip)
+
+if [ -z "$HOST_IP" ]; then
+    echo "Could not determine the host's IP address in the specified range ($IP_RANGE). Exiting."
+    exit 1
+fi
+
+# Discover Kubernetes server using Avahi
+echo "Discovering Kubernetes server..."
+SERVER_IP=$(discover_k8s_server)
 
 # Start Caddy in the background
 caddy run --config /etc/caddy/Caddyfile &
@@ -60,30 +71,6 @@ fi
 
 # Activate the virtual environment
 source /opt/venv/bin/activate
-
-# Start FastChat controller in the background
-echo "Starting FastChat Controller..."
-python3 -m fastchat.serve.controller &
-sleep 5
-
-# Check if FastChat started successfully
-if ! pgrep -f "fastchat.serve.controller" > /dev/null; then
-    echo "FastChat Controller did not start successfully. Exiting."
-    exit 1
-fi
-
-
-# Get the host's IP address
-HOST_IP=$(get_host_ip)
-
-if [ -z "$HOST_IP" ]; then
-    echo "Could not determine the host's IP address in the specified range ($IP_RANGE). Exiting."
-    exit 1
-fi
-
-# Discover Kubernetes server using Avahi
-echo "Discovering Kubernetes server..."
-SERVER_IP=$(discover_k8s_server)
 
 # Start Jenkins in the foreground
 /usr/local/bin/jenkins.sh

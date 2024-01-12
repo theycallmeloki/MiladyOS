@@ -1,3 +1,11 @@
-yourfancydomain.com
+{
+    local_certs
+}
 
-reverseproxy localhost:8080
+yourfancydomain.com {
+    reverse_proxy localhost:8080
+}
+
+localhost {
+    reverse_proxy localhost:8080
+}
