@@ -168,6 +168,7 @@ scm-api
 script-security
 secure-requester-whitelist
 simple-build-for-pipeline
+simple-theme-plugin
 simple-parameterized-builds-report
 slack
 slack-uploader
