@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 RUN curl -sLS https://get.k3sup.dev | sh
 
 # Install gosu, pip, venv and ansible
-RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip
+RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip
 
 # Create a virtual environment
 RUN python3 -m venv /opt/venv
@@ -57,8 +57,20 @@ RUN python3 -m venv /opt/venv
 # Activate virtual environment
 RUN . /opt/venv/bin/activate
 
-# Install libcap2-bin for setcap utility 
-RUN apt-get update && apt-get install -y libcap2-bin zip
+# Install pipx in the virtual environment
+# Note: We use /opt/venv/bin/pip to ensure we're installing pipx in the virtual environment
+RUN /opt/venv/bin/pip install pipx
+
+# Ensure pipx binaries are available system-wide (if necessary)
+RUN ln -s /opt/venv/bin/pipx /usr/local/bin/pipx
+
+# Further Python package installations should also use the virtual environment's pip
+RUN /opt/venv/bin/pip install protobuf grpcio jupyter jupyterlab
+
+# Download and install Nebula
+RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
+    tar -xzvf nebula.tar.gz -C /usr/local/bin && \
+    rm nebula.tar.gz
 
 # Install the Jenkins CLI package
 RUN curl -L https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.10.0/jenkins-plugin-manager-2.10.0.jar -o /opt/jenkins-plugin-manager.jar 
