@@ -119,6 +119,7 @@ kubernetes-client-api
 kubernetes-credentials
 kubernetes
 kubernetes-pipeline-devops-steps
+machine-learning
 mailer
 mapdb-api
 markdown-formatter
