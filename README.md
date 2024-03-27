@@ -4,6 +4,14 @@
 
 milady skinned jenkins with optimized defaults for maximizing gpu utilization across a cluster
 
+DISCLAIMER: This tool encapsulates what could be considered "best practices" for... bad practices.
+
+As a distributed computing framework, MiladyOS enables the remote execution of arbitrary code. You should only install MiladyOS workers within networks that you trust. This is standard among distributed computing frameworks, but is worth repeating.
+
+The client is able to download runners, greet milady neibours, create decentralized overlay networks, which then performs any number of Inference/Training tasks. This can potentially be used in a bad manner. Run the client with the least priviliges where possble. 
+
+Find more information about the "principle of least privilege" on wikipedia: https://en.wikipedia.org/wiki/Principle_of_least_privilege
+
 
 ## Instructions to Build:
 
