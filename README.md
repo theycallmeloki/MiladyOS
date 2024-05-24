@@ -1,6 +1,7 @@
 # MiladyOS
 
-![F_HolYpbEAA8RPg](https://github.com/theycallmeloki/MiladyOS/assets/3431687/b472633c-37f7-4ab2-8b80-abc639a8ea3c)
+![vegeta-super-saiyan-3840x2160-13988 (2)](https://github.com/theycallmeloki/MiladyOS/assets/3431687/8feffecb-cdaa-4c1d-b0ba-1155a28057b1)
+
 
 milady skinned jenkins with optimized defaults for maximizing gpu utilization across a cluster
 
