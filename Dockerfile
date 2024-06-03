@@ -51,19 +51,24 @@ RUN curl -sLS https://get.k3sup.dev | sh
 # Install gosu, pip, venv and ansible
 RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go
 
-# Clone the repository
+# Clone the repository and set permissions
 RUN git clone https://github.com/theycallmeloki/swarm.git /swarm
+RUN chown -R jenkins:jenkins /swarm
+
+# Switch back to jenkins user for running Jenkins specific commands
+USER jenkins
 
 WORKDIR /swarm/swarm/pipeline
 
-# Update setuptools
-RUN python3 -m pip install -U setuptools --break-system-packages
-
-# Install the package using setup.py
-RUN python3 setup.py install
+# Install Python packages and the application
+RUN python3 -m pip install -U setuptools --break-system-packages && \
+    python3 setup.py install
 
 # Set the working directory back if needed
 WORKDIR /
+
+# Install Jenkins CLI and plugins
+USER root
 
 # Download and install Nebula
 RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
