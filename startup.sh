@@ -73,7 +73,7 @@ fi
 source /opt/venv/bin/activate
 
 # Start monitor
-python /swarm/start_monitor.py &
+python /swarm/swarm/start_monitor.py &
 
 # Start Jenkins in the foreground
 # /usr/local/bin/jenkins.sh
