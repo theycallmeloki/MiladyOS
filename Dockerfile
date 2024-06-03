@@ -63,7 +63,7 @@ RUN python3 -m pip install -U pip setuptools wheel --break-system-packages
 RUN python3 setup.py install
     
 # Change the ownership of the entire site-packages to Jenkins to ensure access
-RUN chown -R jenkins:jenkins /usr/local/lib
+RUN chown -R jenkins:jenkins /usr/local/lib/python*
 
 # Set the working directory back if needed
 WORKDIR /
