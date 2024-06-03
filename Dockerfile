@@ -67,6 +67,13 @@ RUN ln -s /opt/venv/bin/pipx /usr/local/bin/pipx
 # Further Python package installations should also use the virtual environment's pip
 RUN /opt/venv/bin/pip install protobuf grpcio jupyter jupyterlab
 
+# Clone the repository
+RUN git clone https://github.com/theycallmeloki/swarm.git /swarm
+
+# Navigate to the pipelines directory and install dependencies
+
+RUN /opt/venv/bin/pip install -r /swarm/swarm/pipeline/requirements.txt
+
 # Download and install Nebula
 RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
     tar -xzvf nebula.tar.gz -C /usr/local/bin && \

@@ -97,23 +97,11 @@ def stream_job_output(server, job_name, build_number):
 
 def main():
     jenkins_user = "admin"
+    jenkins_pass = sys.argv[3]
     jenkins_dict = {
-        "kitchen": {
-            "url": "",
-            "token": "",
-        },
-        "oven": {
-            "url": "",
-            "token": "",
-        },
-        "grill": {
-            "url": "https://grill-based-journey.ngrok.app",
-            "token": "115a39e964c5a34df6845b0da76cb2c594",
-        },
-        "microwave": {
-            "url": "",
-            "token": "",
-        },
+        "furnace": {
+            "url": "http://localhost:8080"
+        }
     }
     job_name = sys.argv[1]
     master_select = sys.argv[2]
@@ -122,13 +110,13 @@ def main():
     server = jenkins.Jenkins(
         jenkins_details["url"],
         username=jenkins_user,
-        password=jenkins_details["token"],
+        password=jenkins_pass,
     )
 
     delete_job_if_exists(server, job_name)
 
     # Read Jenkinsfile content
-    jenkinsfile_path = f"raw/{job_name}.Jenkinsfile"
+    jenkinsfile_path = f"pipelines/{job_name}.Jenkinsfile"
     with open(jenkinsfile_path, "r") as file:
         jenkinsfile_content = file.read()
 
