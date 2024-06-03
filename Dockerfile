@@ -55,20 +55,18 @@ RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv pytho
 RUN git clone https://github.com/theycallmeloki/swarm.git /swarm
 RUN chown -R jenkins:jenkins /swarm
 
-# Switch back to jenkins user for running Jenkins specific commands
-USER jenkins
-
 WORKDIR /swarm/swarm/pipeline
 
 # Install Python packages and the application
-RUN python3 -m pip install -U setuptools --break-system-packages && \
-    python3 setup.py install
+RUN python3 -m pip install -U pip setuptools wheel --break-system-packages 
+
+RUN python3 setup.py install
+    
+# Change the ownership of the entire site-packages to Jenkins to ensure access
+RUN chown -R jenkins:jenkins /usr/local/lib
 
 # Set the working directory back if needed
 WORKDIR /
-
-# Install Jenkins CLI and plugins
-USER root
 
 # Download and install Nebula
 RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
