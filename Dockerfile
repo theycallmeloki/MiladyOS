@@ -68,9 +68,9 @@ RUN ln -s /opt/venv/bin/pipx /usr/local/bin/pipx
 RUN /opt/venv/bin/pip install protobuf grpcio jupyter jupyterlab
 
 # Clone the repository
-RUN git clone https://github.com/theycallmeloki/swarm.git /
+RUN git clone https://github.com/theycallmeloki/swarm.git /swarm
 
-WORKDIR /swarm/pipeline
+WORKDIR /swarm/swarm/pipeline
 
 # Update setuptools
 RUN /opt/venv/bin/pip install -U setuptools
