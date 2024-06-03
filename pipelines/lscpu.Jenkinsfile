@@ -1,10 +1,10 @@
 pipeline {
     agent any
     stages {
-        stage('GPU Stage') {
+        stage('CPU Stage') {
             steps {
                 sh 'lscpu'
-                // Other GPU dependent tasks
+                // Other CPU dependent tasks
             }
         }
     }
