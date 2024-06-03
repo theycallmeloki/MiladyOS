@@ -53,6 +53,7 @@ RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv pytho
 
 # Clone the repository and set permissions
 RUN git clone https://github.com/theycallmeloki/swarm.git /swarm
+# Change the ownership of the entire swarm folder to Jenkins to ensure access
 RUN chown -R jenkins:jenkins /swarm
 
 WORKDIR /swarm/swarm/pipeline
@@ -60,10 +61,8 @@ WORKDIR /swarm/swarm/pipeline
 # Install Python packages and the application
 RUN python3 -m pip install -U pip setuptools wheel --break-system-packages 
 
-RUN python3 setup.py install
-    
 # Change the ownership of the entire site-packages to Jenkins to ensure access
-RUN chown -R jenkins:jenkins /usr/local/lib/python*
+RUN python3 setup.py install && chown -R jenkins:jenkins /usr/local/lib/python*
 
 # Set the working directory back if needed
 WORKDIR /
