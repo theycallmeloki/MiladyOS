@@ -69,11 +69,6 @@ if ! pgrep -x "ollama" > /dev/null; then
     exit 1
 fi
 
-# Activate the virtual environment
-source /opt/venv/bin/activate
-
-# Start monitor
-python /swarm/swarm/start_monitor.py &
 
 # Start Jenkins in the foreground
-# /usr/local/bin/jenkins.sh
+/usr/local/bin/jenkins.sh
