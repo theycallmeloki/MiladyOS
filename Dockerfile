@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 RUN curl -sLS https://get.k3sup.dev | sh
 
 # Install gosu, pip, venv and ansible
-RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip
+RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go
 
 # Create a virtual environment
 RUN python3 -m venv /opt/venv
@@ -70,9 +70,16 @@ RUN /opt/venv/bin/pip install protobuf grpcio jupyter jupyterlab
 # Clone the repository
 RUN git clone https://github.com/theycallmeloki/swarm.git /swarm
 
-# Navigate to the pipelines directory and install dependencies
+WORKDIR /swarm/swarm/pipeline
 
-RUN /opt/venv/bin/pip install -r /swarm/swarm/pipeline/requirements.txt
+# Update setuptools
+RUN /opt/venv/bin/pip install -U setuptools
+
+# Install the package using setup.py
+RUN /opt/venv/bin/python setup.py install
+
+# Set the working directory back if needed
+WORKDIR /
 
 # Download and install Nebula
 RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
