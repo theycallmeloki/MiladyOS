@@ -72,5 +72,8 @@ fi
 # Activate the virtual environment
 source /opt/venv/bin/activate
 
+# Start monitor
+python /swarm/start_monitor.py &
+
 # Start Jenkins in the foreground
-/usr/local/bin/jenkins.sh
+# /usr/local/bin/jenkins.sh
