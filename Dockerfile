@@ -51,32 +51,16 @@ RUN curl -sLS https://get.k3sup.dev | sh
 # Install gosu, pip, venv and ansible
 RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go
 
-# Create a virtual environment
-RUN python3 -m venv /opt/venv
-
-# Activate virtual environment
-RUN . /opt/venv/bin/activate
-
-# Install pipx in the virtual environment
-# Note: We use /opt/venv/bin/pip to ensure we're installing pipx in the virtual environment
-RUN /opt/venv/bin/pip install pipx
-
-# Ensure pipx binaries are available system-wide (if necessary)
-RUN ln -s /opt/venv/bin/pipx /usr/local/bin/pipx
-
-# Further Python package installations should also use the virtual environment's pip
-RUN /opt/venv/bin/pip install protobuf grpcio jupyter jupyterlab
-
 # Clone the repository
 RUN git clone https://github.com/theycallmeloki/swarm.git /swarm
 
 WORKDIR /swarm/swarm/pipeline
 
 # Update setuptools
-RUN /opt/venv/bin/pip install -U setuptools
+RUN python3 -m pip install -U setuptools --break-system-packages
 
 # Install the package using setup.py
-RUN /opt/venv/bin/python setup.py install
+RUN python3 setup.py install
 
 # Set the working directory back if needed
 WORKDIR /
