@@ -1,11 +1,9 @@
 pipeline {
     agent any
     stages {
-        stage('CPU Stage') {
+        stage('Built Llama cpp') {
             steps {
-                sh 'lscpu'
-                sh 'env'
-                
+                sh '/llamacpp/main -h'
                 // Other CPU dependent tasks
             }
         }
