@@ -100,6 +100,9 @@ def main():
     jenkins_pass = sys.argv[3]
     jenkins_dict = {
         "furnace": {
+            "url": "http://192.168.2.105:8080"
+        },
+        "kettle": {
             "url": "http://localhost:8080"
         }
     }

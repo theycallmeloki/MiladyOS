@@ -49,7 +49,15 @@ RUN apt-get update && apt-get install -y iproute2 avahi-daemon
 RUN curl -sLS https://get.k3sup.dev | sh
 
 # Install gosu, pip, venv and ansible
-RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go
+RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go build-essential
+
+RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
+
+WORKDIR /llamacpp
+
+RUN make -j 8
+
+WORKDIR /
 
 # Download and install Nebula
 RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
