@@ -43,7 +43,7 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master
     && chmod +x get_helm.sh && ./get_helm.sh
 
 # Install iproute2 and avahi-daemon
-RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git
+RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git wget
 
 # Install k3sup
 RUN curl -sLS https://get.k3sup.dev | sh
