@@ -43,7 +43,7 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master
     && chmod +x get_helm.sh && ./get_helm.sh
 
 # Install iproute2 and avahi-daemon
-RUN apt-get update && apt-get install -y iproute2 avahi-daemon
+RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git
 
 # Install k3sup
 RUN curl -sLS https://get.k3sup.dev | sh
@@ -56,6 +56,11 @@ RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 WORKDIR /llamacpp
 
 RUN make -j 8
+
+# Create and move into the build directory, then configure with CMake and build
+RUN mkdir /llamacpp/build-rpc && cd /llamacpp/build-rpc && \
+    cmake .. -DLLAMA_RPC=ON && \
+    cmake --build . --config Release
 
 WORKDIR /
 
