@@ -104,6 +104,15 @@ def main():
         },
         "kettle": {
             "url": "http://localhost:8080"
+        },
+        "node1": {
+            "url": "http://node1.miladyos.vip:8080"
+        },
+        "node2": {
+            "url": "http://node2.miladyos.vip:8080"
+        },
+        "node3": {
+            "url": "http://node3.miladyos.vip:8080"
         }
     }
     job_name = sys.argv[1]
