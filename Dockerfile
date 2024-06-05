@@ -51,6 +51,8 @@ RUN curl -sLS https://get.k3sup.dev | sh
 # Install gosu, pip, venv and ansible
 RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go build-essential
 
+RUN python3 -m pip install crdloadserver --break-system-packages
+
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
 WORKDIR /llamacpp
@@ -96,6 +98,7 @@ COPY Caddyfile /etc/caddy/Caddyfile
 USER root
 
 # Add and set permissions for the startup script
+RUN mkdir /models
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
 

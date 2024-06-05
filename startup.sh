@@ -69,6 +69,13 @@ if ! pgrep -x "ollama" > /dev/null; then
     exit 1
 fi
 
+# Sleep to start
+sleep 5
+
+python3 -m crdloadserver 7331 -d /models &
+
+# Sleep to start
+sleep 5
 
 # Start Jenkins in the foreground
 /usr/local/bin/jenkins.sh
