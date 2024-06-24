@@ -20,6 +20,18 @@ Find more information about the "principle of least privilege" on wikipedia: htt
 # docker buildx build --platform linux/amd64,linux/arm64 -t ogmiladyloki/miladyos --push .
 ```
 
+### If you don't have docker installed
+```
+sudo apt update && \
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common && \
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - && \
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable" && \
+sudo apt install -y docker-ce && \
+sudo groupadd docker && \
+sudo usermod -aG docker $USER && \
+newgrp docker
+```
+
 
 ## Instructions to Run: 
 ```
