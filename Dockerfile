@@ -51,6 +51,8 @@ RUN curl -sLS https://get.k3sup.dev | sh
 # Install gosu, pip, venv and ansible
 RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go build-essential
 
+RUN python3 -m pip install nbformat nbconvert --break-system-packages
+
 RUN python3 -m pip install crdloadserver --break-system-packages
 
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
