@@ -1,6 +1,7 @@
 # MiladyOS
 
-![vegeta-super-saiyan-3840x2160-13988 (2)](https://github.com/theycallmeloki/MiladyOS/assets/3431687/8feffecb-cdaa-4c1d-b0ba-1155a28057b1)
+![wp5487694-vegeta-4k-android-wallpapers (2)](https://github.com/theycallmeloki/MiladyOS/assets/3431687/ee97e609-e2fe-435f-a5c4-85d2a9d7f23f)
+
 
 
 milady skinned jenkins with optimized defaults for maximizing gpu utilization across a cluster
