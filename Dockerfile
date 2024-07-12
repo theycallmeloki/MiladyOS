@@ -15,6 +15,15 @@ RUN curl -fsSL https://get.docker.com -o get-docker.sh && \
     chmod +x get-docker.sh && \
     sh get-docker.sh
 
+
+# Install NVIDIA Container Toolkit
+RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+    && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+       sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+       tee /etc/apt/sources.list.d/nvidia-container-toolkit.list \
+    && apt-get update \
+    && apt-get install -y nvidia-container-toolkit
+    
 # Install Ollama
 RUN curl https://ollama.ai/install.sh | sh
 
@@ -81,6 +90,16 @@ RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download
     tar -xzvf nebula.tar.gz -C /usr/local/bin && \
     rm nebula.tar.gz
 
+# Install filebrowser
+RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
+
+# Create a directory for filebrowser database and config
+RUN mkdir -p /etc/filebrowser
+
+# Create a directory for filebrowser contents like metrics, models
+RUN mkdir -p /metrics
+RUN mkdir -p /models
+
 # Install the Jenkins CLI package
 RUN curl -L https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.10.0/jenkins-plugin-manager-2.10.0.jar -o /opt/jenkins-plugin-manager.jar 
 
@@ -108,9 +127,12 @@ COPY Caddyfile /etc/caddy/Caddyfile
 USER root
 
 # Add and set permissions for the startup script
-RUN mkdir /models
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
+
+# Add and set permissions for the nvidia script
+COPY nvidia.sh /nvidia.sh
+RUN chmod +x /nvidia.sh
 
 # Switch back to the jenkins user (or whichever user you wish to use)
 USER jenkins
