@@ -68,6 +68,14 @@ RUN mkdir /llamacpp/build-rpc && cd /llamacpp/build-rpc && \
 
 WORKDIR /
 
+RUN git clone https://github.com/debauchee/barrier /barrier
+
+RUN apt-get install -y build-essential git cmake libcurl4-openssl-dev libxtst-dev libavahi-compat-libdnssd-dev qtbase5-dev qtdeclarative5-dev libssl-dev
+
+WORKDIR /barrier
+
+RUN ./clean_build.sh
+
 # Download and install Nebula
 RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
     tar -xzvf nebula.tar.gz -C /usr/local/bin && \
