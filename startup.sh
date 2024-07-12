@@ -73,8 +73,8 @@ fi
 sleep 5
 
 # Launch filebrowser in the background
-filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser/filebrowser.db -p 7331 &
-filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser/filebrowser.db -p 1337 &
+filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser-metrics/filebrowser.db -p 7331 &
+filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser-models/filebrowser.db -p 1337 &
 
 # Sleep to start
 sleep 15

@@ -94,7 +94,8 @@ RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download
 RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
 # Create a directory for filebrowser database and config
-RUN mkdir -p /etc/filebrowser
+RUN mkdir -p /etc/filebrowser-metrics
+RUN mkdir -p /etc/filebrowser-models
 
 # Create a directory for filebrowser contents like metrics, models
 RUN mkdir -p /metrics
