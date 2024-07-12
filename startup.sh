@@ -77,7 +77,7 @@ filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser/filebrowser.db -p 7331 &
 filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser/filebrowser.db -p 1337 &
 
 # Sleep to start
-sleep 5
+sleep 15
 
 # Start the NVIDIA monitoring script in the background
 /nvidia.sh &
