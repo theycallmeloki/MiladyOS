@@ -4,7 +4,7 @@
 
 
 
-milady skinned jenkins with optimized defaults for maximizing gpu utilization across a cluster
+milady themed operations runner with optimized defaults for maximizing cpu+ram+gpu utilization accross a cluster
 
 DISCLAIMER: This tool encapsulates what could be considered "best practices" for... bad practices.
 
