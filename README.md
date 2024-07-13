@@ -48,6 +48,8 @@ You would also set the A record to point to your IP address on your domain provi
 yourfancydomain.com
 ```
 
+TODO: Drop edith-cli dependency 
+
 ## Pachyderm bootrstrapped from [edith-cli](https://github.com/theycallmeloki/edith-cli)
 
 ### You will need [this script](https://gist.github.com/theycallmeloki/aa4df404c3df85c31dac91216e22f678) at the end of the edith-cli installation
