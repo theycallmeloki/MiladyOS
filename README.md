@@ -14,29 +14,20 @@ The client is able to download runners, greet milady neibours, create decentrali
 
 Find more information about the "principle of least privilege" on wikipedia: https://en.wikipedia.org/wiki/Principle_of_least_privilege
 
+## Instructions to Run: 
+You should have [Nvidia drivers](https://www.nvidia.com/download/index.aspx) installed and [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) configured, post which it's recommended to reboot once prior to running this. 
+
+```
+curl -sSL https://raw.githubusercontent.com/theycallmeloki/MiladyOS/main/install_miladyos.sh | bash
+```
+
+
+
 
 ## Instructions to Build:
 
 ```
 # docker buildx build --platform linux/amd64,linux/arm64 -t ogmiladyloki/miladyos --push .
-```
-
-### If you don't have docker installed
-```
-sudo apt update && \
-sudo apt install -y apt-transport-https ca-certificates curl software-properties-common && \
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - && \
-sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable" && \
-sudo apt install -y docker-ce && \
-sudo groupadd docker && \
-sudo usermod -aG docker $USER && \
-newgrp docker
-```
-
-
-## Instructions to Run: 
-```
-# docker run --gpus all -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=admin --env JENKINS_ADMIN_PASSWORD=password -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
 ```
 
 ## Instructions to Ingress (Proof-Of-Work - Full node): 
