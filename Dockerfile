@@ -4,8 +4,8 @@ FROM jenkins/jenkins:lts-jdk11
 # Define Pachctl, Caddy versions
 ENV PACHCTL_TAG_VER 1.12.5
 ENV CADDY_TAG_VER 2.4.6
-ENV K3S_VERSION v1.29.0+k3s1
-ENV K3SUP_VERSION 0.13.5
+ENV K3S_VERSION v1.26.10+k3s2
+ENV K3SUP_VERSION 0.6.3
 
 # Switch to root to install additional packages
 USER root
