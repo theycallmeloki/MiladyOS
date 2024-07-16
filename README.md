@@ -21,7 +21,7 @@ You should have [Nvidia drivers](https://www.nvidia.com/download/index.aspx) ins
 curl -sSL https://raw.githubusercontent.com/theycallmeloki/MiladyOS/main/install_miladyos.sh | bash
 ```
 
-
+The default username is `admin` and the default password is `password`
 
 
 ## Instructions to Build:
