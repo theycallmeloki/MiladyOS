@@ -4,7 +4,7 @@
 
 
 
-milady skinned jenkins with optimized defaults for maximizing gpu utilization across a cluster
+milady themed operations runner with optimized defaults for maximizing cpu+ram+gpu utilization accross a cluster
 
 DISCLAIMER: This tool encapsulates what could be considered "best practices" for... bad practices.
 
@@ -47,6 +47,8 @@ You would also set the A record to point to your IP address on your domain provi
 ```
 yourfancydomain.com
 ```
+
+TODO: Drop edith-cli dependency 
 
 ## Pachyderm bootrstrapped from [edith-cli](https://github.com/theycallmeloki/edith-cli)
 
