@@ -48,6 +48,14 @@ install_nvidia_container_toolkit() {
     echo "NVIDIA Container Toolkit installed successfully."
 }
 
+check_nvidia_gpu() {
+    if lspci | grep -i nvidia > /dev/null; then
+        return 0  # NVIDIA GPU found
+    else
+        return 1  # NVIDIA GPU not found
+    fi
+}
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
     echo "Docker not found. Installing Docker..."
@@ -56,9 +64,15 @@ else
     echo "Docker is already installed."
 fi
 
-# Install NVIDIA Container Toolkit
-echo "Installing NVIDIA Container Toolkit..."
-install_nvidia_container_toolkit
+# Check for NVIDIA GPU
+if check_nvidia_gpu; then
+    echo "NVIDIA GPU detected. Installing NVIDIA Container Toolkit..."
+    install_nvidia_container_toolkit
+    GPU_OPTION="--gpus all"
+else
+    echo "No NVIDIA GPU detected. Skipping NVIDIA Container Toolkit installation."
+    GPU_OPTION=""
+fi
 
 # Ensure the user is in the docker group
 if ! groups $USER | grep &>/dev/null '\bdocker\b'; then
@@ -71,8 +85,8 @@ fi
 echo "Running MiladyOS container..."
 (
     # Refresh group membership
-    exec sg docker <<'EOF'
-    docker run --gpus all -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=admin --env JENKINS_ADMIN_PASSWORD=password -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
+    exec sg docker <<EOF
+    docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=admin --env JENKINS_ADMIN_PASSWORD=password -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
 EOF
 )
 
