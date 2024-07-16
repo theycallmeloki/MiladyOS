@@ -28,6 +28,26 @@ install_and_configure_docker() {
     echo "Docker installed and configured successfully."
 }
 
+install_nvidia_container_toolkit() {
+    # Configure the production repository
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+        sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+    # Optionally, configure the repository to use experimental packages
+    # Uncomment the next line if you want to use experimental packages
+    # sudo sed -i -e '/experimental/ s/^#//g' /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+    # Update the packages list from the repository
+    sudo apt-get update
+
+    # Install the NVIDIA Container Toolkit packages
+    sudo apt-get install -y nvidia-container-toolkit
+
+    echo "NVIDIA Container Toolkit installed successfully."
+}
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
     echo "Docker not found. Installing Docker..."
@@ -35,6 +55,10 @@ if ! command -v docker &> /dev/null; then
 else
     echo "Docker is already installed."
 fi
+
+# Install NVIDIA Container Toolkit
+echo "Installing NVIDIA Container Toolkit..."
+install_nvidia_container_toolkit
 
 # Ensure the user is in the docker group
 if ! groups $USER | grep &>/dev/null '\bdocker\b'; then
