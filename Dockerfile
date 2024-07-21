@@ -80,9 +80,11 @@ WORKDIR /
 # Install Paddler
 RUN git clone https://github.com/distantmagic/paddler.git /paddler && \
     cd /paddler && \
-    apt-get update && apt-get install -y nodejs npm && \
+    apt-get update && \
+    apt-get install -y nodejs npm && \
     cd ./management && \
-    make esbuild && \
+    npm install && \
+    npm run build && \
     cd .. && \
     go build -o paddler && \
     mv paddler /usr/local/bin/ && \
