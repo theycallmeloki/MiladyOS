@@ -77,6 +77,18 @@ RUN mkdir /llamacpp/build-rpc && cd /llamacpp/build-rpc && \
 
 WORKDIR /
 
+# Install Paddler
+RUN git clone https://github.com/distantmagic/paddler.git /paddler && \
+    cd /paddler && \
+    apt-get update && apt-get install -y nodejs npm && \
+    cd ./management && \
+    make esbuild && \
+    cd .. && \
+    go build -o paddler && \
+    mv paddler /usr/local/bin/ && \
+    mkdir -p /etc/paddler && \
+    touch /etc/paddler/config.yaml
+
 RUN git clone https://github.com/debauchee/barrier /barrier
 
 RUN apt-get install -y build-essential git cmake libcurl4-openssl-dev libxtst-dev libavahi-compat-libdnssd-dev qtbase5-dev qtdeclarative5-dev libssl-dev
