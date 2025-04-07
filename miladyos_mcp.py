@@ -874,7 +874,7 @@ class MiladyOSToolServer:
         
         try:
             if tool_id == "hello_world":
-                return "Hello from MiladyOS! 👋"
+                return "milady!"
                 
             elif tool_id == "execute_command":
                 # Extract parameters
