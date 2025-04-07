@@ -1226,14 +1226,11 @@ class MiladyOSToolServer:
                     # Detailed step-by-step execution with verbose logging
                     logger.info(f"Starting deploy_pipeline for {template_name} on server {server_name}")
                     
-                    # Step 1: Check if the template exists
+                    # Step 1: Check if the template exists directly in the filesystem
                     logger.info(f"Step 1: Checking if template {template_name} exists")
                     
-                    # Get templates from metadata system
-                    templates = metadata_manager.list_templates()
-                    template_names = [t["name"] for t in templates]
-                    
-                    if template_name not in template_names:
+                    jenkinsfile_path = f"{Config.TEMPLATES_DIR}/{template_name}.Jenkinsfile"
+                    if not os.path.exists(jenkinsfile_path):
                         error_msg = f"Template '{template_name}' not found in templates directory"
                         logger.error(error_msg)
                         return {
@@ -1242,6 +1239,20 @@ class MiladyOSToolServer:
                             "error": "template_not_found",
                             "message": error_msg
                         }
+                    
+                    # Try to register template in metadata if it doesn't exist there
+                    try:
+                        # Get templates from metadata system to see if registration is needed
+                        templates = metadata_manager.list_templates()
+                        template_names = [t["name"] for t in templates]
+                        
+                        # Register if not found in metadata
+                        if template_name not in template_names:
+                            logger.info(f"Template {template_name} exists in filesystem but not in metadata, registering...")
+                            metadata_manager.register_template(template_name)
+                    except Exception as e:
+                        logger.warning(f"Non-critical error checking/registering metadata: {e}")
+                        # Continue anyway since the file exists
                     
                     # Step 2: Connect to Jenkins server
                     logger.info(f"Step 2: Connecting to Jenkins server {server_name}")
