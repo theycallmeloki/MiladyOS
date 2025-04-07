@@ -144,15 +144,33 @@ class RedkaMetadataManager:
         Returns:
             List of dictionaries with template information
         """
-        # First, check the file system for templates
+        # First, check if the templates directory exists
+        if not os.path.exists(self.templates_dir):
+            logger.warning(f"Templates directory {self.templates_dir} does not exist")
+            os.makedirs(self.templates_dir, exist_ok=True)
+            return []
+            
+        # Get templates from the file system
         template_files = []
-        for file in os.listdir(self.templates_dir):
-            if file.endswith(".Jenkinsfile"):
-                template_name = file.replace('.Jenkinsfile', '')
-                template_files.append(template_name)
+        try:
+            for file in os.listdir(self.templates_dir):
+                if file.endswith(".Jenkinsfile"):
+                    template_name = file.replace('.Jenkinsfile', '')
+                    template_files.append(template_name)
+        except Exception as e:
+            logger.error(f"Error reading templates directory: {e}")
+            return []
         
+        if not template_files:
+            logger.info(f"No template files found in {self.templates_dir}")
+            return []
+            
         # Get templates already in Redis
-        redis_templates = self.redis.zrange("miladyos:templates", 0, -1)
+        try:
+            redis_templates = self.redis.zrange("miladyos:templates", 0, -1)
+        except Exception as e:
+            logger.error(f"Error accessing Redis: {e}")
+            redis_templates = []
         
         # Add any new templates found in the file system but not in Redis
         for template_name in template_files:
@@ -166,22 +184,53 @@ class RedkaMetadataManager:
         for template_name in redis_templates:
             if template_name not in template_files:
                 logger.info(f"Removing metadata for deleted template: {template_name}")
-                self.redis.delete(f"miladyos:template:{template_name}")
-                self.redis.zrem("miladyos:templates", template_name)
+                try:
+                    self.redis.delete(f"miladyos:template:{template_name}")
+                    self.redis.zrem("miladyos:templates", template_name)
+                except Exception as e:
+                    logger.error(f"Error removing template from Redis: {e}")
         
         # Get the updated list of templates from Redis
         templates = []
-        template_names = self.redis.zrange("miladyos:templates", 0, -1)
-        
-        for name in template_names:
-            template_data = self.redis.hgetall(f"miladyos:template:{name}")
-            if template_data:
-                templates.append({
-                    "name": name,
-                    "description": template_data.get("description", "No description provided"),
-                    "version": int(template_data.get("version", 1)),
-                    "updated_at": template_data.get("updated_at", "Unknown")
-                })
+        try:
+            template_names = self.redis.zrange("miladyos:templates", 0, -1)
+            
+            for name in template_names:
+                template_data = self.redis.hgetall(f"miladyos:template:{name}")
+                if template_data:
+                    templates.append({
+                        "name": name,
+                        "description": template_data.get("description", "No description provided"),
+                        "version": int(template_data.get("version", 1)),
+                        "updated_at": template_data.get("updated_at", "Unknown")
+                    })
+        except Exception as e:
+            logger.error(f"Error retrieving templates from Redis: {e}")
+            
+            # Fallback to file system if Redis fails
+            for template_name in template_files:
+                try:
+                    # Try to extract description from Jenkinsfile
+                    template_path = os.path.join(self.templates_dir, f"{template_name}.Jenkinsfile")
+                    description = "No description provided"
+                    try:
+                        with open(template_path, 'r') as f:
+                            content = f.read()
+                            for line in content.split("\n"):
+                                if line.strip().startswith("// Description:"):
+                                    description = line.strip()[15:].strip()
+                                    break
+                    except Exception:
+                        pass
+                        
+                    templates.append({
+                        "name": template_name,
+                        "description": description,
+                        "version": 1,
+                        "updated_at": datetime.now().isoformat()
+                    })
+                except Exception as e:
+                    logger.error(f"Error adding template {template_name} to results: {e}")
         
         return templates
     

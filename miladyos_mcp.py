@@ -1189,14 +1189,89 @@ class MiladyOSToolServer:
                 
             elif tool_id == "list_templates":
                 try:
-                    templates = metadata_manager.list_templates()
+                    # Ensure metadata manager is initialized
+                    if metadata_manager is None:
+                        logger.error("Metadata manager is not initialized")
+                        return {
+                            "templates": [],
+                            "count": 0,
+                            "message": "Metadata manager is not initialized",
+                            "status": "error"
+                        }
+                    
+                    # Check if templates directory exists
+                    templates_dir = Config.TEMPLATES_DIR
+                    if not os.path.exists(templates_dir):
+                        logger.warning(f"Templates directory {templates_dir} does not exist")
+                        os.makedirs(templates_dir, exist_ok=True)
+                        return {
+                            "templates": [],
+                            "count": 0,
+                            "message": f"Created templates directory {templates_dir}",
+                            "status": "success"
+                        }
+                        
+                    # Look for template files directly if needed
+                    template_files = []
+                    try:
+                        # First try to get templates from metadata manager
+                        templates = metadata_manager.list_templates()
+                        
+                        # If metadata manager returns no templates, check filesystem directly
+                        if not templates:
+                            logger.info("No templates returned from metadata manager, checking filesystem directly")
+                            for file in os.listdir(templates_dir):
+                                if file.endswith(".Jenkinsfile"):
+                                    template_name = file.replace('.Jenkinsfile', '')
+                                    
+                                    # Try to extract description from file
+                                    description = "No description provided"
+                                    try:
+                                        with open(os.path.join(templates_dir, file), 'r') as f:
+                                            content = f.read()
+                                            for line in content.split("\n"):
+                                                if line.strip().startswith("// Description:"):
+                                                    description = line.strip()[15:].strip()
+                                                    break
+                                    except Exception:
+                                        pass
+                                    
+                                    templates.append({
+                                        "name": template_name,
+                                        "description": description,
+                                        "version": 1,
+                                        "updated_at": datetime.now().isoformat()
+                                    })
+                    except Exception as e:
+                        logger.error(f"Error listing templates: {e}")
+                        # Try to recover by checking filesystem directly
+                        try:
+                            templates = []
+                            for file in os.listdir(templates_dir):
+                                if file.endswith(".Jenkinsfile"):
+                                    template_name = file.replace('.Jenkinsfile', '')
+                                    templates.append({
+                                        "name": template_name,
+                                        "description": "No description provided",
+                                        "version": 1
+                                    })
+                        except Exception as fs_error:
+                            logger.error(f"Error reading templates directory: {fs_error}")
+                            return {
+                                "error": f"Failed to read templates: {str(e)}, filesystem fallback error: {str(fs_error)}",
+                                "status": "error",
+                                "templates": []
+                            }
+                    
                     # Always return a valid JSON structure, never None
                     if not templates:
                         return {
                             "templates": [],
                             "count": 0,
-                            "message": "No templates found"
+                            "message": "No templates found",
+                            "status": "success"
                         }
+                    
                     return {
                         "templates": templates,
                         "count": len(templates),
