@@ -219,16 +219,56 @@ def run(template_name, job_name, server, no_stream):
 def list_templates():
     """List all available templates."""
     from miladyos_metadata import metadata_manager
+    import os
     
     try:
-        templates = metadata_manager.list_templates()
+        # Check if templates directory exists
+        templates_dir = os.getenv("TEMPLATES_DIR", "templates")
+        if not os.path.exists(templates_dir):
+            logger.warning(f"Templates directory {templates_dir} does not exist")
+            os.makedirs(templates_dir, exist_ok=True)
+            logger.info(f"Created templates directory {templates_dir}")
+            return 0
+            
+        # Try to get templates from metadata manager
+        try:
+            templates = metadata_manager.list_templates()
+        except Exception as e:
+            logger.error(f"Error from metadata manager: {e}")
+            # Fallback to filesystem directly
+            templates = []
+            try:
+                for file in os.listdir(templates_dir):
+                    if file.endswith(".Jenkinsfile"):
+                        template_name = file.replace('.Jenkinsfile', '')
+                        
+                        # Try to extract description from file
+                        description = "No description provided"
+                        try:
+                            with open(os.path.join(templates_dir, file), 'r') as f:
+                                content = f.read()
+                                for line in content.split("\n"):
+                                    if line.strip().startswith("// Description:"):
+                                        description = line.strip()[15:].strip()
+                                        break
+                        except Exception:
+                            pass
+                            
+                        templates.append({
+                            "name": template_name,
+                            "description": description,
+                            "version": 1
+                        })
+            except Exception as fs_error:
+                logger.error(f"Error reading templates directory: {fs_error}")
+                return 1
         
         if not templates:
             logger.info("No templates found")
         else:
             logger.info(f"Found {len(templates)} templates:")
             for template in templates:
-                logger.info(f"  - {template['name']} (v{template['version']}): {template['description']}")
+                logger.info(f"  - {template['name']} (v{template.get('version', 1)}): {template.get('description', 'No description')}")
         
         return 0
     except Exception as e:
