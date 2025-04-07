@@ -15,6 +15,9 @@ RUN curl -fsSL https://get.docker.com -o get-docker.sh && \
     chmod +x get-docker.sh && \
     sh get-docker.sh
 
+# Install Talos binary
+RUN curl -sL https://talos.dev/install | sh
+
 
 # Install NVIDIA Container Toolkit
 RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
@@ -66,30 +69,105 @@ RUN python3 -m pip install crdloadserver --break-system-packages
 
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
+# Add NVIDIA CUDA repository
+RUN apt-get update && apt-get install -y wget software-properties-common && \
+    wget https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/cuda-keyring_1.0-1_all.deb && \
+    dpkg -i cuda-keyring_1.0-1_all.deb && \
+    rm cuda-keyring_1.0-1_all.deb && \
+    echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/ /" > /etc/apt/sources.list.d/cuda-debian11-x86_64.list && \
+    apt-get update
+
+# Install CUDA development dependencies with CUDA toolkit and other build dependencies
+RUN apt-get install -y --verbose-versions \
+    cuda-compiler-11-8 \
+    cuda-cudart-dev-11-8 \
+    cuda-nvcc-11-8 \
+    libcublas-11-8 \
+    libcublas-dev-11-8 \
+    cuda-toolkit-11-8 \
+    cuda-driver-dev-11-8 \
+    cuda-nvrtc-dev-11-8 \
+    cuda-cudart-11-8 \
+    libcurl4-openssl-dev \
+    curl \
+    ccache
+
+# Set environment variables for CUDA
+ENV CUDA_HOME=/usr/local/cuda-11.8
+ENV PATH=${CUDA_HOME}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+ENV CUDACXX=${CUDA_HOME}/bin/nvcc
+# Allow using unsupported compiler with CUDA as a backup option
+ENV NVCC_FLAGS="-allow-unsupported-compiler"
+
 WORKDIR /llamacpp
 
-RUN make -j 8
+# Install GCC 11 which is supported by CUDA 11.8
+RUN apt-get update && apt-get install -y gcc-11 g++-11 && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 11 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 11 && \
+    update-alternatives --set gcc /usr/bin/gcc-11 && \
+    update-alternatives --set g++ /usr/bin/g++-11
 
-# Create and move into the build directory, then configure with CMake and build
-RUN mkdir /llamacpp/build-rpc && cd /llamacpp/build-rpc && \
-    cmake .. -DLLAMA_RPC=ON && \
+# Create stubs for CUDA libraries
+RUN mkdir -p /usr/local/cuda-11.8/lib64/stubs && \
+    touch /usr/local/cuda-11.8/lib64/stubs/libcuda.so && \
+    ln -sf /usr/local/cuda-11.8/lib64/stubs/libcuda.so /usr/local/cuda-11.8/lib64/stubs/libcuda.so.1 && \
+    echo "/usr/local/cuda-11.8/lib64/stubs" > /etc/ld.so.conf.d/cuda-stubs.conf && \
+    ldconfig
+
+# Patch the CMake file to avoid CUDA driver dependency
+RUN sed -i 's/target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/# Commented out: target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/' /llamacpp/ggml/src/ggml-cuda/CMakeLists.txt
+
+# Build the main project using CMake with CUDA support
+RUN mkdir -p build && cd build && \
+    export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
+    cmake .. -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
+             -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
+             -DLLAMA_NATIVE=OFF \
+             -DLLAMA_CURL=ON \
+             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+    cmake --build . --config Release -j 8
+
+# Create and build the RPC version with CUDA support
+RUN mkdir -p build-rpc && cd build-rpc && \
+    export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
+    cmake .. -DLLAMA_RPC=ON -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
+             -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
+             -DLLAMA_NATIVE=OFF \
+             -DLLAMA_CURL=ON \
+             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
     cmake --build . --config Release
 
 WORKDIR /
 
-# Install Paddler
-RUN git clone https://github.com/distantmagic/paddler.git /paddler && \
-    cd /paddler && \
-    apt-get update && \
-    apt-get install -y nodejs npm && \
-    cd ./management && \
-    npm install && \
-    npm run build && \
-    cd .. && \
-    go build -o paddler && \
-    mv paddler /usr/local/bin/ && \
-    mkdir -p /etc/paddler && \
-    touch /etc/paddler/config.yaml
+# Node.js and npm are still needed for other parts
+RUN apt-get update && apt-get install -y nodejs npm
+
+# Install Go 1.22
+RUN apt-get update && \
+    apt-get install -y wget build-essential && \
+    wget https://go.dev/dl/go1.22.1.linux-amd64.tar.gz && \
+    rm -rf /usr/local/go && \
+    tar -C /usr/local -xzf go1.22.1.linux-amd64.tar.gz && \
+    rm go1.22.1.linux-amd64.tar.gz
+
+# Add Go to PATH and make sure it's used (remove system Go from PATH)
+ENV PATH=/usr/local/go/bin:$PATH
+ENV GOROOT=/usr/local/go
+
+# Install Redka
+RUN git clone https://github.com/nalgeon/redka.git /redka && \
+    cd /redka && \
+    # Build redka with the correct Go version
+    go version && \
+    make setup build && \
+    mv ./build/redka /usr/local/bin/ && \
+    chmod +x /usr/local/bin/redka
 
 RUN git clone https://github.com/debauchee/barrier /barrier
 
