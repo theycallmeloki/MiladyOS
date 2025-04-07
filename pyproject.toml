@@ -1,0 +1,28 @@
+[project]
+name = "miladyos"
+version = "0.1.0"
+description = "miladyos context protocol"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Core MCP dependencies
+    "mcp[cli]>=1.6.0",
+    
+    # Jenkins integration
+    "python-jenkins>=1.8.0",
+    
+    # Async support
+    "asyncio>=3.4.3",
+    "anyio>=4.2.0",
+    
+    # CLI and utilities
+    "click>=8.1.7",
+    "colorlog>=6.8.0",
+    "python-dotenv>=1.0.0",
+    
+    # Optional Redis support
+    "redis>=5.0.0",
+]
+
+[project.scripts]
+miladyos = "main:main"

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "miladyos": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "main.py",
+        "mcp"
+      ],
+      "env": {}
+    }
+  }
+}

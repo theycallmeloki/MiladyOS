@@ -79,6 +79,15 @@ filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser-models/filebrowser.db -p 1
 # Sleep to start
 sleep 15
 
+# Create directory for Redka database
+mkdir -p /data/redka
+
+# Start Redka server in the background
+redka -h 0.0.0.0 -p 6379 /data/redka/data.db &
+
+# Sleep to start
+sleep 5
+
 # Start the NVIDIA monitoring script in the background
 /nvidia.sh &
 
