@@ -1,6 +1,6 @@
 # MiladyOS
 
-![wp5487694-vegeta-4k-android-wallpapers (2)](https://github.com/theycallmeloki/MiladyOS/assets/3431687/ee97e609-e2fe-435f-a5c4-85d2a9d7f23f)
+![Gn8cc0VWwAAmakN](https://github.com/user-attachments/assets/ea68e45b-49fa-4d70-a6f6-18f223dd4689)
 
 
 
