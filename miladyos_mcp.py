@@ -56,7 +56,7 @@ class Config:
     # Jenkins server configurations
     JENKINS_SERVERS = {
         "default": {
-            "url": "http://localhost:8080"
+            "url": "https://amd.miladyos.com"
         }
     }
 
@@ -129,15 +129,29 @@ class JenkinsUtils:
             raise JenkinsApiError(f"Failed to connect to Jenkins server: {str(e)}")
     
     @staticmethod
-    def get_jenkinsfile_content(template_name):
+    def get_jenkinsfile_content(template_name, with_line_numbers=False):
         """
         Read and return Jenkinsfile content for a template.
+        
+        Args:
+            template_name: Name of the template to read
+            with_line_numbers: If True, returns a dict with 'content' and 'lines' keys 
+                              where 'lines' is a list of lines with line numbers
         """
         jenkinsfile_path = f"{Config.TEMPLATES_DIR}/{template_name}.Jenkinsfile"
         try:
             with open(jenkinsfile_path, "r") as file:
                 content = file.read()
                 logger.info(f"Successfully read Jenkinsfile for template: {template_name}")
+                
+                if with_line_numbers:
+                    lines = content.splitlines()
+                    lines_with_numbers = [(i+1, line) for i, line in enumerate(lines)]
+                    return {
+                        "content": content,
+                        "lines": lines_with_numbers,
+                        "path": jenkinsfile_path
+                    }
                 return content
         except FileNotFoundError:
             raise FileNotFoundError(f"Jenkinsfile not found for template: {template_name}")
@@ -535,7 +549,34 @@ class MiladyOSToolServer:
                         },
                         "content": {
                             "type": "string",
-                            "description": "New content for the template"
+                            "description": "New complete content for the template (for full file replacement)"
+                        },
+                        "edits": {
+                            "type": "array",
+                            "description": "List of edit operations to apply",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": ["replace", "insert", "delete"],
+                                        "description": "Type of edit operation"
+                                    },
+                                    "start_line": {
+                                        "type": "integer",
+                                        "description": "Starting line number (1-indexed)"
+                                    },
+                                    "end_line": {
+                                        "type": "integer",
+                                        "description": "Ending line number for replace/delete operations"
+                                    },
+                                    "content": {
+                                        "type": "string",
+                                        "description": "Content for replace/insert operations"
+                                    }
+                                },
+                                "required": ["type", "start_line"]
+                            }
                         },
                         "diff_preview": {
                             "type": "boolean",
@@ -547,7 +588,7 @@ class MiladyOSToolServer:
                             "description": "Updated description for the template (optional)"
                         }
                     },
-                    "required": ["template_name", "content"]
+                    "required": ["template_name"]
                 }
             },
             "execute_command": {
@@ -1086,6 +1127,7 @@ class MiladyOSToolServer:
                 # Extract parameters
                 template_name = arguments.get("template_name")
                 content = arguments.get("content")
+                edits = arguments.get("edits", [])
                 diff_preview = arguments.get("diff_preview", False)
                 new_description = arguments.get("description")
                 
@@ -1096,11 +1138,13 @@ class MiladyOSToolServer:
                         "error": "template_name is required",
                         "status": "error"
                     }
-                if not content:
-                    logger.error("content is required")
+                
+                # Either content or edits must be provided
+                if not content and not edits:
+                    logger.error("Either content or edits is required")
                     return {
                         "success": False,
-                        "error": "content is required",
+                        "error": "Either content or edits is required",
                         "status": "error"
                     }
                 
@@ -1116,17 +1160,54 @@ class MiladyOSToolServer:
                             "status": "error"
                         }
                     
-                    # Read existing content for diff preview
-                    with open(jenkinsfile_path, "r") as file:
-                        existing_content = file.read()
+                    # Get existing content with line numbers if diff-based editing
+                    template_data = JenkinsUtils.get_jenkinsfile_content(template_name, with_line_numbers=True) if edits else None
+                    existing_content = template_data["content"] if template_data else None
                     
-                    # Generate diff if requested
+                    with open(jenkinsfile_path, "r") as file:
+                        if not existing_content:
+                            existing_content = file.read()
+                    
+                    # Determine the new content based on edit mode
+                    new_content = content
+                    
+                    # If using diff-based editing
+                    if edits:
+                        lines = existing_content.splitlines()
+                        
+                        # Process edits in reverse order of line numbers to avoid position shifts
+                        sorted_edits = sorted(edits, key=lambda e: e.get("start_line", 0), reverse=True)
+                        
+                        for edit in sorted_edits:
+                            edit_type = edit.get("type")
+                            start_line = edit.get("start_line", 1) - 1  # Convert to 0-indexed
+                            end_line = edit.get("end_line", start_line + 1) - 1 if edit.get("end_line") else start_line
+                            edit_content = edit.get("content", "")
+                            
+                            if edit_type == "replace":
+                                # Replace specified lines with new content
+                                if start_line < len(lines) and end_line < len(lines):
+                                    new_lines = edit_content.splitlines()
+                                    lines[start_line:end_line+1] = new_lines
+                            elif edit_type == "delete":
+                                # Delete specified lines
+                                if start_line < len(lines) and end_line < len(lines):
+                                    del lines[start_line:end_line+1]
+                            elif edit_type == "insert":
+                                # Insert content at specified line
+                                if start_line <= len(lines):
+                                    new_lines = edit_content.splitlines()
+                                    lines[start_line:start_line] = new_lines
+                        
+                        new_content = "\n".join(lines)
+                    
+                    # Generate diff for preview or response
                     diff = None
-                    if diff_preview:
+                    if diff_preview or edits:
                         import difflib
                         differ = difflib.unified_diff(
                             existing_content.splitlines(),
-                            content.splitlines(),
+                            new_content.splitlines(),
                             fromfile=f"{template_name}.Jenkinsfile (original)",
                             tofile=f"{template_name}.Jenkinsfile (edited)",
                             lineterm=""
@@ -1140,12 +1221,14 @@ class MiladyOSToolServer:
                             "template_name": template_name,
                             "status": "preview",
                             "diff": diff,
-                            "message": "Diff preview generated"
+                            "message": "Diff preview generated",
+                            "original_content": existing_content,
+                            "new_content": new_content
                         }
                     
                     # Write the new content
                     with open(jenkinsfile_path, "w") as file:
-                        file.write(content)
+                        file.write(new_content)
                     
                     # Update metadata if description is provided
                     metadata_updated = False
