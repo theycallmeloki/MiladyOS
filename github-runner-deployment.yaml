@@ -32,18 +32,40 @@ spec:
               key: GITHUB_PAT
         - name: RUNNER_WORKDIR
           value: "/home/runner/_work"
+        - name: DOCKER_HOST
+          value: "tcp://localhost:2375"
         securityContext:
           privileged: true
         resources:
           limits:
-            cpu: "44"
-            memory: "180Gi"
+            cpu: "40"
+            memory: "160Gi"
           requests:
             cpu: "4"
             memory: "16Gi"
         volumeMounts:
         - name: runner-data
           mountPath: /home/runner/_work
+      # Add Docker-in-Docker sidecar
+      - name: dind
+        image: docker:dind
+        securityContext:
+          privileged: true
+        env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        resources:
+          requests:
+            cpu: "1"
+            memory: "1Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        volumeMounts:
+        - name: dind-storage
+          mountPath: /var/lib/docker
       volumes:
       - name: runner-data
+        emptyDir: {}
+      - name: dind-storage
         emptyDir: {}
