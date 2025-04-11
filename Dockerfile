@@ -69,9 +69,13 @@ RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 
 # Install dependencies from pyproject.toml
 COPY pyproject.toml uv.lock /
+# Install uv and make sure it's in the PATH
 RUN curl -fsS https://astral.sh/uv/install.sh | bash
-ENV PATH="/root/.cargo/bin:${PATH}"
-RUN uv pip install -e .
+ENV PATH="/root/.cargo/bin:/root/.uv/bin:$HOME/.uv/bin:/usr/local/bin:${PATH}"
+# Verify uv is installed and in PATH
+RUN which uv || echo "uv not found in PATH"
+# Install dependencies
+RUN /root/.uv/bin/uv pip install -e .
 
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
