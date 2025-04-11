@@ -237,9 +237,9 @@ else
 fi
 
 # Start MCP server if main.py exists
-if [ -f "/main.py" ]; then
+if [ -f "/app/main.py" ]; then
     echo "Starting MCP server..."
-    python -m main mcp --redis-host localhost --redis-port 6379 --http --port 6000 &
+    cd /app && python -m main mcp --redis-host localhost --redis-port 6379 --http --port 6000 &
     sleep 2
     
     # Check if python process is running
@@ -249,7 +249,7 @@ if [ -f "/main.py" ]; then
         echo "WARNING: MCP server did not start successfully"
     fi
 else
-    echo "WARNING: main.py not found, MCP server will not be available"
+    echo "WARNING: main.py not found at /app/main.py, MCP server will not be available"
 fi
 
 # Start Jenkins in the foreground
