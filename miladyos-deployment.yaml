@@ -42,6 +42,7 @@ spec:
         image: ogmiladyloki/miladyos:latest
         securityContext:
           privileged: true
+          runAsUser: 0  # Run as root
         ports:
         - containerPort: 8080
           name: web
