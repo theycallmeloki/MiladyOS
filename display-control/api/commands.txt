@@ -1,0 +1,3 @@
+navigate all https://example.com
+status
+exit
