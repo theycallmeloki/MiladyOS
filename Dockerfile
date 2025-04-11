@@ -67,6 +67,12 @@ RUN python3 -m pip install nbformat nbconvert --break-system-packages
 
 RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 
+# Install dependencies from pyproject.toml
+COPY pyproject.toml uv.lock /
+RUN curl -fsS https://astral.sh/uv/install.sh | bash
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN uv pip install -e .
+
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
 # Add NVIDIA CUDA repository
