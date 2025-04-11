@@ -12,28 +12,55 @@ discover_k8s_server() {
     avahi-browse -tpr _kubernetes._tcp | grep "=;.*IPv4;.*" | awk '{print $8}' | head -n 1
 }
 
-# Function to check if Docker is ready
+# Function to check if Docker client works
 docker_ready() {
     docker info > /dev/null 2>&1
 }
 
-# Function to run Docker daemon
-run_docker() {
+# Function to check if kubectl is available
+kubectl_ready() {
+    kubectl version --client > /dev/null 2>&1
+}
+
+# Function to set up container build environment
+setup_build_environment() {
+    # Try to start Docker daemon first
+    echo "Attempting to start Docker daemon..."
+    
+    # Try to start dockerd in the background
     dockerd \
         --host=unix:///var/run/docker.sock \
         --host=tcp://0.0.0.0:2375 \
         > /var/log/dockerd.log 2>&1 < /dev/null &
-
-    # Wait for Docker to be ready
-    until docker_ready; do
+    
+    # Wait for up to 10 seconds for Docker to be ready
+    local max_attempts=10
+    local attempts=0
+    while [ $attempts -lt $max_attempts ]; do
+        if docker_ready; then
+            echo "Docker daemon started successfully"
+            return 0
+        fi
+        attempts=$((attempts+1))
         sleep 1
     done
+    
+    # If Docker failed to start, check for kubectl
+    echo "Docker daemon failed to start. Checking for kubectl..."
+    if kubectl_ready; then
+        echo "kubectl is available. Will use Kubernetes for container operations."
+        # Set environment variable to indicate kubectl should be used
+        export USE_KUBECTL=true
+        return 0
+    fi
+    
+    # Neither Docker nor kubectl is available
+    echo "WARNING: Neither Docker nor kubectl is available. Container builds and deployments may fail."
+    return 1
 }
 
-
-# Start Docker daemon
-echo "Starting Docker..."
-run_docker
+# Set up build environment
+setup_build_environment
 
 # Get the host's IP address
 HOST_IP=$(get_host_ip)

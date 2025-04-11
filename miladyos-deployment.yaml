@@ -58,16 +58,13 @@ spec:
         volumeMounts:
         - name: miladyos-home
           mountPath: /var/jenkins_home
-        - name: docker-socket
-          mountPath: /var/run/docker.sock
         - name: varlog
           mountPath: /var/log
       volumes:
       - name: miladyos-home
         persistentVolumeClaim:
           claimName: miladyos-pvc
-      - name: docker-socket
-        emptyDir: {}
+      # Removed Docker socket volume
       - name: varlog
         emptyDir: {}
 ---
