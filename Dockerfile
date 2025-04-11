@@ -68,14 +68,12 @@ RUN python3 -m pip install nbformat nbconvert --break-system-packages
 RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 
 # Install dependencies from pyproject.toml
-COPY pyproject.toml uv.lock /
-# Install uv and make sure it's in the PATH
-RUN curl -fsS https://astral.sh/uv/install.sh | bash
-ENV PATH="/root/.cargo/bin:/root/.uv/bin:$HOME/.uv/bin:/usr/local/bin:${PATH}"
-# Verify uv is installed and in PATH
-RUN which uv || echo "uv not found in PATH"
-# Install dependencies
-RUN /root/.uv/bin/uv pip install -e .
+COPY pyproject.toml uv.lock README.md main.py miladyos_mcp.py miladyos_metadata.py /app/
+WORKDIR /app
+
+# Use pip directly to install uv and then use it to install dependencies
+RUN python3 -m pip install uv==0.1.20 --break-system-packages && \
+    python3 -m uv pip install -e .
 
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
