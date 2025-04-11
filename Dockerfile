@@ -71,11 +71,11 @@ RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 COPY pyproject.toml uv.lock README.md main.py miladyos_mcp.py miladyos_metadata.py /app/
 WORKDIR /app
 
-# Create a virtual environment with uv and install dependencies
-RUN python3 -m pip install uv==0.1.20 --break-system-packages && \
-    python3 -m uv venv /app/.venv && \
+# Create a virtual environment using standard venv and install dependencies with pip
+RUN python3 -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
-    python3 -m uv pip install -e .
+    pip install --upgrade pip && \
+    pip install -e .
 
 # Add venv to PATH
 ENV PATH="/app/.venv/bin:${PATH}"
