@@ -67,8 +67,7 @@ spec:
         persistentVolumeClaim:
           claimName: miladyos-pvc
       - name: docker-socket
-        hostPath:
-          path: /var/run/docker.sock
+        emptyDir: {}
       - name: varlog
         emptyDir: {}
 ---
