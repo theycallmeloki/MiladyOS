@@ -55,16 +55,23 @@ spec:
           value: "admin"
         - name: JENKINS_ADMIN_PASSWORD
           value: "password"
+        - name: KUBERNETES_MODE
+          value: "true"
+        - name: DISABLE_DOCKER
+          value: "true"
         volumeMounts:
         - name: miladyos-home
           mountPath: /var/jenkins_home
         - name: varlog
           mountPath: /var/log
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
       volumes:
       - name: miladyos-home
         persistentVolumeClaim:
           claimName: miladyos-pvc
-      # Removed Docker socket volume
+      - name: docker-socket
+        emptyDir: {}
       - name: varlog
         emptyDir: {}
 ---
