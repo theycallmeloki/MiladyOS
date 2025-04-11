@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # Use GitHub-hosted runner instead of self-hosted
 
     steps:
     - name: Check Out Repo
@@ -18,38 +18,23 @@ jobs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
-      with:
-        driver: docker
-        driver-opts: |
-          image=moby/buildkit:buildx-stable-1
-          network=host
 
     - name: Login to Docker Hub
+      if: github.event_name != 'pull_request'
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build and push (direct method)
-      if: github.event_name != 'pull_request'
-      run: |
-        # Build directly from the checked out code
-        echo "Building from local checkout instead of GitHub URL"
-        docker buildx build \
-          --platform linux/amd64 \
-          --tag ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:latest \
-          --push \
-          .
-
-    - name: Build without pushing (PR)
-      if: github.event_name == 'pull_request'
-      run: |
-        # Build directly from the checked out code but don't push for PRs
-        echo "Building from local checkout (PR - no push)"
-        docker buildx build \
-          --platform linux/amd64 \
-          --tag ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:pr-test \
-          .
+    - name: Build and push
+      uses: docker/build-push-action@v3
+      with:
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:latest
+        platforms: linux/amd64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
     - name: Logout of Docker Hub
+      if: github.event_name != 'pull_request'
       run: docker logout
