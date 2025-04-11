@@ -56,7 +56,7 @@ class Config:
     # Jenkins server configurations
     JENKINS_SERVERS = {
         "default": {
-            "url": "https://amd.miladyos.com"
+            "url": "http://localhost:8080"
         }
     }
 
@@ -1917,6 +1917,77 @@ class MiladyOSToolServer:
             await self.server.run(
                 streams[0], streams[1], self.server.create_initialization_options()
             )
+            
+    async def run_http(self, host="0.0.0.0", port=6000):
+        """Run the server using HTTP transport."""
+        if not self.server:
+            await self.initialize()
+            
+        try:
+            # Import uvicorn and fastapi only when needed
+            import uvicorn
+            from fastapi import FastAPI, Request, Response
+            from fastapi.middleware.cors import CORSMiddleware
+            import json
+            
+            # Create FastAPI app
+            app = FastAPI(title="MiladyOS MCP API")
+            
+            # Add CORS middleware
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=["*"],
+                allow_credentials=True,
+                allow_methods=["*"],
+                allow_headers=["*"],
+            )
+            
+            @app.post("/mcp")
+            async def mcp_endpoint(request: Request):
+                """MCP request handler endpoint."""
+                try:
+                    # Parse request body
+                    body = await request.json()
+                    
+                    # Process MCP request
+                    if "tool" not in body:
+                        return Response(
+                            content=json.dumps({"error": "Missing 'tool' in request"}),
+                            media_type="application/json",
+                            status_code=400
+                        )
+                    
+                    tool_name = body["tool"]
+                    arguments = body.get("arguments", {})
+                    
+                    # Call the tool
+                    result = await self._execute_tool(tool_name, arguments)
+                    
+                    # Return the result
+                    return Response(
+                        content=json.dumps(result),
+                        media_type="application/json"
+                    )
+                except Exception as e:
+                    logger.error(f"Error processing MCP request: {e}")
+                    return Response(
+                        content=json.dumps({
+                            "error": f"Error processing request: {str(e)}",
+                            "status": "error"
+                        }),
+                        media_type="application/json",
+                        status_code=500
+                    )
+            
+            # Run the uvicorn server
+            logger.info(f"Starting HTTP server on {host}:{port}")
+            config = uvicorn.Config(app, host=host, port=port)
+            server = uvicorn.Server(config)
+            await server.serve()
+            
+        except ImportError as e:
+            logger.error(f"Failed to start HTTP server: {e}. Please install uvicorn and fastapi with 'pip install uvicorn fastapi'")
+            raise
 
     # SSE transport removed - using stdio only
 
