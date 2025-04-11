@@ -71,9 +71,14 @@ RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 COPY pyproject.toml uv.lock README.md main.py miladyos_mcp.py miladyos_metadata.py /app/
 WORKDIR /app
 
-# Use pip directly to install uv and then use it to install dependencies
+# Create a virtual environment with uv and install dependencies
 RUN python3 -m pip install uv==0.1.20 --break-system-packages && \
+    python3 -m uv venv /app/.venv && \
+    . /app/.venv/bin/activate && \
     python3 -m uv pip install -e .
+
+# Add venv to PATH
+ENV PATH="/app/.venv/bin:${PATH}"
 
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
