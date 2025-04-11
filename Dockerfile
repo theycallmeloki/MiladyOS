@@ -67,18 +67,22 @@ RUN python3 -m pip install nbformat nbconvert --break-system-packages
 
 RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 
-# Install dependencies from pyproject.toml
-COPY pyproject.toml uv.lock README.md main.py miladyos_mcp.py miladyos_metadata.py /app/
+# Install dependencies directly
 WORKDIR /app
+COPY pyproject.toml /app/
 
-# Create a virtual environment using standard venv and install dependencies with pip
+# Create a virtual environment and install dependencies directly
 RUN python3 -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
     pip install --upgrade pip && \
-    pip install -e .
+    pip install mcp[cli]>=1.6.0 python-jenkins>=1.8.0 asyncio>=3.4.3 anyio>=4.2.0 \
+    click>=8.1.7 colorlog>=6.8.0 python-dotenv>=1.0.0 redis>=5.0.0
 
 # Add venv to PATH
 ENV PATH="/app/.venv/bin:${PATH}"
+
+# Copy Python source files
+COPY main.py miladyos_mcp.py miladyos_metadata.py /app/
 
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
