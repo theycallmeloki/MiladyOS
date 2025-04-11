@@ -1,0 +1,2 @@
+playwright
+websockets>=11.0.0

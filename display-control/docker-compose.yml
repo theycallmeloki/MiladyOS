@@ -1,0 +1,23 @@
+version: '2'
+services:
+  # Control API service - ONE instance on the fleet
+  control-api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    restart: always
+    labels:
+      io.balena.features.supervisor-api: '1'
+      io.balena.features.balena-api: '1'
+  
+  # Display service - ONE per device
+  display:
+    build: ./display
+    privileged: true
+    environment:
+      - DISPLAY_ID=:0
+      - DEFAULT_URL=https://grafana.miladyos.net
+      - CONTROL_API=http://control-api:8000
+    depends_on:
+      - control-api
+    restart: always
