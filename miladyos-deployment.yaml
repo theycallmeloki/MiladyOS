@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: miladyos-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: longhorn-single-replica
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: miladyos
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: miladyos
+  template:
+    metadata:
+      labels:
+        app: miladyos
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: talos-4vi-s4q
+      initContainers:
+      - name: volume-permissions
+        image: busybox
+        command: ["sh", "-c", "chown -R 1000:1000 /var/jenkins_home && mkdir -p /var/log && chmod 777 /var/log"]
+        volumeMounts:
+        - name: miladyos-home
+          mountPath: /var/jenkins_home
+        - name: varlog
+          mountPath: /var/log
+      containers:
+      - name: miladyos
+        image: ogmiladyloki/miladyos:latest
+        securityContext:
+          privileged: true
+        ports:
+        - containerPort: 8080
+          name: web
+        - containerPort: 50000
+          name: agent
+        - containerPort: 6000
+          name: mcp
+        env:
+        - name: JENKINS_ADMIN_ID
+          value: "admin"
+        - name: JENKINS_ADMIN_PASSWORD
+          value: "password"
+        volumeMounts:
+        - name: miladyos-home
+          mountPath: /var/jenkins_home
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: varlog
+          mountPath: /var/log
+      volumes:
+      - name: miladyos-home
+        persistentVolumeClaim:
+          claimName: miladyos-pvc
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+      - name: varlog
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: miladyos
+  namespace: default
+spec:
+  selector:
+    app: miladyos
+  ports:
+  - name: web
+    port: 8080
+    targetPort: 8080
+  - name: agent
+    port: 50000
+    targetPort: 50000
+  - name: mcp
+    port: 6000
+    targetPort: 6000
+  type: ClusterIP

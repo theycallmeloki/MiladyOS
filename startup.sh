@@ -94,5 +94,12 @@ sleep 5
 # Sleep to start
 sleep 5
 
+# Start MCP server with HTTP transport in the background
+python -m main mcp --redis-host localhost --redis-port 6379 --http --port 6000 &
+
+# Sleep to ensure MCP server starts
+sleep 2
+echo "MiladyOS MCP server started on port 6000"
+
 # Start Jenkins in the foreground
 /usr/local/bin/jenkins.sh
