@@ -56,7 +56,7 @@ class Config:
     # Jenkins server configurations
     JENKINS_SERVERS = {
         "default": {
-            "url": "http://localhost:8080"
+            "url": os.getenv("JENKINS_URL", "http://localhost:8080")
         }
     }
 
@@ -791,8 +791,14 @@ class MiladyOSToolServer:
             if not REDIS_AVAILABLE:
                 raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
                 
-            redis_host = os.getenv("REDIS_HOST", "localhost")
-            redis_port = int(os.getenv("REDIS_PORT", "6379"))
+            # In Kubernetes, use service names for discovery
+            if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
+                redis_host = os.getenv("REDIS_HOST", "redka")
+                redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
+            else:
+                redis_host = os.getenv("REDIS_HOST", "localhost")
+                redis_port = int(os.getenv("REDIS_PORT", "6379"))
             
             # Initialize Redis-based metadata manager
             metadata_manager = RedkaMetadataManager(
@@ -902,8 +908,14 @@ class MiladyOSToolServer:
             if not REDIS_AVAILABLE:
                 raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
                 
-            redis_host = os.getenv("REDIS_HOST", "localhost")
-            redis_port = int(os.getenv("REDIS_PORT", "6379"))
+            # In Kubernetes, use service names for discovery
+            if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
+                redis_host = os.getenv("REDIS_HOST", "redka")
+                redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
+            else:
+                redis_host = os.getenv("REDIS_HOST", "localhost")
+                redis_port = int(os.getenv("REDIS_PORT", "6379"))
             
             # Initialize Redis-based metadata manager
             metadata_manager = RedkaMetadataManager(
@@ -1661,8 +1673,15 @@ class MiladyOSToolServer:
                                     if not isinstance(metadata_manager, RedkaMetadataManager):
                                         logger.error("metadata_manager is not an instance of RedkaMetadataManager")
                                         # Initialize Redis-based metadata manager
-                                        redis_host = os.getenv("REDIS_HOST", "localhost")
-                                        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                                        # In Kubernetes, use service names for discovery
+                                        if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
+                                            redis_host = os.getenv("REDIS_HOST", "redka")
+                                            redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                                            logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
+                                        else:
+                                            redis_host = os.getenv("REDIS_HOST", "localhost")
+                                            redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                                        
                                         metadata_manager = RedkaMetadataManager(
                                             templates_dir=Config.TEMPLATES_DIR,
                                             redis_host=redis_host,
@@ -1981,8 +2000,8 @@ class MiladyOSToolServer:
             
             # Run the uvicorn server
             logger.info(f"Starting HTTP server on {host}:{port}")
-            config = uvicorn.Config(app, host=host, port=port)
-            server = uvicorn.Server(config)
+            config = uvicorn.Config(app=app, host=host, port=port)
+            server = uvicorn.Server(config=config)
             await server.serve()
             
         except ImportError as e:
@@ -2040,6 +2059,15 @@ def main(all_tools: bool, templates_dir: str, metadata_dir: str,
         raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
     
     # Always use Redis-based manager
+    # In Kubernetes, use service names for discovery
+    if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
+        redis_host = os.getenv("REDIS_HOST", "redka")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
+    else:
+        redis_host = os.getenv("REDIS_HOST", "localhost")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+    
     metadata_manager = RedkaMetadataManager(templates_dir, redis_host, redis_port)
     logger.info(f"Initialized Redis-based metadata manager ({redis_host}:{redis_port})")
     
