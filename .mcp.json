@@ -1,13 +1,8 @@
 {
   "mcpServers": {
     "miladyos": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "main.py",
-        "mcp"
-      ],
+      "type": "sse",
+      "url": "http://mcp.miladyos.net/sse",
       "env": {}
     }
   }

@@ -7,8 +7,12 @@ spec:
   type: ExternalName
   externalName: miladyos.default.svc.cluster.local
   ports:
-  - port: 8080
+  - name: http
+    port: 8080
     targetPort: 8080
+  - name: mcp
+    port: 6000
+    targetPort: 6000
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -32,3 +36,13 @@ spec:
             name: miladyos-proxy
             port:
               number: 8080
+  - host: mcp.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: miladyos-proxy
+            port:
+              number: 6000
