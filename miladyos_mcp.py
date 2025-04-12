@@ -9,6 +9,84 @@ import uuid
 import click
 import anyio
 
+def get_redis_config():
+    """
+    Get Redis configuration based on environment variables.
+    Centralizes Redis configuration to avoid duplication.
+    """
+    if not REDIS_AVAILABLE:
+        raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
+        
+    # In Kubernetes, use service names for discovery
+    if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
+        redis_host = os.getenv("REDIS_HOST", "redka")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
+    else:
+        redis_host = os.getenv("REDIS_HOST", "localhost")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+    
+    return redis_host, redis_port
+
+def create_error_response(error_message, tool=None, status="error", additional_info=None):
+    """
+    Create a standardized error response dictionary.
+    
+    Args:
+        error_message: The main error message
+        tool: Optional tool name that triggered the error
+        status: Error status code (default: "error")
+        additional_info: Optional dictionary with additional error details
+    
+    Returns:
+        Dictionary with standardized error format
+    """
+    response = {
+        "success": False,
+        "error": error_message,
+        "status": status
+    }
+    
+    if tool:
+        response["tool"] = tool
+    
+    if additional_info and isinstance(additional_info, dict):
+        response.update(additional_info)
+        
+    return response
+
+def create_success_response(message=None, data=None, status="success", additional_info=None):
+    """
+    Create a standardized success response dictionary.
+    
+    Args:
+        message: Optional success message
+        data: Optional data to include in the response
+        status: Success status code (default: "success")
+        additional_info: Optional dictionary with additional information
+    
+    Returns:
+        Dictionary with standardized success format
+    """
+    response = {
+        "success": True,
+        "status": status
+    }
+    
+    if message:
+        response["message"] = message
+        
+    if data:
+        if isinstance(data, dict):
+            response.update(data)
+        else:
+            response["data"] = data
+    
+    if additional_info and isinstance(additional_info, dict):
+        response.update(additional_info)
+        
+    return response
+
 import jenkins
 import colorlog
 from mcp.server.lowlevel import Server
@@ -17,10 +95,10 @@ from mcp import types
 from xml.sax.saxutils import escape
 
 # Import our metadata management system
-from miladyos_metadata import MetadataManager, RedkaMetadataManager, REDIS_AVAILABLE
+from miladyos_metadata import RedkaMetadataManager, REDIS_AVAILABLE, metadata_manager
 
-# Global metadata manager instance will be set during initialization
-metadata_manager = None
+# Note: We use the shared metadata_manager instance from miladyos_metadata
+# but can also create our own instances of RedkaMetadataManager when needed
 
 # Configure logging
 logger = colorlog.getLogger("miladyos-mcp-tools")
@@ -783,30 +861,7 @@ class MiladyOSToolServer:
 
     async def initialize(self) -> Server:
         """Initialize by loading tools from metadata."""
-        # Initialize metadata manager if not already initialized
-        global metadata_manager
-        
-        if metadata_manager is None:
-            # Always use Redis for metadata management
-            if not REDIS_AVAILABLE:
-                raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
-                
-            # In Kubernetes, use service names for discovery
-            if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
-                redis_host = os.getenv("REDIS_HOST", "redka")
-                redis_port = int(os.getenv("REDIS_PORT", "6379"))
-                logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
-            else:
-                redis_host = os.getenv("REDIS_HOST", "localhost")
-                redis_port = int(os.getenv("REDIS_PORT", "6379"))
-            
-            # Initialize Redis-based metadata manager
-            metadata_manager = RedkaMetadataManager(
-                templates_dir=Config.TEMPLATES_DIR,
-                redis_host=redis_host,
-                redis_port=redis_port
-            )
-            logger.info(f"Initialized Redis-based metadata manager ({redis_host}:{redis_port})")
+        # Use the global metadata_manager already initialized in miladyos_metadata.py
         
         self.tool_registry = await self.process_tool_metadata()
         
@@ -839,10 +894,7 @@ class MiladyOSToolServer:
             try:
                 if name not in self.tool_registry:
                     logger.error(f"Unknown tool: {name}")
-                    error_response = {
-                        "error": f"Unknown tool: {name}",
-                        "status": "error"
-                    }
+                    error_response = create_error_response(f"Unknown tool: {name}", tool=name)
                     return [types.TextContent(type="text", text=json.dumps(error_response, indent=2))]
 
                 # Execute the appropriate tool function
@@ -851,12 +903,11 @@ class MiladyOSToolServer:
                 except Exception as tool_error:
                     import traceback
                     logger.error(f"Error executing tool {name}: {tool_error}")
-                    error_response = {
-                        "error": f"Error executing tool: {str(tool_error)}",
-                        "status": "error",
-                        "tool": name,
-                        "arguments": arguments
-                    }
+                    error_response = create_error_response(
+                        f"Error executing tool: {str(tool_error)}", 
+                        tool=name, 
+                        additional_info={"arguments": arguments}
+                    )
                     return [types.TextContent(type="text", text=json.dumps(error_response, indent=2))]
 
                 # Convert result to TextContent
@@ -901,29 +952,7 @@ class MiladyOSToolServer:
     
     async def _execute_tool(self, tool_id: str, arguments: Dict[str, Any]) -> Any:
         """Execute the specified tool with the given arguments."""
-        # Ensure metadata_manager is initialized
-        global metadata_manager
-        if metadata_manager is None:
-            # Always use Redis for metadata management
-            if not REDIS_AVAILABLE:
-                raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
-                
-            # In Kubernetes, use service names for discovery
-            if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
-                redis_host = os.getenv("REDIS_HOST", "redka")
-                redis_port = int(os.getenv("REDIS_PORT", "6379"))
-                logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
-            else:
-                redis_host = os.getenv("REDIS_HOST", "localhost")
-                redis_port = int(os.getenv("REDIS_PORT", "6379"))
-            
-            # Initialize Redis-based metadata manager
-            metadata_manager = RedkaMetadataManager(
-                templates_dir=Config.TEMPLATES_DIR,
-                redis_host=redis_host,
-                redis_port=redis_port
-            )
-            logger.info(f"Initialized Redis-based metadata manager ({redis_host}:{redis_port})")
+        # Use the global metadata_manager already initialized in miladyos_metadata.py
         
         try:
             if tool_id == "hello_world":
@@ -1589,18 +1618,8 @@ class MiladyOSToolServer:
                         
                         # Record execution in metadata system
                         try:
-                            # Make sure we're using RedkaMetadataManager
-                            if not isinstance(metadata_manager, RedkaMetadataManager):
-                                logger.error("metadata_manager is not an instance of RedkaMetadataManager")
-                                # Initialize Redis-based metadata manager
-                                redis_host = os.getenv("REDIS_HOST", "localhost")
-                                redis_port = int(os.getenv("REDIS_PORT", "6379"))
-                                metadata_manager = RedkaMetadataManager(
-                                    templates_dir=Config.TEMPLATES_DIR,
-                                    redis_host=redis_host,
-                                    redis_port=redis_port
-                                )
-                                logger.info(f"Re-initialized Redis-based metadata manager ({redis_host}:{redis_port})")
+                            # We use the shared metadata_manager instance from miladyos_metadata
+                            # It should already be properly initialized
                             
                             # Record execution in Redis
                             execution_info = metadata_manager.record_execution(
@@ -1669,25 +1688,8 @@ class MiladyOSToolServer:
                                 
                                 # Update execution status in metadata system
                                 try:
-                                    # Make sure we're using RedkaMetadataManager
-                                    if not isinstance(metadata_manager, RedkaMetadataManager):
-                                        logger.error("metadata_manager is not an instance of RedkaMetadataManager")
-                                        # Initialize Redis-based metadata manager
-                                        # In Kubernetes, use service names for discovery
-                                        if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
-                                            redis_host = os.getenv("REDIS_HOST", "redka")
-                                            redis_port = int(os.getenv("REDIS_PORT", "6379"))
-                                            logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
-                                        else:
-                                            redis_host = os.getenv("REDIS_HOST", "localhost")
-                                            redis_port = int(os.getenv("REDIS_PORT", "6379"))
-                                        
-                                        metadata_manager = RedkaMetadataManager(
-                                            templates_dir=Config.TEMPLATES_DIR,
-                                            redis_host=redis_host,
-                                            redis_port=redis_port
-                                        )
-                                        logger.info(f"Re-initialized Redis-based metadata manager ({redis_host}:{redis_port})")
+                                    # We use the shared metadata_manager instance from miladyos_metadata
+                                    # It should already be properly initialized
                                     
                                     # First check if the execution key exists
                                     execution_key = f"miladyos:execution:{execution_info['id']}"
@@ -2002,6 +2004,8 @@ class MiladyOSToolServer:
             logger.info(f"Starting HTTP server on {host}:{port}")
             config = uvicorn.Config(app=app, host=host, port=port)
             server = uvicorn.Server(config=config)
+            
+            # Use the run method that works with our configuration
             await server.serve()
             
         except ImportError as e:
@@ -2053,23 +2057,8 @@ def main(all_tools: bool, templates_dir: str, metadata_dir: str,
     os.environ["REDIS_HOST"] = redis_host
     os.environ["REDIS_PORT"] = str(redis_port)
     
-    # Initialize metadata manager with Redis
-    global metadata_manager
-    if not REDIS_AVAILABLE:
-        raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
-    
-    # Always use Redis-based manager
-    # In Kubernetes, use service names for discovery
-    if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
-        redis_host = os.getenv("REDIS_HOST", "redka")
-        redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
-    else:
-        redis_host = os.getenv("REDIS_HOST", "localhost")
-        redis_port = int(os.getenv("REDIS_PORT", "6379"))
-    
-    metadata_manager = RedkaMetadataManager(templates_dir, redis_host, redis_port)
-    logger.info(f"Initialized Redis-based metadata manager ({redis_host}:{redis_port})")
+    # Note: We use the global metadata_manager from miladyos_metadata
+    # which will pick up these environment variables
     
     # Create server instance with appropriate tool filtering
     supported_tools = None if all_tools else Config.DEFAULT_TOOLS
