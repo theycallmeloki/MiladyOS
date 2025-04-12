@@ -59,6 +59,12 @@ spec:
           value: "true"
         - name: DISABLE_DOCKER
           value: "true"
+        - name: JENKINS_URL
+          value: "http://miladyos:8080"
+        - name: REDIS_HOST
+          value: "redka"
+        - name: REDIS_PORT
+          value: "6379"
         volumeMounts:
         - name: miladyos-home
           mountPath: /var/jenkins_home
