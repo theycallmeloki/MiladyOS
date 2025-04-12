@@ -57,22 +57,28 @@ def cli():
     help="Redis server port",
 )
 @click.option(
-    "--http",
-    is_flag=True,
-    help="Run MCP server with HTTP transport instead of stdio",
+    "--transport",
+    type=click.Choice(["stdio", "sse"]),
+    default="stdio",
+    help="Transport type to use",
 )
 @click.option(
     "--host",
     default="0.0.0.0",
-    help="Host to bind the HTTP server to (only used with --http)",
+    help="Host to bind the server to (only used with sse transport)",
 )
 @click.option(
     "--port",
     default=6000,
     type=int,
-    help="Port to bind the HTTP server to (only used with --http)",
+    help="Port to bind the server to (only used with sse transport)",
 )
-def mcp(all_tools, templates_dir, metadata_dir, redis_host, redis_port, http, host, port):
+@click.option(
+    "--base-path",
+    default="",
+    help="Base path for URL construction (only used with sse transport)",
+)
+def mcp(all_tools, templates_dir, metadata_dir, redis_host, redis_port, transport, host, port, base_path):
     """Run the MiladyOS MCP server.
 
     Provides MCP-compatible tools for MiladyOS pipeline management.
@@ -102,9 +108,10 @@ def mcp(all_tools, templates_dir, metadata_dir, redis_host, redis_port, http, ho
     server = MiladyOSToolServer(supported_tools=supported_tools)
     
     # Run with the appropriate transport
-    if http:
-        logger.info(f"Starting MCP server with HTTP transport on {host}:{port}")
-        return anyio.run(server.run_http, host=host, port=port)
+    if transport == "sse":
+        logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
+        server.run_sse(host=host, port=port, base_path=base_path)
+        return 0
     else:
         logger.info("Starting MCP server with stdio transport")
         return anyio.run(server.run_stdio)
