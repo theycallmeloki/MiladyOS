@@ -19,8 +19,25 @@ logger.setLevel(logging.INFO)
 
 # Default paths
 DEFAULT_TEMPLATES_DIR = "templates"
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
+def get_redis_config():
+    """
+    Get Redis configuration based on environment variables.
+    Centralizes Redis configuration to avoid duplication.
+    """
+    if not REDIS_AVAILABLE:
+        raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
+        
+    # In Kubernetes, use service names for discovery
+    if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
+        redis_host = os.getenv("REDIS_HOST", "redka")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
+    else:
+        redis_host = os.getenv("REDIS_HOST", "localhost")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+    
+    return redis_host, redis_port
 
 # Try to import redis
 try:
@@ -1281,6 +1298,13 @@ class MetadataManager:
 if not REDIS_AVAILABLE:
     raise ImportError("Redis package is required for MiladyOS. Please install with 'pip install redis'")
 
+# Get Redis configuration
+redis_host, redis_port = get_redis_config()
+
 # Initialize the Redis-based metadata manager
-metadata_manager = RedkaMetadataManager()
-logger.info("Using Redis-based metadata manager")
+metadata_manager = RedkaMetadataManager(
+    templates_dir=DEFAULT_TEMPLATES_DIR,
+    redis_host=redis_host,
+    redis_port=redis_port
+)
+logger.info(f"Initialized Redis-based metadata manager ({redis_host}:{redis_port})")
