@@ -305,6 +305,33 @@ def list_templates():
 
 
 @cli.command()
+@click.argument("template_name")
+def view_template(template_name):
+    """View content of a template with line numbers."""
+    from miladyos_mcp import JenkinsUtils
+    
+    try:
+        # Get template content with line numbers
+        template_data = JenkinsUtils.get_jenkinsfile_content(template_name, with_line_numbers=True)
+        
+        # Print path and metadata first
+        logger.info(f"Template path: {template_data.get('path')}")
+        logger.info("")
+        
+        # Print the content with line numbers
+        for line_num, line_content in template_data.get("lines", []):
+            print(f"{line_num:4d} | {line_content}")
+        
+        return 0
+    except FileNotFoundError:
+        logger.error(f"Template {template_name} not found")
+        return 1
+    except Exception as e:
+        logger.error(f"Error viewing template: {e}")
+        return 1
+
+
+@cli.command()
 @click.option("--template", help="Filter by template name")
 @click.option("--limit", default=10, help="Maximum number of runs to show")
 @click.option("--status", type=click.Choice(["running", "complete", "failed"]), help="Filter by status")

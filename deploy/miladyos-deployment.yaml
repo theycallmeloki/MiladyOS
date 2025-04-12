@@ -11,6 +11,32 @@ spec:
       storage: 200Gi
   storageClassName: longhorn-single-replica
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pachyderm-config-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Mi
+  storageClassName: longhorn-single-replica
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kube-config-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Mi
+  storageClassName: longhorn-single-replica
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,12 +57,16 @@ spec:
       initContainers:
       - name: volume-permissions
         image: busybox
-        command: ["sh", "-c", "chown -R 1000:1000 /var/jenkins_home && mkdir -p /var/log && chmod 777 /var/log"]
+        command: ["sh", "-c", "chown -R 1000:1000 /var/jenkins_home && mkdir -p /var/log && chmod 777 /var/log && mkdir -p /root/.kube /root/.pachyderm && touch /root/.kube/config /root/.pachyderm/config.json && chmod -R 700 /root/.kube /root/.pachyderm"]
         volumeMounts:
         - name: miladyos-home
           mountPath: /var/jenkins_home
         - name: varlog
           mountPath: /var/log
+        - name: kube-config
+          mountPath: /root/.kube
+        - name: pachyderm-config
+          mountPath: /root/.pachyderm
       containers:
       - name: miladyos
         image: ogmiladyloki/miladyos:latest
@@ -72,6 +102,10 @@ spec:
           mountPath: /var/log
         - name: docker-socket
           mountPath: /var/run/docker.sock
+        - name: kube-config
+          mountPath: /root/.kube
+        - name: pachyderm-config
+          mountPath: /root/.pachyderm
       volumes:
       - name: miladyos-home
         persistentVolumeClaim:
@@ -80,6 +114,12 @@ spec:
         emptyDir: {}
       - name: varlog
         emptyDir: {}
+      - name: kube-config
+        persistentVolumeClaim:
+          claimName: kube-config-pvc
+      - name: pachyderm-config
+        persistentVolumeClaim:
+          claimName: pachyderm-config-pvc
 ---
 apiVersion: v1
 kind: Service
