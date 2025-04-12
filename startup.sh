@@ -239,7 +239,7 @@ fi
 # Start MCP server if main.py exists
 if [ -f "/app/main.py" ]; then
     echo "Starting MCP server..."
-    cd /app && python -m main mcp --redis-host localhost --redis-port 6379 --http --port 6000 &
+    cd /app && python -m main mcp --redis-host localhost --redis-port 6379 --transport sse --host 0.0.0.0 --port 6000 &
     sleep 2
     
     # Check if python process is running

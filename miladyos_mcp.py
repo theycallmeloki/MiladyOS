@@ -1939,77 +1939,57 @@ class MiladyOSToolServer:
                 streams[0], streams[1], self.server.create_initialization_options()
             )
             
-    async def run_http(self, host="0.0.0.0", port=6000):
-        """Run the server using HTTP transport."""
+    def run_sse(self, host="0.0.0.0", port=6000, base_path=""):
+        """Run the server using Server-Sent Events (SSE) transport.
+        
+        This implements the MCP transport protocol using SSE (Server-Sent Events)
+        which is the recommended approach for HTTP-based MCP servers.
+        
+        Args:
+            host: Host to bind to
+            port: Port to listen on
+            base_path: Optional base path for URL construction
+        """
+        # Initialize the server if needed
         if not self.server:
-            await self.initialize()
+            anyio.run(self.initialize)
             
         try:
-            # Import uvicorn and fastapi only when needed
+            # Import required modules only when needed
             import uvicorn
-            from fastapi import FastAPI, Request, Response
-            from fastapi.middleware.cors import CORSMiddleware
-            import json
+            from starlette.applications import Starlette
+            from starlette.routing import Mount, Route
+            from mcp.server.sse import SseServerTransport
             
-            # Create FastAPI app
-            app = FastAPI(title="MiladyOS MCP API")
+            # Use the base_path for messages endpoint
+            messages_path = "/messages/"
+            messages_endpoint = f"{base_path}{messages_path}" if base_path else messages_path
             
-            # Add CORS middleware
-            app.add_middleware(
-                CORSMiddleware,
-                allow_origins=["*"],
-                allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
+            # Create SSE transport with messages endpoint
+            sse = SseServerTransport(messages_endpoint)
+            
+            # Define SSE handler
+            async def handle_sse(request):
+                async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+                    await self.server.run(
+                        streams[0], streams[1], self.server.create_initialization_options()
+                    )
+            
+            # Create Starlette app with SSE endpoint and message handler
+            starlette_app = Starlette(
+                debug=True,
+                routes=[
+                    Route("/sse", endpoint=handle_sse),
+                    Mount("/messages/", app=sse.handle_post_message),
+                ],
             )
             
-            @app.post("/mcp")
-            async def mcp_endpoint(request: Request):
-                """MCP request handler endpoint."""
-                try:
-                    # Parse request body
-                    body = await request.json()
-                    
-                    # Process MCP request
-                    if "tool" not in body:
-                        return Response(
-                            content=json.dumps({"error": "Missing 'tool' in request"}),
-                            media_type="application/json",
-                            status_code=400
-                        )
-                    
-                    tool_name = body["tool"]
-                    arguments = body.get("arguments", {})
-                    
-                    # Call the tool
-                    result = await self._execute_tool(tool_name, arguments)
-                    
-                    # Return the result
-                    return Response(
-                        content=json.dumps(result),
-                        media_type="application/json"
-                    )
-                except Exception as e:
-                    logger.error(f"Error processing MCP request: {e}")
-                    return Response(
-                        content=json.dumps({
-                            "error": f"Error processing request: {str(e)}",
-                            "status": "error"
-                        }),
-                        media_type="application/json",
-                        status_code=500
-                    )
-            
             # Run the uvicorn server
-            logger.info(f"Starting HTTP server on {host}:{port}")
-            config = uvicorn.Config(app=app, host=host, port=port)
-            server = uvicorn.Server(config=config)
-            
-            # Use the run method that works with our configuration
-            await server.serve()
+            logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
+            uvicorn.run(starlette_app, host=host, port=port)
             
         except ImportError as e:
-            logger.error(f"Failed to start HTTP server: {e}. Please install uvicorn and fastapi with 'pip install uvicorn fastapi'")
+            logger.error(f"Failed to start SSE server: {e}. Please install uvicorn, starlette, and other required packages with 'pip install uvicorn starlette'")
             raise
 
     # SSE transport removed - using stdio only
