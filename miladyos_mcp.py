@@ -119,6 +119,7 @@ class Config:
         "create_template",
         "edit_template",
         "list_templates",
+        "view_template",
         "deploy_pipeline",
         "run_pipeline",
         "get_pipeline_status",
@@ -615,6 +616,20 @@ class MiladyOSToolServer:
                     "required": []
                 }
             },
+            "view_template": {
+                "name": "View Template",
+                "description": "View content of a template with line numbers",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "template_name": {
+                            "type": "string",
+                            "description": "Name of the template to view (without .Jenkinsfile extension)"
+                        }
+                    },
+                    "required": ["template_name"]
+                }
+            },
             "edit_template": {
                 "name": "Edit Template",
                 "description": "Edit an existing template in the templates directory",
@@ -957,6 +972,53 @@ class MiladyOSToolServer:
         try:
             if tool_id == "hello_world":
                 return "milady!"
+                
+            elif tool_id == "view_template":
+                # Extract parameters
+                template_name = arguments.get("template_name")
+                
+                if not template_name:
+                    logger.error("template_name is required")
+                    return {
+                        "success": False,
+                        "error": "template_name is required",
+                        "status": "error"
+                    }
+                
+                try:
+                    # Get template content with line numbers
+                    template_data = JenkinsUtils.get_jenkinsfile_content(template_name, with_line_numbers=True)
+                    
+                    # Format the output
+                    formatted_content = []
+                    for line_num, line_content in template_data.get("lines", []):
+                        formatted_content.append(f"{line_num:4d} | {line_content}")
+                    
+                    # Return response with template information
+                    return {
+                        "success": True,
+                        "template_name": template_name,
+                        "status": "success",
+                        "path": template_data.get("path"),
+                        "formatted_content": "\n".join(formatted_content),
+                        "raw_content": template_data.get("content")
+                    }
+                    
+                except FileNotFoundError:
+                    return {
+                        "success": False,
+                        "template_name": template_name,
+                        "error": f"Template {template_name} not found",
+                        "status": "error"
+                    }
+                except Exception as e:
+                    logger.error(f"Error viewing template: {e}")
+                    return {
+                        "success": False,
+                        "template_name": template_name,
+                        "error": f"Error viewing template: {str(e)}",
+                        "status": "error"
+                    }
                 
             elif tool_id == "execute_command":
                 # Extract parameters
