@@ -8,6 +8,9 @@ import textwrap
 import uuid
 import click
 import anyio
+import sqlite3
+from contextlib import closing
+from pathlib import Path
 
 def get_redis_config():
     """
@@ -125,7 +128,10 @@ class Config:
         "get_pipeline_status",
         "list_pipeline_runs",
         "hello_world",
-        "execute_command"
+        "execute_command",
+        "read_query",
+        "list_db_tables",
+        "describe_db_table"
     ]
 
     # Jenkins credentials - hardcoded for reliability
@@ -138,6 +144,9 @@ class Config:
             "url": os.getenv("JENKINS_URL", "http://localhost:8080")
         }
     }
+
+    # SQLite database path
+    SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "/data/redka/data.db")
 
     # Templates and metadata directories
     TEMPLATES_DIR = os.getenv("TEMPLATES_DIR", "templates")
@@ -153,6 +162,82 @@ class Config:
 class JenkinsApiError(Exception):
     """Raised when there's an error with the Jenkins API."""
     pass
+
+class SqliteApiError(Exception):
+    """Raised when there's an error with the SQLite API."""
+    pass
+
+
+# ===== SQLite Utilities =====
+class SqliteUtils:
+    """Utility functions for interacting with SQLite."""
+    
+    DEFAULT_DB_PATH = "/data/redka/data.db"
+    
+    @staticmethod
+    def connect_to_db(db_path=None):
+        """
+        Connect to SQLite database and return connection.
+        """
+        try:
+            db_path = db_path or SqliteUtils.DEFAULT_DB_PATH
+            
+            # Ensure the parent directory exists
+            parent_dir = os.path.dirname(db_path)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
+                logger.info(f"Created directory for SQLite database: {parent_dir}")
+            
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            logger.info(f"Successfully connected to SQLite database: {db_path}")
+            return conn
+        except Exception as e:
+            logger.error(f"Error connecting to SQLite database: {e}")
+            raise SqliteApiError(f"Failed to connect to SQLite database: {str(e)}")
+    
+    @staticmethod
+    def execute_read_query(db_path, query):
+        """Execute a SELECT query on the SQLite database."""
+        if not query.strip().upper().startswith("SELECT"):
+            raise SqliteApiError("Only SELECT queries are allowed for read_query")
+        
+        try:
+            with closing(SqliteUtils.connect_to_db(db_path)) as conn:
+                with closing(conn.cursor()) as cursor:
+                    cursor.execute(query)
+                    rows = cursor.fetchall()
+                    results = [dict(row) for row in rows]
+                    return results
+        except Exception as e:
+            logger.error(f"Error executing read query: {e}")
+            raise SqliteApiError(f"Error executing read query: {str(e)}")
+    
+    @staticmethod
+    def list_tables(db_path):
+        """List all tables in the SQLite database."""
+        try:
+            with closing(SqliteUtils.connect_to_db(db_path)) as conn:
+                with closing(conn.cursor()) as cursor:
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    rows = cursor.fetchall()
+                    return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Error listing tables: {e}")
+            raise SqliteApiError(f"Error listing tables: {str(e)}")
+    
+    @staticmethod
+    def describe_table(db_path, table_name):
+        """Get schema information for a specific table."""
+        try:
+            with closing(SqliteUtils.connect_to_db(db_path)) as conn:
+                with closing(conn.cursor()) as cursor:
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    rows = cursor.fetchall()
+                    return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Error describing table {table_name}: {e}")
+            raise SqliteApiError(f"Error describing table: {str(e)}")
 
 
 # ===== Jenkins Utilities =====
@@ -870,6 +955,43 @@ class MiladyOSToolServer:
                         }
                     },
                     "required": []
+                }
+            },
+            "read_query": {
+                "name": "Milady SQL Query",
+                "description": "Execute a SELECT query on MiladyOS's internal SQLite database (read-only)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "SELECT SQL query to execute on MiladyOS internal database"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            },
+            "list_db_tables": {
+                "name": "Milady DB Tables",
+                "description": "List all tables in MiladyOS's internal SQLite database",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            "describe_db_table": {
+                "name": "Milady DB Schema",
+                "description": "Get the schema information for a specific table in MiladyOS's internal database",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {
+                            "type": "string",
+                            "description": "Name of the table to describe in MiladyOS internal database"
+                        }
+                    },
+                    "required": ["table_name"]
                 }
             }
         }
@@ -1967,6 +2089,88 @@ class MiladyOSToolServer:
                         "status": "error",
                         "executions": []
                     }
+            
+            elif tool_id == "read_query":
+                # Extract parameters
+                query = arguments.get("query")
+                
+                if not query:
+                    logger.error("query is required")
+                    return {
+                        "success": False,
+                        "error": "query is required",
+                        "status": "error"
+                    }
+                
+                try:
+                    # Execute the query on MiladyOS's internal database
+                    results = SqliteUtils.execute_read_query(Config.SQLITE_DB_PATH, query)
+                    return {
+                        "success": True,
+                        "results": results,
+                        "row_count": len(results),
+                        "status": "success",
+                        "message": f"Successfully executed query on MiladyOS internal database"
+                    }
+                except Exception as e:
+                    logger.error(f"Error executing SQLite query: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error",
+                        "query": query
+                    }
+            
+            elif tool_id == "list_db_tables":
+                try:
+                    # List tables in MiladyOS's internal database
+                    tables = SqliteUtils.list_tables(Config.SQLITE_DB_PATH)
+                    return {
+                        "success": True,
+                        "tables": tables,
+                        "count": len(tables),
+                        "status": "success",
+                        "message": f"Found {len(tables)} tables in MiladyOS internal database"
+                    }
+                except Exception as e:
+                    logger.error(f"Error listing database tables: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error"
+                    }
+            
+            elif tool_id == "describe_db_table":
+                # Extract parameters
+                table_name = arguments.get("table_name")
+                
+                if not table_name:
+                    logger.error("table_name is required")
+                    return {
+                        "success": False,
+                        "error": "table_name is required",
+                        "status": "error"
+                    }
+                
+                try:
+                    # Get schema for the specified table in MiladyOS's internal database
+                    schema = SqliteUtils.describe_table(Config.SQLITE_DB_PATH, table_name)
+                    return {
+                        "success": True,
+                        "table_name": table_name,
+                        "schema": schema,
+                        "column_count": len(schema),
+                        "status": "success",
+                        "message": f"Successfully retrieved schema for table '{table_name}' from MiladyOS internal database"
+                    }
+                except Exception as e:
+                    logger.error(f"Error describing table {table_name}: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error",
+                        "table_name": table_name
+                    }
                 
             else:
                 logger.error(f"Unknown tool: {tool_id}")
@@ -2085,8 +2289,13 @@ class MiladyOSToolServer:
     type=int,
     help="Redis server port",
 )
+@click.option(
+    "--sqlite-db-path",
+    default="/data/redka/data.db",
+    help="Path to SQLite database file",
+)
 def main(all_tools: bool, templates_dir: str, metadata_dir: str, 
-         redis_host: str, redis_port: int) -> int:
+         redis_host: str, redis_port: int, sqlite_db_path: str) -> int:
     """Run the MiladyOS Tools MCP Server.
 
     Provides MCP-compatible tools for MiladyOS pipeline management.
@@ -2094,10 +2303,12 @@ def main(all_tools: bool, templates_dir: str, metadata_dir: str,
     # Set up configuration based on CLI parameters
     Config.TEMPLATES_DIR = templates_dir
     Config.METADATA_DIR = metadata_dir
+    Config.SQLITE_DB_PATH = sqlite_db_path
     
     # Set environment variables for Redis configuration
     os.environ["REDIS_HOST"] = redis_host
     os.environ["REDIS_PORT"] = str(redis_port)
+    os.environ["SQLITE_DB_PATH"] = sqlite_db_path
     
     # Note: We use the global metadata_manager from miladyos_metadata
     # which will pick up these environment variables
