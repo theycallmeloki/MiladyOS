@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: wiz-exporter
+  namespace: monitoring
+  labels:
+    app: wiz-exporter
+    release: prometheus # This must match your Prometheus Operator release label
+spec:
+  selector:
+    matchLabels:
+      app: wiz-exporter
+  endpoints:
+  - port: metrics
+    interval: 60s
+  namespaceSelector:
+    matchNames:
+    - monitoring

@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wiz-exporter
+  namespace: monitoring
+  labels:
+    app: wiz-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wiz-exporter
+  template:
+    metadata:
+      labels:
+        app: wiz-exporter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      nodeSelector:
+        kubernetes.io/hostname: talos-o0r-78y
+      containers:
+      - name: wiz-exporter
+        image: python:3.9-slim
+        ports:
+        - containerPort: 9678
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        envFrom:
+        - configMapRef:
+            name: wiz-exporter-config
+        - secretRef:
+            name: wiz-exporter-secret
+        volumeMounts:
+        - name: script
+          mountPath: /app/script
+          readOnly: true
+        - name: data
+          mountPath: /data
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            mkdir -p /tmp/pip
+            export PIP_CACHE_DIR=/tmp/pip
+            export PYTHONUSERBASE=/tmp/pyuser
+            python -m pip install --user requests prometheus-client
+            export PYTHONPATH=/tmp/pyuser/lib/python3.9/site-packages
+            echo "Copying exporter script..."
+            cp /app/script/exporter.py /data/exporter.py
+            chmod +x /data/exporter.py
+            echo "Script copied. Contents:"
+            cat /data/exporter.py | head -n 20
+            echo "Environment variables:"
+            env | grep -E "HASS_|EXPORTER|POLL|PYTHON"
+            echo "Running exporter..."
+            python -u /data/exporter.py  # -u for unbuffered output
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      volumes:
+      - name: script
+        configMap:
+          name: wiz-exporter-script
+          items:
+          - key: exporter.py
+            path: exporter.py
+      - name: data
+        persistentVolumeClaim:
+          claimName: wiz-exporter-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wiz-exporter
+  namespace: monitoring
+  labels:
+    app: wiz-exporter
+spec:
+  ports:
+  - port: 9678
+    targetPort: 9678
+    name: metrics
+  selector:
+    app: wiz-exporter
