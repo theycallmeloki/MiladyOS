@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: homeassistant
+    app.kubernetes.io/instance: homeassistant
+  name: homeassistant
+  namespace: homeassistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homeassistant
+  template:
+    metadata:
+      labels:
+        app: homeassistant
+        app.kubernetes.io/name: homeassistant
+    spec:
+      # Home Assistant needs to run as PID 1
+      shareProcessNamespace: false
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/hostname: talos-4vi-s4q
+      containers:
+      - image: homeassistant/home-assistant:latest
+        imagePullPolicy: Always
+        name: homeassistant
+        securityContext:
+          privileged: true  # Required for some Home Assistant integrations
+        command: ["/init"]  # Try forcing the init system to run
+        ports:
+        - containerPort: 8123
+          name: web
+          protocol: TCP
+        env:
+        - name: TZ
+          value: Europe/London
+        volumeMounts:
+        - mountPath: /config
+          name: homeassistant
+        # Mount the config file
+        - name: ha-config
+          mountPath: /config/configuration.yaml
+          subPath: configuration.yaml
+      volumes:
+        - name: homeassistant
+          persistentVolumeClaim:
+            claimName: homeassistant
+        # Config volume
+        - name: ha-config
+          configMap:
+            name: ha-configuration

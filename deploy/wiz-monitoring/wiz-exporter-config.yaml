@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wiz-exporter-config
+  namespace: monitoring
+data:
+  HASS_URL: "http://homeassistant.homeassistant.svc.cluster.local:80"
+  EXPORTER_PORT: "9678"
+  POLL_INTERVAL: "60"

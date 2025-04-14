@@ -1,0 +1,309 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-dump-script
+  namespace: default
+data:
+  redis_dump.py: |
+    #!/usr/bin/env python
+    """
+    MiladyOS Redis Dump Utility
+
+    This script dumps the entire Redis state for MiladyOS into JSON files
+    organized by data type. It uses the same connection logic as the main
+    metadata manager to ensure consistency.
+    """
+
+    import json
+    import os
+    import sys
+    import time
+    import logging
+    from datetime import datetime
+    import colorlog
+    import redis
+    import argparse
+
+    # Configure logging
+    logger = colorlog.getLogger("miladyos-dump")
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(colorlog.ColoredFormatter(
+        "%(log_color)s%(levelname)s%(reset)s: %(message)s"
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+    def get_redis_config():
+        """
+        Get Redis configuration based on environment variables.
+        Centralizes Redis configuration to avoid duplication.
+        """
+        # In Kubernetes, use service names for discovery
+        if os.getenv("KUBERNETES_MODE", "false").lower() == "true":
+            redis_host = os.getenv("REDIS_HOST", "redka")
+            redis_port = int(os.getenv("REDIS_PORT", "6379"))
+            logger.info(f"Running in Kubernetes mode, using Redis at {redis_host}:{redis_port}")
+        else:
+            redis_host = os.getenv("REDIS_HOST", "localhost")
+            redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        
+        return redis_host, redis_port
+
+    def dump_redis_state(output_dir="/backups/miladyos_dump", pretty=True):
+        """
+        Dump all MiladyOS data from Redis into JSON files.
+        
+        Args:
+            output_dir: Directory to save dump files
+            pretty: Whether to format JSON with indentation
+        """
+        # Create output directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dump_dir = f"{output_dir}_{timestamp}"
+        os.makedirs(dump_dir, exist_ok=True)
+        
+        # Connect to Redis
+        redis_host, redis_port = get_redis_config()
+        try:
+            r = redis.Redis(
+                host=redis_host,
+                port=redis_port,
+                decode_responses=True
+            )
+            r.ping()
+            logger.info(f"Connected to Redis at {redis_host}:{redis_port}")
+        except redis.ConnectionError as e:
+            logger.error(f"Failed to connect to Redis: {e}")
+            sys.exit(1)
+        
+        # Dictionary to hold all MiladyOS data
+        data = {
+            "metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "redis_host": redis_host,
+                "redis_port": redis_port
+            },
+            "templates": {},
+            "deployments": {},
+            "executions": {},
+            "console_outputs": {}
+        }
+        
+        # 1. Dump templates data
+        logger.info("Dumping templates data...")
+        template_names = r.zrange("miladyos:templates", 0, -1)
+        for name in template_names:
+            template_key = f"miladyos:template:{name}"
+            template_data = r.hgetall(template_key)
+            
+            # Add template data to the main structure
+            data["templates"][name] = template_data
+            
+            # Get deployments associated with this template
+            deployment_ids = list(r.smembers(f"miladyos:template_deployments:{name}"))
+            data["templates"][name]["deployments"] = deployment_ids
+        
+        # 2. Dump deployments data
+        logger.info("Dumping deployments data...")
+        deployment_keys = r.keys("miladyos:deployment:*")
+        for key in deployment_keys:
+            deployment_id = key.split(":")[-1]
+            deployment_data = r.hgetall(key)
+            data["deployments"][deployment_id] = deployment_data
+        
+        # 3. Dump execution data
+        logger.info("Dumping execution metadata...")
+        execution_ids = r.zrange("miladyos:executions", 0, -1)
+        
+        # Also check status sets for any missing executions
+        for status in ["running", "complete", "failed", "unknown"]:
+            status_ids = r.smembers(f"miladyos:status:{status}")
+            for execution_id in status_ids:
+                if execution_id not in execution_ids:
+                    execution_ids.append(execution_id)
+        
+        for execution_id in execution_ids:
+            execution_key = f"miladyos:execution:{execution_id}"
+            if r.exists(execution_key):
+                execution_data = r.hgetall(execution_key)
+                data["executions"][execution_id] = execution_data
+                
+                # Convert parameters from JSON string to dict
+                if "parameters" in execution_data and execution_data["parameters"]:
+                    try:
+                        execution_data["parameters"] = json.loads(execution_data["parameters"])
+                    except json.JSONDecodeError:
+                        execution_data["parameters"] = {}
+        
+        # 4. Dump console outputs separately (can be large)
+        logger.info("Dumping console outputs...")
+        for execution_id in execution_ids:
+            console_key = f"miladyos:console:{execution_id}"
+            if r.exists(console_key):
+                console_output = r.get(console_key)
+                # Store console outputs in a separate file to keep the main dump manageable
+                console_file = os.path.join(dump_dir, f"console_{execution_id}.txt")
+                try:
+                    with open(console_file, 'w') as f:
+                        f.write(console_output)
+                    # Just store a reference in the main data structure
+                    data["console_outputs"][execution_id] = console_file
+                except Exception as e:
+                    logger.error(f"Error saving console output for {execution_id}: {e}")
+        
+        # 5. Dump any job indices
+        logger.info("Dumping job indices...")
+        job_index_keys = r.keys("miladyos:job_index:*")
+        data["job_indices"] = {}
+        for key in job_index_keys:
+            job_index = key.replace("miladyos:job_index:", "")
+            deployment_id = r.get(key)
+            data["job_indices"][job_index] = deployment_id
+        
+        # 6. Save the main data structure
+        json_file = os.path.join(dump_dir, "miladyos_redis_dump.json")
+        indent = 2 if pretty else None
+        
+        try:
+            with open(json_file, 'w') as f:
+                json.dump(data, f, indent=indent)
+            logger.info(f"Successfully saved Redis dump to {json_file}")
+        except Exception as e:
+            logger.error(f"Error saving dump file: {e}")
+        
+        # 7. Save a complete raw dump using redis-dump
+        try:
+            import redis_dump_load as redisdump
+            logger.info("Creating raw Redis dump with redisdump...")
+            raw_dump_file = os.path.join(dump_dir, "miladyos_raw_dump.json")
+            dumper = redisdump.Dumper(host=redis_host, port=redis_port, pattern="miladyos:*")
+            raw_dump = dumper.dump()
+            
+            with open(raw_dump_file, 'w') as f:
+                json.dump(raw_dump, f, indent=indent)
+            logger.info(f"Successfully saved raw Redis dump to {raw_dump_file}")
+        except ImportError:
+            logger.warning("redisdump package not available, skipping raw dump. Install with 'pip install redis-dump-load'")
+        except Exception as e:
+            logger.error(f"Error creating raw Redis dump: {e}")
+        
+        logger.info(f"Redis dump completed. Files saved to {dump_dir}/")
+        return dump_dir
+
+    if __name__ == "__main__":
+        # Set environment variables for Kubernetes context
+        os.environ["KUBERNETES_MODE"] = "true"
+        
+        try:
+            dump_dir = dump_redis_state()
+            print(f"\nDump completed successfully. Output directory: {dump_dir}")
+            sys.exit(0)
+        except KeyboardInterrupt:
+            print("\nDump operation cancelled.")
+            sys.exit(1)
+        except Exception as e:
+            logger.error(f"Error during dump operation: {e}")
+            sys.exit(1)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: miladyos-redis-backup
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 86400  # Automatically delete job 1 day after completion
+  template:
+    metadata:
+      labels:
+        app: miladyos-redis-backup
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: redis-backup
+        image: python:3.9-slim
+        env:
+        - name: KUBERNETES_MODE
+          value: "true"
+        - name: REDIS_HOST
+          value: "redka"  # Using service name redka
+        - name: REDIS_PORT
+          value: "6379"
+        command:
+        - /bin/bash
+        - -c
+        - |
+          pip install redis colorlog redis-dump-load &&
+          python /scripts/redis_dump.py
+        volumeMounts:
+        - name: scripts-volume
+          mountPath: /scripts
+        - name: backup-volume
+          mountPath: /backups
+      volumes:
+      - name: scripts-volume
+        configMap:
+          name: redis-dump-script
+          defaultMode: 0755
+      - name: backup-volume
+        persistentVolumeClaim:
+          claimName: redis-backup-pvc  # Make sure this PVC exists
+---
+# PersistentVolumeClaim for storing backups
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-backup-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi  # Adjust size as needed
+---
+# CronJob to run the backup on a schedule
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: miladyos-redis-backup-cron
+  namespace: default
+spec:
+  schedule: "*/15 * * * *"  # Run every 15 minutes
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400  # Automatically delete job 1 day after completion
+      template:
+        metadata:
+          labels:
+            app: miladyos-redis-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: redis-backup
+            image: python:3.9-slim
+            env:
+            - name: KUBERNETES_MODE
+              value: "true"
+            - name: REDIS_HOST
+              value: "redka"  # Using service name redka
+            - name: REDIS_PORT
+              value: "6379"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              pip install redis colorlog redis-dump-load &&
+              python /scripts/redis_dump.py
+            volumeMounts:
+            - name: scripts-volume
+              mountPath: /scripts
+            - name: backup-volume
+              mountPath: /backups
+          volumes:
+          - name: scripts-volume
+            configMap:
+              name: redis-dump-script
+              defaultMode: 0755
+          - name: backup-volume
+            persistentVolumeClaim:
+              claimName: redis-backup-pvc

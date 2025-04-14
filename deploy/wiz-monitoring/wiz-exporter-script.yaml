@@ -1,0 +1,496 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wiz-exporter-script
+  namespace: monitoring
+data:
+  exporter.py: |
+    #!/usr/bin/env python3
+    import os
+    import sys
+    import time
+    import requests
+    import json
+    import traceback
+    import re
+    from prometheus_client import start_http_server, Gauge, Counter, REGISTRY, PROCESS_COLLECTOR, PLATFORM_COLLECTOR, GC_COLLECTOR
+    
+    # Configuration from environment variables
+    HASS_URL = os.environ.get('HASS_URL', 'http://localhost:8123')
+    HASS_TOKEN = os.environ.get('HASS_TOKEN', '')
+    EXPORTER_PORT = int(os.environ.get('EXPORTER_PORT', 9678))
+    POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', 60))
+    
+    # Cleanup ALL existing metrics to start fresh
+    for collector in list(REGISTRY._collector_to_names.keys()):
+        try:
+            REGISTRY.unregister(collector)
+        except:
+            pass
+    
+    # Dictionary to store metrics for each device
+    device_metrics = {}
+    
+    # Device info dictionary to store power and state values
+    device_info = {}
+    
+    # Device ID to MAC mapping
+    device_ids = {}
+    
+    # Track historical data for advanced metrics
+    state_timestamps = {}  # When device states changed
+    historical_power = {}  # Store power readings for averaging
+    peak_power_values = {}  # Track peak power values
+    
+    # Total power for all devices
+    total_power = Gauge('wiz_total_power_watts', 'Total power consumption of all WiZ devices in watts')
+    aggregated_power_total = Counter('wiz_aggregated_power_total_watt_hours', 'Aggregated power consumption for all WiZ devices')
+    aggregated_power_kwh = Gauge('wiz_aggregated_power_total_kwh', 'Aggregated power consumption in kilowatt-hours')
+    device_count = Gauge('wiz_device_count', 'Number of WiZ devices found')
+    
+    # System-wide peak power
+    system_peak_power = Gauge('wiz_system_peak_power_watts', 'Peak power consumption across all devices')
+    
+    # Time-based power averages for the system
+    hourly_avg_power = Gauge('wiz_hourly_avg_power_watts', 'Average power consumption over the past hour')
+    daily_avg_power = Gauge('wiz_daily_avg_power_watts', 'Average power consumption over the past day')
+    
+    # System-wide operational metrics
+    total_on_device_count = Gauge('wiz_devices_on_count', 'Number of devices currently on')
+    
+    # Home Assistant API headers
+    headers = {
+        'Authorization': f'Bearer {HASS_TOKEN}',
+        'Content-Type': 'application/json',
+    }
+    
+    def get_entities():
+        """Get all entities from Home Assistant"""
+        try:
+            print(f"Connecting to Home Assistant at {HASS_URL}...")
+            response = requests.get(f"{HASS_URL}/api/states", headers=headers)
+            print(f"Response status code: {response.status_code}")
+            response.raise_for_status()
+            data = response.json()
+            print(f"Retrieved {len(data)} entities from Home Assistant")
+            return data
+        except Exception as e:
+            print(f"Error fetching entities: {e}")
+            print(f"Headers used: Authorization: Bearer xxxxx (token partially hidden)")
+            return []
+    
+    def extract_device_id(entity_id):
+        """Extract device ID from entity ID or friendly name"""
+        # Try to find a pattern like wiz_socket_c6d96e or wiz_socket_c6d96e_power
+        match = re.search(r'wiz_socket_([a-f0-9]{6})(?:_power)?', entity_id.lower())
+        if match:
+            return match.group(1)
+            
+        # Try to find a pattern like c6d96e in the entity ID
+        match = re.search(r'c6[a-f0-9]{4}', entity_id.lower())
+        if match:
+            return match.group(0)
+            
+        return None
+    
+    def process_entities(entities):
+        """Process all entities and extract the relevant ones"""
+        # Reset device info
+        device_info.clear()
+        
+        # Temporary storage for all WiZ related entities
+        all_wiz_entities = []
+        power_entities = []
+        switch_entities = []
+        
+        print(f"Searching for WiZ socket entities among {len(entities)} entities...")
+        
+        # First pass: find all WiZ entities 
+        for entity in entities:
+            entity_id = entity['entity_id']
+            attributes = entity.get('attributes', {})
+            friendly_name = attributes.get('friendly_name', '')
+            
+            if ('wiz' in entity_id.lower() or 'wiz' in friendly_name.lower() or
+                ('socket' in entity_id.lower() and ('wiz' in str(attributes).lower()))):
+                
+                print(f"Found entity: {entity_id}, friendly_name: {friendly_name}")
+                all_wiz_entities.append(entity)
+                
+                # Categorize by entity type
+                if 'power' in entity_id.lower() or 'power' in friendly_name.lower():
+                    power_entities.append(entity)
+                elif 'switch' in entity_id.lower() or attributes.get('device_class') == 'switch':
+                    switch_entities.append(entity)
+                
+                # Extract device ID
+                device_id = extract_device_id(entity_id)
+                if not device_id and friendly_name:
+                    device_id = extract_device_id(friendly_name)
+                
+                if device_id:
+                    if entity_id not in device_ids:
+                        device_ids[entity_id] = device_id
+        
+        print(f"Found {len(all_wiz_entities)} WiZ related entities")
+        print(f"Power entities: {len(power_entities)}")
+        print(f"Switch entities: {len(switch_entities)}")
+        
+        # Create metrics for each device if they don't exist yet
+        for entity in all_wiz_entities:
+            entity_id = entity['entity_id']
+            device_id = device_ids.get(entity_id)
+            
+            if device_id and device_id not in device_metrics:
+                print(f"Creating metrics for device: {device_id}")
+                device_metrics[device_id] = {
+                    # Basic metrics
+                    'state': Gauge(f'wiz_state_{device_id}', f'WiZ Socket {device_id} state (1=on, 0=off)'),
+                    'power': Gauge(f'wiz_power_{device_id}_watts', f'WiZ Socket {device_id} power consumption in watts'),
+                    'rssi': Gauge(f'wiz_rssi_{device_id}_dbm', f'WiZ Socket {device_id} WiFi signal strength in dBm'),
+                    'power_total': Counter(f'wiz_power_total_{device_id}_watt_hours', f'WiZ Socket {device_id} cumulative power consumption'),
+                    
+                    # New metrics
+                    'power_kwh': Gauge(f'wiz_power_total_{device_id}_kwh', f'WiZ Socket {device_id} cumulative power in kWh'),
+                    'peak_power': Gauge(f'wiz_peak_power_{device_id}_watts', f'WiZ Socket {device_id} peak power consumption'),
+                    'hourly_avg_power': Gauge(f'wiz_hourly_avg_power_{device_id}_watts', f'WiZ Socket {device_id} average power over last hour'),
+                    'daily_avg_power': Gauge(f'wiz_daily_avg_power_{device_id}_watts', f'WiZ Socket {device_id} average power over last day'),
+                    
+                    # Operational metrics
+                    'state_transitions': Counter(f'wiz_state_transitions_{device_id}_total', f'WiZ Socket {device_id} number of on/off transitions'),
+                    'on_duration_seconds': Gauge(f'wiz_on_duration_{device_id}_seconds', f'WiZ Socket {device_id} current time in ON state'),
+                    'off_duration_seconds': Gauge(f'wiz_off_duration_{device_id}_seconds', f'WiZ Socket {device_id} current time in OFF state'),
+                    'utilization_percent': Gauge(f'wiz_utilization_{device_id}_percent', f'WiZ Socket {device_id} percentage of time in ON state')
+                }
+                # Initialize device info dictionary
+                device_info[device_id] = {'power': 0, 'state': None}
+                
+                # Initialize state tracking
+                current_time = time.time()
+                state_timestamps[device_id] = {'transitions': 0, 'last_change': current_time, 'on_time': 0, 'total_time': 1}
+        
+        # Process power entities
+        # Reset power values in device_info to ensure we don't use stale values
+        for device_id in device_info:
+            device_info[device_id]['power'] = 0
+            
+        total_watts = 0
+        for entity in power_entities:
+            entity_id = entity['entity_id']
+            device_id = device_ids.get(entity_id)
+            
+            if not device_id:
+                # Try to extract device ID from entity ID
+                match = re.search(r'wiz_socket_([a-f0-9]{6})_power', entity_id.lower())
+                if match:
+                    device_id = match.group(1)
+                    device_ids[entity_id] = device_id
+                    
+                    # Create metrics for this device if they don't exist yet
+                    if device_id not in device_metrics:
+                        print(f"Creating metrics for device: {device_id}")
+                        device_metrics[device_id] = {
+                            'state': Gauge(f'wiz_state_{device_id}', f'WiZ Socket {device_id} state (1=on, 0=off)'),
+                            'power': Gauge(f'wiz_power_{device_id}_watts', f'WiZ Socket {device_id} power consumption in watts'),
+                            'rssi': Gauge(f'wiz_rssi_{device_id}_dbm', f'WiZ Socket {device_id} WiFi signal strength in dBm'),
+                            'power_total': Counter(f'wiz_power_total_{device_id}_watt_hours', f'WiZ Socket {device_id} cumulative power consumption')
+                        }
+                        # Initialize device info dictionary
+                        device_info[device_id] = {'power': 0, 'state': None}
+                        
+                        # Initialize state tracking
+                        current_time = time.time()
+                        state_timestamps[device_id] = {'transitions': 0, 'last_change': current_time, 'on_time': 0, 'total_time': 1}
+                else:
+                    continue
+                
+            try:
+                if entity['state'].replace('.', '', 1).isdigit():
+                    power_value = float(entity['state'])
+                    print(f"Found power value: {power_value}W for device {device_id}")
+                    
+                    # Store in device info - IMPORTANT: This is where we track the device's power
+                    if device_id in device_info:
+                        device_info[device_id]['power'] = power_value
+                    else:
+                        device_info[device_id] = {'power': power_value, 'state': None}
+                    
+                    # Update device metrics
+                    if device_id in device_metrics:
+                        device_metrics[device_id]['power'].set(power_value)
+                        
+                        # Update total power consumption for this device
+                        watt_hours = power_value * (POLL_INTERVAL / 3600)
+                        device_metrics[device_id]['power_total'].inc(watt_hours)
+                        
+                        # Track for kWh calculation
+                        device_metrics[device_id]['power_kwh'].set(float(device_metrics[device_id]['power_total']._value.get()) / 1000)
+                        
+                        # Update peak power if current power exceeds previous peak
+                        if power_value > device_metrics[device_id]['peak_power']._value.get():
+                            device_metrics[device_id]['peak_power'].set(power_value)
+                            print(f"New peak power for {device_id}: {power_value}W")
+                        
+                        # Store historical power values for averages
+                        current_time = time.time()
+                        if device_id not in historical_power:
+                            historical_power[device_id] = []
+                        
+                        # Store timestamp and power value
+                        historical_power[device_id].append((current_time, power_value))
+                        
+                        # Keep only values from the past 24 hours for efficiency
+                        day_ago = current_time - (24 * 60 * 60)
+                        historical_power[device_id] = [entry for entry in historical_power[device_id] if entry[0] > day_ago]
+                        
+                        # Calculate and update hourly average
+                        hour_ago = current_time - (60 * 60)
+                        hour_readings = [entry[1] for entry in historical_power[device_id] if entry[0] > hour_ago]
+                        if hour_readings:
+                            hourly_avg = sum(hour_readings) / len(hour_readings)
+                            device_metrics[device_id]['hourly_avg_power'].set(hourly_avg)
+                        
+                        # Calculate and update daily average
+                        day_readings = [entry[1] for entry in historical_power[device_id]]
+                        if day_readings:
+                            daily_avg = sum(day_readings) / len(day_readings)
+                            device_metrics[device_id]['daily_avg_power'].set(daily_avg)
+                        
+                        print(f"Updated total power for {device_id}: added {watt_hours:.2f}Wh")
+            except Exception as e:
+                print(f"Error processing power value from {entity_id}: {repr(e)}")
+        
+        # Calculate total watts by summing all device powers AFTER all devices are processed
+        total_watts = sum(info['power'] for info in device_info.values())
+        
+        # Process switch entities
+        for entity in switch_entities:
+            entity_id = entity['entity_id']
+            device_id = device_ids.get(entity_id)
+            
+            if not device_id:
+                # Try to extract device ID from entity ID
+                match = re.search(r'wiz_socket_([a-f0-9]{6})', entity_id.lower())
+                if match:
+                    device_id = match.group(1)
+                    device_ids[entity_id] = device_id
+                    
+                    # Create metrics for this device if they don't exist yet
+                    if device_id not in device_metrics:
+                        print(f"Creating metrics for device: {device_id}")
+                        device_metrics[device_id] = {
+                            'state': Gauge(f'wiz_state_{device_id}', f'WiZ Socket {device_id} state (1=on, 0=off)'),
+                            'power': Gauge(f'wiz_power_{device_id}_watts', f'WiZ Socket {device_id} power consumption in watts'),
+                            'rssi': Gauge(f'wiz_rssi_{device_id}_dbm', f'WiZ Socket {device_id} WiFi signal strength in dBm'),
+                            'power_total': Counter(f'wiz_power_total_{device_id}_watt_hours', f'WiZ Socket {device_id} cumulative power consumption')
+                        }
+                        # Initialize device info dictionary
+                        device_info[device_id] = {'power': None, 'state': None}
+                        
+                        # Initialize state tracking
+                        current_time = time.time()
+                        state_timestamps[device_id] = {'transitions': 0, 'last_change': current_time, 'on_time': 0, 'total_time': 1}
+                else:
+                    continue
+                
+            try:
+                state = entity['state'].lower()
+                if state in ['on', 'off']:
+                    state_value = 1 if state == 'on' else 0
+                    print(f"Found state: {state} ({state_value}) for device {device_id}")
+                    
+                    # Store in device info
+                    if device_id in device_info:
+                        # Track state change
+                        previous_state = device_info[device_id]['state']
+                        if previous_state is not None and previous_state != state_value:
+                            # Record state transition for on/off frequency tracking
+                            current_time = time.time()
+                            if device_id not in state_timestamps:
+                                state_timestamps[device_id] = {'transitions': 0, 'last_change': current_time, 'on_time': 0, 'total_time': 0}
+                            else:
+                                # Calculate duration in previous state
+                                duration = current_time - state_timestamps[device_id]['last_change']
+                                state_timestamps[device_id]['total_time'] += duration
+                                if previous_state == 1:  # If was previously ON
+                                    state_timestamps[device_id]['on_time'] += duration
+                                
+                                # Update tracking
+                                state_timestamps[device_id]['transitions'] += 1
+                                state_timestamps[device_id]['last_change'] = current_time
+                                
+                                # Update metrics for on/off frequency and utilization
+                                if device_id in device_metrics:
+                                    device_metrics[device_id]['state_transitions'].inc()
+                                    
+                                    # Calculate utilization as percentage of on-time
+                                    if state_timestamps[device_id]['total_time'] > 0:
+                                        utilization = (state_timestamps[device_id]['on_time'] / state_timestamps[device_id]['total_time']) * 100
+                                        device_metrics[device_id]['utilization_percent'].set(utilization)
+                        
+                        device_info[device_id]['state'] = state_value
+                    else:
+                        device_info[device_id] = {'power': 0, 'state': state_value}
+                        # Initialize state tracking
+                        current_time = time.time()
+                        state_timestamps[device_id] = {'transitions': 0, 'last_change': current_time, 'on_time': 0, 'total_time': 0}
+                    
+                    # Update device metrics
+                    if device_id in device_metrics:
+                        device_metrics[device_id]['state'].set(state_value)
+                        
+                        # Update state duration since last change
+                        current_time = time.time()
+                        if device_id in state_timestamps:
+                            duration = current_time - state_timestamps[device_id]['last_change']
+                            if state_value == 1:  # ON state
+                                device_metrics[device_id]['on_duration_seconds'].set(duration)
+                            else:  # OFF state
+                                device_metrics[device_id]['off_duration_seconds'].set(duration)
+            except Exception as e:
+                print(f"Error processing state from {entity_id}: {repr(e)}")
+        
+        # If we have power but no state, infer state from power for each device
+        for device_id, info in device_info.items():
+            if info['power'] is not None and info['state'] is None:
+                inferred_state = 1 if info['power'] > 0 else 0
+                device_metrics[device_id]['state'].set(inferred_state)
+                print(f"Inferred state from power for {device_id}: {inferred_state}")
+            
+            # Always set a default RSSI value for each device
+            device_metrics[device_id]['rssi'].set(-65)
+            
+            # If the socket is currently on, set utilization to 100% initially
+            if device_info[device_id]['state'] == 1:
+                device_metrics[device_id]['utilization_percent'].set(100)
+            elif device_info[device_id]['state'] == 0:
+                device_metrics[device_id]['utilization_percent'].set(0)
+        
+        # Calculate total by directly summing the power readings from each device metric
+        device_powers = []
+        calculated_total = 0
+        on_devices_count = 0
+        
+        # Get power values directly from the device metrics
+        for device_id, metrics in device_metrics.items():
+            if 'power' in metrics:
+                # This is the gauge value of the latest power reading
+                try:
+                    # Get the value directly from the gauge object
+                    power_value = float(metrics['power']._value.get())
+                    device_powers.append(power_value)
+                    calculated_total += power_value
+                except Exception as e:
+                    print(f"Error getting power value for {device_id}: {e}")
+            
+            # Count devices in ON state
+            if 'state' in metrics:
+                try:
+                    state_value = int(metrics['state']._value.get())
+                    if state_value == 1:
+                        on_devices_count += 1
+                except Exception as e:
+                    print(f"Error getting state value for {device_id}: {e}")
+        
+        print(f"Individual device power values from metrics: {device_powers}")
+        print(f"Calculated total power: {calculated_total}W")
+        
+        # Set the total power metric
+        total_power.set(calculated_total)
+        
+        # Update the aggregated counter with the total watt-hours for this interval
+        watt_hours_this_interval = calculated_total * (POLL_INTERVAL / 3600)
+        aggregated_power_total.inc(watt_hours_this_interval)
+        
+        # Set the kilowatt-hour gauge
+        try:
+            # Convert from Wh to kWh
+            kwh_total = float(aggregated_power_total._value.get()) / 1000
+            aggregated_power_kwh.set(kwh_total)
+            print(f"Total energy consumption: {kwh_total:.3f} kWh")
+        except Exception as e:
+            print(f"Error calculating kWh: {e}")
+        
+        print(f"Added {watt_hours_this_interval:.2f}Wh to aggregated total")
+        
+        # Update system-wide peak power if current total exceeds previous peak
+        try:
+            current_peak = float(system_peak_power._value.get())
+            if calculated_total > current_peak:
+                system_peak_power.set(calculated_total)
+                print(f"New system peak power: {calculated_total}W")
+        except:
+            # Initialize if not set
+            system_peak_power.set(calculated_total)
+            print(f"Initialized system peak power: {calculated_total}W")
+        
+        # Calculate system-wide averages from individual device data
+        current_time = time.time()
+        hour_ago = current_time - (60 * 60)
+        day_ago = current_time - (24 * 60 * 60)
+        
+        # Collect all power readings from all devices
+        all_hourly_readings = []
+        all_daily_readings = []
+        
+        for device_id in historical_power:
+            all_hourly_readings.extend([p for t, p in historical_power[device_id] if t > hour_ago])
+            all_daily_readings.extend([p for t, p in historical_power[device_id]])
+        
+        # Calculate and set hourly average
+        if all_hourly_readings:
+            system_hourly_avg = sum(all_hourly_readings) / len(all_hourly_readings)
+            hourly_avg_power.set(system_hourly_avg)
+            print(f"System hourly average power: {system_hourly_avg:.2f}W")
+        
+        # Calculate and set daily average
+        if all_daily_readings:
+            system_daily_avg = sum(all_daily_readings) / len(all_daily_readings)
+            daily_avg_power.set(system_daily_avg)
+            print(f"System daily average power: {system_daily_avg:.2f}W")
+        
+        # Update device count metrics
+        device_count.set(len(device_metrics))
+        total_on_device_count.set(on_devices_count)
+        
+        print(f"Total power consumption: {calculated_total}W from {len(device_metrics)} devices ({on_devices_count} on)")
+        
+        return len(all_wiz_entities) > 0
+    
+    if __name__ == '__main__':
+        # Print environment variables and configuration for debugging
+        print("\n--- WiZ Exporter Starting ---")
+        print(f"Python version: {sys.version}")
+        print(f"HASS_URL: {HASS_URL}")
+        print(f"HASS_TOKEN: {'*' * 5}")  # Show only a few stars for security
+        print(f"EXPORTER_PORT: {EXPORTER_PORT}")
+        print(f"POLL_INTERVAL: {POLL_INTERVAL}")
+        print(f"Current working directory: {os.getcwd()}")
+        print("Starting HTTP server...")
+        
+        # Start up the server to expose the metrics.
+        try:
+            start_http_server(EXPORTER_PORT)
+            print(f"Exporter HTTP server successfully started on port {EXPORTER_PORT}")
+        except Exception as e:
+            print(f"Error starting HTTP server: {e}")
+            traceback.print_exc()
+            sys.exit(1)
+        
+        print(f"Polling Home Assistant at {HASS_URL} every {POLL_INTERVAL} seconds")
+        
+        # Main loop
+        while True:
+            try:
+                print("\n--- Starting polling cycle ---")
+                entities = get_entities()
+                if entities:
+                    found = process_entities(entities)
+                    if not found:
+                        print("No WiZ Socket devices found")
+                print(f"--- Completed polling cycle, sleeping for {POLL_INTERVAL} seconds ---\n")
+                time.sleep(POLL_INTERVAL)
+            except Exception as e:
+                print(f"Error in main loop: {e}")
+                traceback.print_exc()
+                time.sleep(POLL_INTERVAL)
