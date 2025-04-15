@@ -44,7 +44,7 @@ spec:
         image: vllm/vllm-openai:latest
         command: ["/bin/sh", "-c"]
         args: [
-          "vllm serve Qwen/QwQ-32B-AWQ --trust-remote-code --tensor-parallel-size 2 --max-model-len 32768 --swap-space 4 --max-num-batched-tokens 8192 --max-num-seqs 256 --enforce-eager --disable-custom-all-reduce --device cuda --gpu-memory-utilization 0.85 --quantization awq --dtype auto --host 0.0.0.0 --port 8000"
+          "vllm serve Qwen/QwQ-32B-AWQ --trust-remote-code --tensor-parallel-size 2 --max-model-len 32768 --swap-space 4 --max-num-batched-tokens 8192 --max-num-seqs 128 --enforce-eager --disable-custom-all-reduce --device cuda --gpu-memory-utilization 0.90 --quantization awq --dtype auto --host 0.0.0.0 --port 8000"
         ]
         env:
         - name: HUGGING_FACE_HUB_TOKEN
@@ -53,8 +53,8 @@ spec:
               name: hf-token-secret
               key: token
               optional: true
-        - name: NVIDIA_VISIBLE_DEVICES
-          value: "all"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0,1"
         - name: VLLM_LOGGING_LEVEL
           value: "DEBUG"
         - name: TRANSFORMERS_CACHE
