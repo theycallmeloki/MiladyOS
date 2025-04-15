@@ -53,7 +53,7 @@ spec:
         app: miladyos
     spec:
       nodeSelector:
-        kubernetes.io/hostname: talos-o5y-af4
+        kubernetes.io/hostname: talos-o0r-78y
       initContainers:
       - name: volume-permissions
         image: busybox

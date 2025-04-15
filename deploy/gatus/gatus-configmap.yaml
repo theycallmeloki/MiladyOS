@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatus-config
+  namespace: default
+data:
+  config.yaml: |
+    web:
+      port: 8080
+    metrics: true
+    storage:
+      path: /data/gatus.db
+      type: sqlite
+    endpoints:
+      - name: Grafana
+        group: Monitoring
+        url: https://grafana.miladyos.net
+        interval: 1m
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 2000"
+        alerts:
+          - type: pagerduty
+            enabled: false
+            description: "Grafana is down"
+            send-on-resolved: true
+          
+      - name: Gateway
+        group: Core Services
+        url: https://gateway.miladyos.net
+        interval: 1m
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 3000"
+        
+      - name: Uptime
+        group: Monitoring
+        url: https://uptime.miladyos.net
+        interval: 2m
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 1000"
