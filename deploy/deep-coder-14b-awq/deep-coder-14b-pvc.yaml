@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: deep-coder-32b
+  namespace: default
+  annotations:
+    volume.kubernetes.io/selected-node: talos-dkp-mps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-single-replica
+  resources:
+    requests:
+      storage: 30Gi
