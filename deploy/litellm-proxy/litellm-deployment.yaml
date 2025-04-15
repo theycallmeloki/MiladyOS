@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-proxy
+  namespace: default
+  labels:
+    app: litellm-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm-proxy
+  template:
+    metadata:
+      labels:
+        app: litellm-proxy
+    spec:
+      initContainers:
+      - name: init-log-dir
+        image: busybox
+        command: ['sh', '-c', 'mkdir -p /var/log/litellm && mkdir -p /etc/litellm && touch /var/log/litellm/chat_completions.jsonl && chmod 666 /var/log/litellm/chat_completions.jsonl && cp /custom-callbacks/custom_callbacks.py /etc/litellm/custom_callbacks.py && chmod 644 /etc/litellm/custom_callbacks.py && cp /config/config.yaml /etc/litellm/config.yaml && chmod 644 /etc/litellm/config.yaml']
+        volumeMounts:
+        - name: logs-volume
+          mountPath: /var/log/litellm
+        - name: shared-config-volume
+          mountPath: /etc/litellm
+        - name: callbacks-volume
+          mountPath: /custom-callbacks
+        - name: config-volume
+          mountPath: /config
+      containers:
+      - name: litellm-proxy
+        image: ghcr.io/berriai/litellm:main-latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4000
+        env:
+        - name: LITELLM_CONFIG_PATH
+          value: "/etc/litellm/config.yaml"
+        - name: PORT
+          value: "4000"
+        - name: LITELLM_LOAD_MODEL_CONFIG_AT_START
+          value: "True"
+        args:
+        - "--config"
+        - "/etc/litellm/config.yaml"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          successThreshold: 1
+          failureThreshold: 10
+          timeoutSeconds: 20
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          successThreshold: 1
+          failureThreshold: 10
+          timeoutSeconds: 20
+        volumeMounts:
+        - name: shared-config-volume
+          mountPath: /etc/litellm
+        - name: logs-volume
+          mountPath: /var/log/litellm
+      volumes:
+      - name: config-volume
+        configMap:
+          name: litellm-config
+      - name: logs-volume
+        persistentVolumeClaim:
+          claimName: litellm-logs-pvc
+      - name: callbacks-volume
+        configMap:
+          name: litellm-callbacks-config
+      - name: shared-config-volume
+        emptyDir: {}

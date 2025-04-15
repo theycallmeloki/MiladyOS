@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-callbacks-config
+  namespace: default
+data:
+  custom_callbacks.py: |
+    # Custom callback handler for LiteLLM Proxy
+    # Logs all chat completions and errors to JSONL files in /var/log/litellm
+    
+    from litellm.integrations.custom_logger import CustomLogger
+    import litellm
+    import json
+    import os
+    import datetime
+    import sys
+
+    print("Loading custom_callbacks.py")
+
+    class CustomLogHandler(CustomLogger):
+        def __init__(self, log_dir="/var/log/litellm"):
+            self.log_dir = log_dir
+            # Create log directory if it doesn't exist
+            os.makedirs(self.log_dir, exist_ok=True)
+            self.chat_log_file = os.path.join(self.log_dir, "chat_completions.jsonl")
+            self.error_log_file = os.path.join(self.log_dir, "errors.jsonl")
+            print(f"Logger initialized with log file: {self.chat_log_file}")
+            
+        def log_pre_api_call(self, model, messages, kwargs): 
+            # Process incoming API call, no logging needed here
+            pass
+        
+        def log_post_api_call(self, kwargs, response_obj, start_time, end_time): 
+            # Process completed API call, no logging needed here
+            pass
+            
+        def log_success_event(self, kwargs, response_obj, start_time, end_time): 
+            self._write_to_log(kwargs, response_obj, start_time, end_time)
+
+        def log_failure_event(self, kwargs, response_obj, start_time, end_time): 
+            self._write_error_log(kwargs, response_obj, start_time, end_time)
+
+        async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
+            self._write_to_log(kwargs, response_obj, start_time, end_time)
+            return
+
+        async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time): 
+            self._write_error_log(kwargs, response_obj, start_time, end_time)
+            return
+        
+        def _write_to_log(self, kwargs, response_obj, start_time, end_time):
+            """Write chat completion information to log file"""
+            try:
+                # Extract relevant information
+                model = kwargs.get("model", "unknown")
+                messages = kwargs.get("messages", [])
+                user = kwargs.get("user", "anonymous")
+                timestamp = datetime.datetime.now().isoformat()
+                duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                
+                # Calculate cost if available
+                try:
+                    cost = litellm.completion_cost(completion_response=response_obj)
+                except:
+                    cost = None
+                    
+                # Get usage information
+                usage = response_obj.get("usage", {}) if isinstance(response_obj, dict) else {}
+                
+                # Format response for logging
+                if isinstance(response_obj, dict):
+                    # For regular dict responses
+                    response_content = response_obj.get("choices", [{}])[0].get("message", {}).get("content", "")
+                else:
+                    # Try to extract from ModelResponse
+                    try:
+                        response_content = response_obj.choices[0].message.content
+                    except (AttributeError, IndexError):
+                        response_content = str(response_obj)
+                
+                log_entry = {
+                    "timestamp": timestamp,
+                    "model": model,
+                    "user": user,
+                    "messages": messages,
+                    "response": response_content,
+                    "usage": usage,
+                    "duration_ms": duration_ms,
+                    "cost": cost
+                }
+                
+                # Write to log file
+                with open(self.chat_log_file, "a") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+                # No need to print success for every log write
+                    
+            except Exception as e:
+                print(f"Error writing to log: {str(e)}")
+        
+        def _write_error_log(self, kwargs, error, start_time, end_time):
+            """Write error information to log file"""
+            try:
+                model = kwargs.get("model", "unknown")
+                messages = kwargs.get("messages", [])
+                user = kwargs.get("user", "anonymous")
+                timestamp = datetime.datetime.now().isoformat()
+                duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                
+                exception_event = kwargs.get("exception", None)
+                traceback_event = kwargs.get("traceback_exception", None)
+                
+                log_entry = {
+                    "timestamp": timestamp,
+                    "model": model,
+                    "user": user,
+                    "messages": messages,
+                    "error": str(error),
+                    "exception": str(exception_event),
+                    "traceback": str(traceback_event),
+                    "duration_ms": duration_ms
+                }
+                
+                # Write to error log file
+                with open(self.error_log_file, "a") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+                # Only print critical issues
+                    
+            except Exception as e:
+                print(f"Error writing to error log: {str(e)}")
+
+    # Create an instance of the handler
+    proxy_handler_instance = CustomLogHandler()
