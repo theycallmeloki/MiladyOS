@@ -1,0 +1,13 @@
+# Persistent Volume Claim for LiteLLM proxy logs
+# Stores chat completions and error logs in JSONL format
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: litellm-logs-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
