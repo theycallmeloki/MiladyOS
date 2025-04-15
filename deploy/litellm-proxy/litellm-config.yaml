@@ -35,5 +35,5 @@ data:
       routing_strategy: "simple-shuffle"
       num_retries: 3 # Added basic retries
       timeout: 600
-      default_model: "Quickpanda/deepcoder-14b-preview-awq"
+      default_model: "Qwen/QwQ-32B-AWQ"
       model_group_alias: {"default": ["Qwen/QwQ-32B-AWQ", "Quickpanda/deepcoder-14b-preview-awq"]}

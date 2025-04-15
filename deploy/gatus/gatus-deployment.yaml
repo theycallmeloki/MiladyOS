@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatus
+  namespace: default
+  labels:
+    app: gatus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gatus
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: gatus
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      nodeSelector:
+        kubernetes.io/hostname: talos-o0r-78y
+      containers:
+      - name: gatus
+        image: twinproduction/gatus:v5.7.0
+        ports:
+        - containerPort: 8080
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+          readOnlyRootFilesystem: false
+        env:
+        - name: CONFIG_PATH
+          value: /config/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+      volumes:
+      - name: config
+        configMap:
+          name: gatus-config
+          items:
+          - key: config.yaml
+            path: config.yaml
+      - name: data
+        persistentVolumeClaim:
+          claimName: gatus-data
