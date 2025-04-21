@@ -1093,7 +1093,11 @@ class MiladyOSToolServer:
         
         try:
             if tool_id == "hello_world":
-                return "milady!"
+                return {
+                    "success": True,
+                    "message": "milady!",
+                    "status": "success"
+                }
                 
             elif tool_id == "view_template":
                 # Extract parameters

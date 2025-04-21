@@ -15,6 +15,7 @@ data:
       - name: Grafana
         group: Monitoring
         url: https://grafana.miladyos.net
+        description: "Login credentials - username: adminuser, password: adminpassword"
         interval: 1m
         conditions:
           - "[STATUS] == 200"

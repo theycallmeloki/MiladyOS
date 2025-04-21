@@ -3,12 +3,14 @@ kind: PersistentVolumeClaim
 metadata:
   name: miladyos-pvc
   namespace: default
+  annotations:
+    volume.kubernetes.io/selected-node: talos-o0r-78y
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 200Gi
+      storage: 50Gi
   storageClassName: longhorn-single-replica
 ---
 apiVersion: v1
@@ -16,6 +18,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: pachyderm-config-pvc
   namespace: default
+  annotations:
+    volume.kubernetes.io/selected-node: talos-o0r-78y
 spec:
   accessModes:
     - ReadWriteOnce
@@ -29,6 +33,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: kube-config-pvc
   namespace: default
+  annotations:
+    volume.kubernetes.io/selected-node: talos-o0r-78y
 spec:
   accessModes:
     - ReadWriteOnce
