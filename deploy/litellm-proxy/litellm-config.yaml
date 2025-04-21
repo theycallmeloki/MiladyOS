@@ -29,7 +29,7 @@ data:
       callbacks: "custom_callbacks.proxy_handler_instance"
 
     general_settings:
-      completion_model: "Quickpanda/deepcoder-14b-preview-awq"
+      completion_model: "Qwen/QwQ-32B-AWQ"
     
     router_settings:
       routing_strategy: "simple-shuffle"
