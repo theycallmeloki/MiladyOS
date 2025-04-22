@@ -6,13 +6,13 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      - model_name: "Quickpanda/deepcoder-14b-preview-awq" # How clients refer to this model via LiteLLM
-        litellm_params:
-          model: "openai/Quickpanda/deepcoder-14b-preview-awq" # Add openai/ prefix to make LiteLLM recognize the provider
-          api_base: "http://deep-coder-14b-svc.default.svc.cluster.local:8000/v1" # Use full service DNS name for robustness
-          api_key: "sk-fake" # Keep if vLLM needs it, otherwise remove or leave empty ""
-        model_info:
-          description: "DeepCoder 14B - A code optimization and generation model"
+      # - model_name: "Quickpanda/deepcoder-14b-preview-awq" # How clients refer to this model via LiteLLM
+      #   litellm_params:
+      #     model: "openai/Quickpanda/deepcoder-14b-preview-awq" # Add openai/ prefix to make LiteLLM recognize the provider
+      #     api_base: "http://deep-coder-14b-svc.default.svc.cluster.local:8000/v1" # Use full service DNS name for robustness
+      #     api_key: "sk-fake" # Keep if vLLM needs it, otherwise remove or leave empty ""
+      #   model_info:
+      #     description: "DeepCoder 14B - A code optimization and generation model"
 
       - model_name: "Qwen/QwQ-32B-AWQ" # How clients refer to this model via LiteLLM
         litellm_params:
@@ -32,8 +32,8 @@ data:
       completion_model: "Qwen/QwQ-32B-AWQ"
     
     router_settings:
-      routing_strategy: "simple-shuffle"
       num_retries: 3 # Added basic retries
       timeout: 600
       default_model: "Qwen/QwQ-32B-AWQ"
-      model_group_alias: {"default": ["Qwen/QwQ-32B-AWQ", "Quickpanda/deepcoder-14b-preview-awq"]}
+      # model_group_alias: {"default": ["Qwen/QwQ-32B-AWQ", "Quickpanda/deepcoder-14b-preview-awq"]}
+      model_group_alias: {"default": ["Qwen/QwQ-32B-AWQ"]}
