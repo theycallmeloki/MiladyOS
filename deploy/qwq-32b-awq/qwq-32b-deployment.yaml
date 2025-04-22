@@ -44,7 +44,7 @@ spec:
         image: vllm/vllm-openai:latest
         command: ["/bin/sh", "-c"]
         args: [
-          "vllm serve Qwen/QwQ-32B-AWQ --trust-remote-code --tensor-parallel-size 2 --max-model-len 32768 --swap-space 4 --max-num-batched-tokens 8192 --max-num-seqs 128 --enforce-eager --disable-custom-all-reduce --device cuda --gpu-memory-utilization 0.90 --quantization awq --dtype auto --host 0.0.0.0 --port 8000 --enable-auto-tool-choice --tool-call-parser hermes"
+          "vllm serve Qwen/QwQ-32B-AWQ --trust-remote-code --tensor-parallel-size 4 --max-model-len 32768 --swap-space 4 --max-num-batched-tokens 16384 --max-num-seqs 256 --enforce-eager --disable-custom-all-reduce --device cuda --gpu-memory-utilization 0.90 --quantization awq --dtype auto --host 0.0.0.0 --port 8000 --enable-auto-tool-choice --tool-call-parser hermes"
         ]
         env:
         - name: HUGGING_FACE_HUB_TOKEN
@@ -54,7 +54,7 @@ spec:
               key: token
               optional: true
         - name: CUDA_VISIBLE_DEVICES
-          value: "0,1"
+          value: "0,1,2,3"
         - name: VLLM_LOGGING_LEVEL
           value: "DEBUG"
         - name: TRANSFORMERS_CACHE
@@ -65,13 +65,13 @@ spec:
         - containerPort: 8000
         resources:
           limits:
+            cpu: "16"
+            memory: 32G
+            nvidia.com/gpu: "4"
+          requests:
             cpu: "8"
             memory: 16G
-            nvidia.com/gpu: "2"
-          requests:
-            cpu: "4"
-            memory: 8G
-            nvidia.com/gpu: "2"
+            nvidia.com/gpu: "4"
         volumeMounts:
         - mountPath: /root/.cache
           name: cache-volume
