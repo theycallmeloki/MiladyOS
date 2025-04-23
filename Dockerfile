@@ -67,16 +67,23 @@ RUN python3 -m pip install nbformat nbconvert --break-system-packages
 
 RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 
+# Install uv package manager
+RUN curl -sSf https://astral.sh/uv/install.sh | sh
+
+# Add uv to PATH
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Install dependencies directly
 WORKDIR /app
 COPY pyproject.toml /app/
+COPY uv.lock /app/
 
-# Create a virtual environment and install dependencies directly
+# Create a virtual environment and install dependencies directly using uv
 RUN python3 -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
-    pip install --upgrade pip && \
-    pip install mcp[cli]>=1.6.0 python-jenkins>=1.8.0 asyncio>=3.4.3 anyio>=4.2.0 \
-    click>=8.1.7 colorlog>=6.8.0 python-dotenv>=1.0.0 redis>=5.0.0
+    uv pip install --upgrade pip && \
+    # Install dependencies from pyproject.toml and uv.lock
+    uv pip sync
 
 # Add venv to PATH
 ENV PATH="/app/.venv/bin:${PATH}"
