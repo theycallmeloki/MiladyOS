@@ -319,7 +319,8 @@ def run_agent(generate_fn, tokenizer, questions, max_generations=5, max_new_toke
         marker = "<|start_header_id|>assistant<|end_header_id|>"
         idx = convo_text.find(marker)
         if idx == -1:
-            raise ValueError("Could not find assistant marker in conversation text.")
+            # If the marker is not found, just return the whole input as prompt and empty response
+            # instead of raising an error
             return convo_text, ""
         # Include the marker in the prompt by slicing up to the end of the marker.
         prompt = convo_text[:idx + len(marker)]

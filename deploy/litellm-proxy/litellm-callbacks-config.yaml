@@ -6,7 +6,7 @@ metadata:
 data:
   custom_callbacks.py: |
     # Custom callback handler for LiteLLM Proxy
-    # Logs all chat completions and errors to JSONL files in /var/log/litellm
+    # Enhanced to log all chat completions, tool calls, tool responses, and errors to JSONL files
     
     from litellm.integrations.custom_logger import CustomLogger
     import litellm
@@ -14,8 +14,9 @@ data:
     import os
     import datetime
     import sys
+    import uuid
 
-    print("Loading custom_callbacks.py")
+    print("Loading enhanced custom_callbacks.py with tool call logging")
 
     class CustomLogHandler(CustomLogger):
         def __init__(self, log_dir="/var/log/litellm"):
@@ -24,10 +25,12 @@ data:
             os.makedirs(self.log_dir, exist_ok=True)
             self.chat_log_file = os.path.join(self.log_dir, "chat_completions.jsonl")
             self.error_log_file = os.path.join(self.log_dir, "errors.jsonl")
-            print(f"Logger initialized with log file: {self.chat_log_file}")
+            print(f"Enhanced logger initialized with log file: {self.chat_log_file}")
             
         def log_pre_api_call(self, model, messages, kwargs): 
-            # Process incoming API call, no logging needed here
+            # Check if conversation_id exists, if not create one
+            if "conversation_id" not in kwargs:
+                kwargs["conversation_id"] = str(uuid.uuid4())
             pass
         
         def log_post_api_call(self, kwargs, response_obj, start_time, end_time): 
@@ -49,35 +52,78 @@ data:
             return
         
         def _write_to_log(self, kwargs, response_obj, start_time, end_time):
-            """Write chat completion information to log file"""
+            """Write chat completion information to log file with enhanced tool call logging"""
             try:
-                # Extract relevant information
+                # Extract basic information (keeping the same structure)
                 model = kwargs.get("model", "unknown")
                 messages = kwargs.get("messages", [])
                 user = kwargs.get("user", "anonymous")
                 timestamp = datetime.datetime.now().isoformat()
                 duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                conversation_id = kwargs.get("conversation_id", str(uuid.uuid4()))
+                
+                # Extract usage information
+                usage = response_obj.get("usage", {}) if isinstance(response_obj, dict) else {}
                 
                 # Calculate cost if available
                 try:
                     cost = litellm.completion_cost(completion_response=response_obj)
                 except:
                     cost = None
-                    
-                # Get usage information
-                usage = response_obj.get("usage", {}) if isinstance(response_obj, dict) else {}
                 
-                # Format response for logging
+                # Extract tool calls from response_obj (new)
+                tool_calls = []
+                tool_call_ids = []
+                
+                # Handle dictionary responses
                 if isinstance(response_obj, dict):
-                    # For regular dict responses
-                    response_content = response_obj.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    response_message = response_obj.get("choices", [{}])[0].get("message", {})
+                    response_content = response_message.get("content")
+                    
+                    # Extract tool calls from the response
+                    raw_tool_calls = response_message.get("tool_calls", [])
+                    for tc in raw_tool_calls:
+                        tool_calls.append(tc)
+                        if "id" in tc:
+                            tool_call_ids.append(tc["id"])
                 else:
-                    # Try to extract from ModelResponse
+                    # Handle ModelResponse objects
                     try:
-                        response_content = response_obj.choices[0].message.content
+                        response_message = response_obj.choices[0].message
+                        response_content = response_message.content
+                        
+                        # Extract tool calls from response object
+                        if hasattr(response_message, "tool_calls") and response_message.tool_calls:
+                            for tc in response_message.tool_calls:
+                                if hasattr(tc, "function"):
+                                    tool_call = {
+                                        "id": tc.id,
+                                        "type": tc.type,
+                                        "function": {
+                                            "name": tc.function.name,
+                                            "arguments": tc.function.arguments
+                                        }
+                                    }
+                                    tool_calls.append(tool_call)
+                                    tool_call_ids.append(tc.id)
                     except (AttributeError, IndexError):
                         response_content = str(response_obj)
                 
+                # Check if this is a tool response message
+                is_tool_response = False
+                tool_response_data = {}
+                
+                for msg in messages:
+                    if isinstance(msg, dict) and msg.get("role") == "tool" and msg.get("tool_call_id"):
+                        is_tool_response = True
+                        tool_response_data = {
+                            "tool_call_id": msg.get("tool_call_id"),
+                            "name": msg.get("name", "unknown_tool"),
+                            "content": msg.get("content", "")
+                        }
+                        break
+                
+                # Create the log entry with enhanced fields
                 log_entry = {
                     "timestamp": timestamp,
                     "model": model,
@@ -86,16 +132,28 @@ data:
                     "response": response_content,
                     "usage": usage,
                     "duration_ms": duration_ms,
-                    "cost": cost
+                    "cost": cost,
+                    "conversation_id": conversation_id,
                 }
+                
+                # Add tool-specific information when present
+                if tool_calls:
+                    log_entry["has_tool_calls"] = True
+                    log_entry["tool_calls"] = tool_calls
+                    log_entry["tool_call_ids"] = tool_call_ids
+                
+                if is_tool_response:
+                    log_entry["is_tool_response"] = True
+                    log_entry["tool_response"] = tool_response_data
                 
                 # Write to log file
                 with open(self.chat_log_file, "a") as f:
                     f.write(json.dumps(log_entry) + "\n")
-                # No need to print success for every log write
                     
             except Exception as e:
                 print(f"Error writing to log: {str(e)}")
+                import traceback
+                traceback.print_exc()
         
         def _write_error_log(self, kwargs, error, start_time, end_time):
             """Write error information to log file"""
@@ -105,6 +163,7 @@ data:
                 user = kwargs.get("user", "anonymous")
                 timestamp = datetime.datetime.now().isoformat()
                 duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                conversation_id = kwargs.get("conversation_id", "")
                 
                 exception_event = kwargs.get("exception", None)
                 traceback_event = kwargs.get("traceback_exception", None)
@@ -117,13 +176,13 @@ data:
                     "error": str(error),
                     "exception": str(exception_event),
                     "traceback": str(traceback_event),
-                    "duration_ms": duration_ms
+                    "duration_ms": duration_ms,
+                    "conversation_id": conversation_id
                 }
                 
                 # Write to error log file
                 with open(self.error_log_file, "a") as f:
                     f.write(json.dumps(log_entry) + "\n")
-                # Only print critical issues
                     
             except Exception as e:
                 print(f"Error writing to error log: {str(e)}")
