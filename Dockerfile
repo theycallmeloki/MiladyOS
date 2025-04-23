@@ -76,7 +76,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager using cargo directly
-RUN cargo install uv
+RUN cargo install astral
 
 # uv is now in path via cargo install
 
