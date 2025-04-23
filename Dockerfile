@@ -76,7 +76,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager using cargo directly from git
-RUN cargo install --git https://github.com/astral-sh/uv uv
+RUN cargo install --git https://github.com/astral-sh/uv
 
 # uv is now in path via cargo install
 
