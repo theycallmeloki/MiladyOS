@@ -12,10 +12,6 @@ data:
     tts:
       - platform: google_translate
     
-    # Use SQLite for now to get the system running
-    recorder:
-      db_url: sqlite:///config/home-assistant_v2.db
-      
     # WiZ Smart Plug integration
     wiz:
       discovery: true

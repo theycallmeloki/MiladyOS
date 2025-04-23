@@ -3,6 +3,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: homeassistant
   namespace: homeassistant
+  annotations:
+    volume.kubernetes.io/selected-node: talos-4vi-s4q
 spec:
   storageClassName: longhorn-single-replica
   accessModes:

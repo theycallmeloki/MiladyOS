@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   labels:
     app: homeassistant
-    app.kubernetes.io/instance: homeassistant
   name: homeassistant
   namespace: homeassistant
 spec:
@@ -15,20 +14,34 @@ spec:
     metadata:
       labels:
         app: homeassistant
-        app.kubernetes.io/name: homeassistant
     spec:
-      # Home Assistant needs to run as PID 1
-      shareProcessNamespace: false
       hostNetwork: true
       nodeSelector:
         kubernetes.io/hostname: talos-4vi-s4q
+      initContainers:
+      - name: volume-permissions
+        image: busybox
+        securityContext:
+          privileged: true
+        command: 
+        - sh
+        - -c
+        - |
+          mkdir -p /config
+          chown -R 0:0 /config
+          chmod -R 775 /config
+          ls -la /config
+        volumeMounts:
+        - mountPath: /config
+          name: homeassistant
       containers:
-      - image: homeassistant/home-assistant:latest
+      - image: ghcr.io/home-assistant/home-assistant:latest
         imagePullPolicy: Always
         name: homeassistant
         securityContext:
-          privileged: true  # Required for some Home Assistant integrations
-        command: ["/init"]  # Try forcing the init system to run
+          allowPrivilegeEscalation: true
+          runAsUser: 0
+          privileged: true
         ports:
         - containerPort: 8123
           name: web
@@ -39,15 +52,14 @@ spec:
         volumeMounts:
         - mountPath: /config
           name: homeassistant
-        # Mount the config file
-        - name: ha-config
-          mountPath: /config/configuration.yaml
+        - mountPath: /config/configuration.yaml
           subPath: configuration.yaml
+          name: ha-config
       volumes:
         - name: homeassistant
           persistentVolumeClaim:
             claimName: homeassistant
-        # Config volume
         - name: ha-config
           configMap:
             name: ha-configuration
+            defaultMode: 0644

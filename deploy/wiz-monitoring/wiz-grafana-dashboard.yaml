@@ -169,6 +169,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max(wiz_state_c6cc5a)",
+              "instant": false,
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max(wiz_state_c6bfd6)",
+              "instant": false,
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "H"
             }
           ],
           "title": "Socket Status",
@@ -740,6 +764,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_power_c6cc5a_watts",
+              "interval": "",
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "H"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_power_c6bfd6_watts",
+              "interval": "",
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "I"
             }
           ],
           "title": "Individual Socket Power Consumption",
@@ -1096,6 +1144,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_power_c6cc5a_watts",
+              "instant": false,
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_power_c6bfd6_watts",
+              "instant": false,
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "H"
             }
           ],
           "title": "Power Distribution",
@@ -1323,6 +1395,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_peak_power_c6cc5a_watts",
+              "instant": false,
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_peak_power_c6bfd6_watts",
+              "instant": false,
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "H"
             }
           ],
           "title": "Peak Power by Socket",
@@ -1477,6 +1573,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_hourly_avg_power_c6cc5a_watts",
+              "instant": false,
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_hourly_avg_power_c6bfd6_watts",
+              "instant": false,
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "H"
             }
           ],
           "title": "Hourly Average Power by Socket",
@@ -1602,6 +1722,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_on_duration_c6cc5a_seconds",
+              "instant": false,
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_on_duration_c6bfd6_seconds",
+              "instant": false,
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "H"
             }
           ],
           "title": "Uptime by Socket",
@@ -1756,6 +1900,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_power_total_c6cc5a_kwh",
+              "instant": false,
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_power_total_c6bfd6_kwh",
+              "instant": false,
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "H"
             }
           ],
           "title": "Energy Consumption by Socket",
@@ -1888,6 +2056,30 @@ data:
               "legendFormat": "Socket 6 (C6D836)",
               "range": true,
               "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_utilization_c6cc5a_percent",
+              "instant": false,
+              "legendFormat": "Socket 7 (C6CC5A)",
+              "range": true,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "wiz_utilization_c6bfd6_percent",
+              "instant": false,
+              "legendFormat": "Socket 8 (C6BFD6)",
+              "range": true,
+              "refId": "H"
             }
           ],
           "title": "Socket Utilization",
