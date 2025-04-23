@@ -1,17 +1,9 @@
 #!/bin/bash
 
-# Ensure uv is in PATH for Jenkins
-if [ -d "/root/.cargo/bin" ]; then
-    export PATH="/root/.cargo/bin:$PATH"
-    # Also add to Jenkins environment
-    echo "export PATH=\"/root/.cargo/bin:\$PATH\"" >> /var/jenkins_home/.bashrc
-    # Ensure uv is executable
-    if [ -f "/root/.cargo/bin/uv" ]; then
-        chmod +x /root/.cargo/bin/uv
-        # Create symlink in /usr/local/bin for broader access
-        ln -sf /root/.cargo/bin/uv /usr/local/bin/uv
-    fi
-fi
+# Make uv accessible to Jenkins
+chown -R jenkins /root/.cargo
+ln -sf /root/.cargo/bin/uv /usr/local/bin/uv
+echo "PATH=/root/.cargo/bin:/usr/local/bin:$PATH" >> /var/jenkins_home/.profile
 
 # Function to get the host's IP address in the specified range
 get_host_ip() {
