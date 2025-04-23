@@ -1,0 +1,50 @@
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    git \
+    wget \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy required files
+COPY embeddings.py .
+COPY search_module.py .
+COPY UnslothGRPOTrainerTemp.py .
+COPY rl_helpers.py .
+COPY train.py .
+
+# Create directories for data
+RUN mkdir -p saved_data faiss_index
+
+# Copy training files and any pre-generated data
+COPY data/ ./data/
+
+# Set GPU-related environment variables
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=all
+
+# Create a script for RL training
+RUN echo '#!/bin/bash\n\
+python3 train.py\n' > /app/train.sh && \
+    chmod +x /app/train.sh
+
+# Set the entrypoint
+CMD ["/app/train.sh"]

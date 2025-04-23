@@ -1,0 +1,35 @@
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy embedding-related files only
+COPY embeddings.py .
+COPY data/ ./data/
+COPY generate_data.py .
+
+# Create directory for output data
+RUN mkdir -p saved_data faiss_index
+
+# Set the entrypoint to run the embedding generation process
+CMD ["python3", "generate_data.py"]
