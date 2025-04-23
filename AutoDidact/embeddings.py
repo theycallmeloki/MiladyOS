@@ -54,9 +54,18 @@ class CustomHuggingFaceEmbeddings(Embeddings):
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
         Compute embeddings for a list of documents (using sentence mode).
+        Process in batches to avoid CUDA OOM errors.
         """
-        vectors = self.get_embedding(texts, mode="sentence")
-        return vectors.cpu().numpy().tolist()
+        batch_size = 32  # Adjust this based on your GPU memory
+        all_vectors = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i+batch_size]
+            print(f"Processing batch {i//batch_size + 1}/{(len(texts)+batch_size-1)//batch_size}")
+            vectors = self.get_embedding(batch_texts, mode="sentence")
+            all_vectors.extend(vectors.cpu().numpy().tolist())
+            
+        return all_vectors
 
     def embed_query(self, text: str) -> List[float]:
         """

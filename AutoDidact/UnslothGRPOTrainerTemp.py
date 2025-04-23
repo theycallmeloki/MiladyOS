@@ -37,6 +37,13 @@ def grpo_compute_loss(old_logits, new_logits, input_ids, mask, beta, advantages)
     new_logits = new_logits.to(torch.float32)
     input_ids  = input_ids.unsqueeze(-1)
 
+    # Check for empty tensors and handle them
+    if old_logits.size(1) == 0 or new_logits.size(1) == 0:
+        # Return zero losses if tensors are empty, ensuring the loss requires gradient
+        device = old_logits.device
+        zero_loss = torch.zeros(1, device=device, requires_grad=True)
+        return zero_loss, torch.tensor(0.0, device=device), torch.tensor(0.0, device=device)
+    
     # x_i - logsumexp(x_i)
     old_x = torch.gather(old_logits, dim = -1, index = input_ids).squeeze(-1)
     new_x = torch.gather(new_logits, dim = -1, index = input_ids).squeeze(-1)
@@ -177,7 +184,16 @@ def grpo_accumulated_loss(
     mixed_dtype = torch.float16 if os.environ.get('ACCELERATE_MIXED_PRECISION', 'fp16') == 'fp16' else torch.bfloat16
     os.environ["UNSLOTH_RETURN_HIDDEN_STATES"] = "1"
 
-    completion_input_ids = input_ids[:, -logits_to_keep:]
+    # Check if the logits_to_keep is valid
+    if logits_to_keep <= 0:
+        # Return zero tensors that require gradients
+        device = input_ids.device
+        zero_loss = torch.zeros(1, device=device, requires_grad=True)
+        return zero_loss, torch.tensor(0.0, device=device), torch.tensor(0.0, device=device)
+
+    # Ensure input_ids is of the correct type (Long) before creating completion_input_ids
+    input_ids = input_ids.to(dtype=torch.long)
+    completion_input_ids = input_ids[:, -logits_to_keep:].to(dtype=torch.long)
     lm_head = trainer.model.get_output_embeddings().weight
 
     with torch.amp.autocast(device_type = "cuda", dtype = mixed_dtype):
@@ -186,6 +202,12 @@ def grpo_accumulated_loss(
         pass
 
         new_hidden_states = trainer.model(input_ids = input_ids, logits_to_keep = logits_to_keep + 1).logits
+        
+        # Check for empty tensors
+        if old_hidden_states.size(1) == 0 or new_hidden_states.size(1) == 0:
+            device = input_ids.device
+            zero_loss = torch.zeros(1, device=device, requires_grad=True)
+            return zero_loss, torch.tensor(0.0, device=device), torch.tensor(0.0, device=device)
         
         loss, completion_length, mean_kl = UnslothEfficientGRPO.apply(
             new_hidden_states, old_hidden_states, lm_head,
@@ -940,7 +962,11 @@ class _UnslothGRPOTrainer(Trainer):
             completion_ids = completion_ids[process_slice]
 
             # Pad the completions, and concatenate them with the prompts
-            completion_ids = [torch.tensor(ids, device=device) for ids in completion_ids]
+            # Properly handle tensor conversion - if it's a list, convert to tensor
+            # If it's already a tensor, use clone().detach()
+            completion_ids = [torch.tensor(ids, device=device, dtype=torch.long) if isinstance(ids, list) 
+                              else ids.clone().detach().to(device=device, dtype=torch.long)
+                              for ids in completion_ids]
             completion_ids = pad(completion_ids, padding_value=self.processing_class.pad_token_id)
             prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)
         else:

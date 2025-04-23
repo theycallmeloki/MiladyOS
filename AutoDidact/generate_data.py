@@ -28,12 +28,17 @@ from embeddings import CustomHuggingFaceEmbeddings
 
 
 # Load your markdown file (adjust the path as needed)
-loader = UnstructuredMarkdownLoader("./data/mission_report.md")
+loader = UnstructuredMarkdownLoader("./data/milady_report.md")
 docs = loader.load()
 
-# Split the document into smaller chunks (each 1000 characters, no overlap)
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+# Split the document into smaller chunks (smaller chunks to avoid CUDA OOM)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=0)
 chunks = text_splitter.split_documents(docs)
+# Limit the number of chunks to process to avoid CUDA OOM
+max_chunks = 50  # Drastically reduce the number of chunks
+if len(chunks) > max_chunks:
+    print(f"Limiting to {max_chunks} chunks to avoid CUDA OOM (out of {len(chunks)} total)")
+    chunks = chunks[:max_chunks]
 
 # Save chunks for later use
 os.makedirs("saved_data", exist_ok=True)

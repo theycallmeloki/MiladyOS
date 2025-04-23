@@ -64,16 +64,16 @@ from vllm import SamplingParams
 
 # Load model
 print('Loading model...')
-max_seq_length = 4096*2
-lora_rank = 64
+max_seq_length = 2048
+lora_rank = 32
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = 'meta-llama/meta-Llama-3.1-8B-Instruct',
+    model_name = 'agentica-org/DeepCoder-1.5B-Preview',
     max_seq_length = max_seq_length,
     load_in_4bit = True,
     fast_inference = True,
     max_lora_rank = lora_rank,
-    gpu_memory_utilization = 0.6,
+    gpu_memory_utilization = 0.7,
 )
 
 model = FastLanguageModel.get_peft_model(
