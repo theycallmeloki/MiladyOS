@@ -35,7 +35,7 @@ docs = loader.load()
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=0)
 chunks = text_splitter.split_documents(docs)
 # Limit the number of chunks to process to avoid CUDA OOM
-max_chunks = 50  # Drastically reduce the number of chunks
+max_chunks = 100  # Increased from 50 to generate more questions overall
 if len(chunks) > max_chunks:
     print(f"Limiting to {max_chunks} chunks to avoid CUDA OOM (out of {len(chunks)} total)")
     chunks = chunks[:max_chunks]
@@ -60,13 +60,13 @@ from unsloth import FastLanguageModel
 from vllm import SamplingParams
 import rl_helpers  # Ensure you have this or remove if not used
 
-# Load the Llama model (adjust parameters as needed)
+# Load the Llama model (adjusted to use Meta Llama 3.2 8B)
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name="meta-llama/meta-Llama-3.1-8B-Instruct",
     max_seq_length=4096,
-    load_in_4bit=True,       # Use 4-bit quantization if desired
-    fast_inference=True,      # Enable fast inference
-    gpu_memory_utilization=0.6  # Adjust based on your GPU memory
+    load_in_4bit=True,       # Use 4-bit quantization for memory efficiency
+    fast_inference=True,     # Enable fast inference
+    gpu_memory_utilization=0.8  # Increased from 0.6 to handle the larger model
 )
 
 # Define sampling parameters for generation
@@ -212,7 +212,8 @@ def generate_question_batch_for_chunks(chunks: List, num_questions: int = 2, dif
     return final_questions
 
 # Generate QA pairs in batch (using a sliding window over the chunks)
-all_questions = generate_question_batch_for_chunks(chunks, num_questions=2, difficulty="medium")
+# Increased number of questions per chunk from 2 to 8
+all_questions = generate_question_batch_for_chunks(chunks, num_questions=8, difficulty="medium")
 print(f"Generated {len(all_questions)} QA pairs.")
 
 # Save the QA pairs to a JSON file

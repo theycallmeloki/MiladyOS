@@ -68,7 +68,7 @@ max_seq_length = 2048
 lora_rank = 32
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = 'agentica-org/DeepCoder-1.5B-Preview',
+    model_name = 'meta-llama/meta-Llama-3.1-8B-Instruct',
     max_seq_length = max_seq_length,
     load_in_4bit = True,
     fast_inference = True,
