@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Stage 1: Embedding Generation
+  embedding:
+    build:
+      context: .
+      dockerfile: Dockerfile.embedding
+    volumes:
+      - ./data:/app/data
+      - ./saved_data:/app/saved_data
+      - ./faiss_index:/app/faiss_index
+    environment:
+      - CUDA_VISIBLE_DEVICES=1  # Using second GPU (RTX A4000)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Stage 2: QA Generation
+  qa_generation:
+    build:
+      context: .
+      dockerfile: Dockerfile.qa_generation
+    volumes:
+      - ./data:/app/data
+      - ./saved_data:/app/saved_data
+      - ./faiss_index:/app/faiss_index
+    environment:
+      - CUDA_VISIBLE_DEVICES=1  # Using second GPU (RTX A4000)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - embedding
+
+  # Stage 3: RL Training
+  rl_training:
+    build:
+      context: .
+      dockerfile: Dockerfile.rl_training
+    volumes:
+      - ./data:/app/data
+      - ./saved_data:/app/saved_data
+      - ./faiss_index:/app/faiss_index
+      - ./models:/app/models
+    environment:
+      - CUDA_VISIBLE_DEVICES=0  # Using first GPU (RTX 3080 Ti)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - qa_generation
+
+  # Stage 4: Inference/Testing
+  inference:
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    volumes:
+      - ./data:/app/data
+      - ./saved_data:/app/saved_data
+      - ./faiss_index:/app/faiss_index
+      - ./models:/app/models
+    environment:
+      - CUDA_VISIBLE_DEVICES=1  # Using second GPU (RTX A4000)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - rl_training
+    tty: true
+    stdin_open: true

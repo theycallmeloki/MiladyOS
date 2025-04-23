@@ -1,0 +1,39 @@
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy only the files needed for inference
+COPY embeddings.py .
+COPY search_module.py .
+COPY simple_qa.py .
+
+# Create directories for data
+RUN mkdir -p saved_data faiss_index models
+
+# Set GPU-related environment variables
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=all
+
+# Set the entrypoint to run the QA environment
+CMD ["python3", "simple_qa.py"]
