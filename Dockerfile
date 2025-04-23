@@ -75,8 +75,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install uv package manager using cargo directly
-RUN cargo install astral
+# Install uv package manager using cargo directly from git
+RUN cargo install --git https://github.com/astral-sh/uv uv
 
 # uv is now in path via cargo install
 
