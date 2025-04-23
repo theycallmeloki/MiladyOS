@@ -67,10 +67,18 @@ RUN python3 -m pip install nbformat nbconvert --break-system-packages
 
 RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
 
-# Install uv package manager
-RUN curl -fsSL https://astral.sh/uv/install.sh | sh
-RUN ln -sf /root/.cargo/bin/uv /usr/local/bin/uv
-ENV PATH="/root/.cargo/bin:/usr/local/bin:${PATH}"
+# Install Rust and Cargo for uv installation
+RUN apt-get update && apt-get install -y \
+    rustc \
+    cargo \
+    pkg-config \
+    libssl-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager using cargo directly
+RUN cargo install uv
+
+# uv is now in path via cargo install
 
 # Install dependencies directly
 WORKDIR /app

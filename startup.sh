@@ -1,9 +1,6 @@
 #!/bin/bash
 
-# Make uv accessible to Jenkins
-chown -R jenkins /root/.cargo
-ln -sf /root/.cargo/bin/uv /usr/local/bin/uv
-echo "PATH=/root/.cargo/bin:/usr/local/bin:$PATH" >> /var/jenkins_home/.profile
+# Jenkins starts here
 
 # Function to get the host's IP address in the specified range
 get_host_ip() {
