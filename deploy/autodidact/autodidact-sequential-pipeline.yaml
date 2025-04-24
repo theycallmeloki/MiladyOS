@@ -132,7 +132,7 @@ data:
               claimName: autodidact-data
           - name: embeddings-script
             configMap:
-              name: autodidact-embeddings
+              name: autodidact-all-files
           restartPolicy: OnFailure
       backoffLimit: 2
   autodidact-qa-job.yaml: |

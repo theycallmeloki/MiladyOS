@@ -47,10 +47,11 @@ spec:
         - "/bin/bash"
         - "-c"
         - |
-          # No need to restrict to specific device in Kubernetes
+          # Explicitly set the CUDA device to GPU 0
+          export CUDA_VISIBLE_DEVICES=0
           export PYTHONPATH="${PYTHONPATH}:/app"
-          # Increased memory split size and added other optimizations
-          export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+          # Set expanded segments to true to avoid fragmentation
+          export PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb:512,expandable_segments:True"
           # Enable TF32 precision for faster training
           export NVIDIA_TF32_OVERRIDE=1
           
@@ -88,7 +89,8 @@ spec:
           
           # Run the script directly with uv (which installs dependencies from script metadata)
           echo "Starting training with UV..."
-          uv run training-script.py
+          # Reduce batch size to avoid OOM errors
+          uv run training-script.py --batch-size=4 --gradient-accumulation-steps=2
         volumeMounts:
         - name: autodidact-pvc
           mountPath: /app/data
