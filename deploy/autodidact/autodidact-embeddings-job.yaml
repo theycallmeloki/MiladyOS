@@ -38,14 +38,21 @@ spec:
             memory: "32Gi"
             cpu: "8"
         volumeMounts:
-        - name: autodidact-data
+        - name: autodidact-pvc
           mountPath: /app/data
+          subPath: data
+        - name: autodidact-pvc
+          mountPath: /app/saved_data
+          subPath: saved_data
+        - name: autodidact-pvc
+          mountPath: /app/faiss_index
+          subPath: faiss_index
         - name: autodidact-embeddings-script
           mountPath: /scripts
         - name: autodidact-sample-data
           mountPath: /sample-data
       volumes:
-      - name: autodidact-data
+      - name: autodidact-pvc
         persistentVolumeClaim:
           claimName: autodidact-data
       - name: autodidact-embeddings-script

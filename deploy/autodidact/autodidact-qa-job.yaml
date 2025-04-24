@@ -1,0 +1,92 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autodidact-qa
+  namespace: autodidact
+spec:
+  template:
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        kubernetes.io/hostname: talos-dkp-mps  # Select the RTX 3090 node
+      containers:
+      - name: qa-generator
+        image: nvcr.io/nvidia/pytorch:23.10-py3
+        command:
+        - "bash"
+        - "-c"
+        - |
+          # Check directories and create if needed
+          for dir in /app/data /app/saved_data /app/faiss_index; do
+            if [ ! -d "$dir" ]; then
+              echo "Creating directory: $dir"
+              mkdir -p "$dir"
+            else
+              echo "Directory already exists: $dir"
+            fi
+          done
+          
+          # Install UV and setuptools (needed for triton)
+          pip install --quiet --no-cache-dir uv setuptools
+          
+          # Copy script
+          cd /app
+          cp /scripts/generate_data.py .
+          
+          # Check NVIDIA GPU availability
+          nvidia-smi || echo "WARNING: No GPU detected!"
+          
+          # Use GPU 2 specifically for compatibility with other workloads
+          export CUDA_VISIBLE_DEVICES=2
+          
+          # Check if chunks file exists from previous job
+          if [ ! -f "/app/saved_data/chunks.pkl" ]; then
+            echo "Error: chunks.pkl not found. The embeddings job must run first."
+            exit 1
+          fi
+          
+          # Run the script
+          uv run generate_data.py
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4"
+          limits:
+            nvidia.com/gpu: 1
+            memory: "32Gi"
+            cpu: "8"
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: autodidact-pvc
+          mountPath: /app/data
+          subPath: data
+        - name: autodidact-pvc
+          mountPath: /app/saved_data
+          subPath: saved_data
+        - name: autodidact-pvc
+          mountPath: /app/faiss_index
+          subPath: faiss_index
+        - name: autodidact-qa-script
+          mountPath: /scripts
+        - name: dev
+          mountPath: /dev
+        - name: shm
+          mountPath: /dev/shm
+      volumes:
+      - name: autodidact-pvc
+        persistentVolumeClaim:
+          claimName: autodidact-data
+      - name: autodidact-qa-script
+        configMap:
+          name: autodidact-qa
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "8Gi"
+      restartPolicy: OnFailure
+  backoffLimit: 2
