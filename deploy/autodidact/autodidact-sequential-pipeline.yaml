@@ -37,23 +37,27 @@ spec:
             done
           }
           
-          # Run embeddings job
+          # Step 1: Run embeddings job
           echo "Starting embeddings job..."
           kubectl delete job autodidact-embeddings -n autodidact --ignore-not-found
           kubectl apply -f /k8s-configs/autodidact-embeddings-job.yaml
           wait_for_job autodidact-embeddings
           
-          # Run QA generation job
+          # Step 2: Run QA generation job
           echo "Starting QA generation job..."
           kubectl delete job autodidact-qa -n autodidact --ignore-not-found
           kubectl apply -f /k8s-configs/autodidact-qa-job.yaml
           wait_for_job autodidact-qa
           
-          # Run training job
-          echo "Starting training job..."
+          # Step 3: Run optimized training job
+          echo "Starting training job with GPU optimizations..."
           kubectl delete job autodidact-training -n autodidact --ignore-not-found
           kubectl apply -f /k8s-configs/autodidact-training-job.yaml
           wait_for_job autodidact-training
+          
+          # Step 4: Verify and log results
+          echo "Checking training outputs..."
+          kubectl exec -n autodidact data-checker -- ls -la /app/model_output || true
           
           echo "Complete AutoDidact pipeline completed successfully!"
         volumeMounts:
