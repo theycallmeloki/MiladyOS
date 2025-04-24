@@ -1,3 +1,15 @@
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#   "torch",
+#   "trl",
+#   "nest-asyncio",
+#   "pydantic",
+#   "langchain",
+#   "datasets",
+# ]
+# ///
+
 """
 RL helpers module for handling tool-based conversations.
 This module provides utility functions for handling chat-based tool interactions

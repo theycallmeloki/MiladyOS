@@ -1,0 +1,30 @@
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
+
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies
+WORKDIR /app
+
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt /app/requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY *.py /app/
+COPY *.sh /app/
+COPY data/ /app/data/
+
+# Create necessary directories
+RUN mkdir -p /app/saved_data /app/faiss_index /app/full_local_training
+
+# Create the runner script
+COPY autodidact_runner.py /app/autodidact_runner.py
+
+# Set entrypoint
+ENTRYPOINT ["python3", "autodidact_runner.py"]

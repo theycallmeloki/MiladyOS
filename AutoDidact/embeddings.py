@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#   "torch",
+#   "transformers",
+#   "langchain",
+# ]
+# ///
+
 from typing import List, Union
 import torch
 import torch.nn.functional as F

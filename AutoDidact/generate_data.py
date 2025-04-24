@@ -1,3 +1,17 @@
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#   "langchain",
+#   "langchain-community",
+#   "faiss-cpu",
+#   "torch",
+#   "transformers",
+#   "unsloth",
+#   "vllm",
+#   "unstructured",
+# ]
+# ///
+
 """
 This script performs two main tasks:
 1. It loads a markdown document, splits it into chunks, generates embeddings,

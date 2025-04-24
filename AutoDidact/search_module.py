@@ -1,3 +1,15 @@
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#   "langchain",
+#   "langchain-community",
+#   "faiss-cpu",
+#   "pickle",
+#   "json",
+#   "datasets",
+#   "pydantic",
+# ]
+# ///
 """
 Search module for RL training loop.
 This module provides functions to search through vectorized documents and retrieve question-answer pairs.

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autodidact-sample-data
+  namespace: autodidact
+data:
+  milady_report.md: |
+    # Milady Report
+
+    ## Introduction
+
+    This is a sample markdown file used for generating embeddings.
+    It contains some placeholder text to demonstrate the capability
+    of the AutoDidact embeddings system.
+
+    ## Section 1: The Project
+
+    Milady NFTs represent a significant advancement in the NFT space,
+    combining artistic expression with community building and technological innovation.
+    The project has become one of the most recognized collections in the digital
+    art space, known for its distinctive aesthetic and dedicated following.
+
+    ## Section 2: Technical Implementation
+
+    The embedding system uses state-of-the-art language models to convert
+    text content into mathematical representations that capture semantic meaning.
+    These embeddings are stored in a FAISS index, which enables efficient
+    vector similarity search operations.
+
+    ## Section 3: Future Development
+
+    Future plans for the project include expanding the embedding system
+    to handle multimodal inputs, including images and structured data.
+    This will enable more sophisticated search and retrieval capabilities
+    across diverse content types and enhance the overall system performance.
