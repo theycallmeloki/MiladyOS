@@ -4,6 +4,8 @@ metadata:
   name: data-checker
   namespace: autodidact
 spec:
+  nodeSelector:
+    kubernetes.io/hostname: talos-dkp-mps
   containers:
   - name: busybox
     image: busybox

@@ -15,7 +15,7 @@ data:
     #   "faiss-cpu",
     #   "unstructured",
     #   "unsloth>=2025.3.6",
-    #   "vllm>=0.7.2",
+    #   "vllm==0.7.2",
     #   "pickle5",
     #   "pydantic",
     #   "setuptools",
