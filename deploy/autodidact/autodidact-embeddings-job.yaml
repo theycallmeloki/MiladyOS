@@ -8,6 +8,30 @@ spec:
     spec:
       nodeSelector:
         nvidia.com/gpu.count: "4"  # Select the RTX 3090 node
+      initContainers:
+      - name: setup-files
+        image: busybox
+        command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          # Copy necessary files to the app directory
+          cp /source-files/embeddings.py /app/
+          
+          # Create data directory and copy documentation file
+          mkdir -p /app/data
+          cp /docs-files/MiladyOS_Documentation.md /app/data/
+          
+          # Ensure proper permissions
+          chmod 755 /app/*.py
+          chmod 644 /app/data/MiladyOS_Documentation.md
+        volumeMounts:
+        - name: autodidact-pvc
+          mountPath: /app
+        - name: all-files
+          mountPath: /source-files
+        - name: docs-files
+          mountPath: /docs-files
       containers:
       - name: embeddings
         image: ghcr.io/astral-sh/uv:python3.10-bookworm
@@ -18,18 +42,18 @@ spec:
           # Set up directories
           mkdir -p /app/data /app/saved_data /app/faiss_index
           
-          # Copy sample data
-          cp /sample-data/milady_report.md /app/data/
-          
-          # Install and run the embeddings script with uv
-          cd /app
-          cp /scripts/embeddings.py .
-          
           # Set CUDA_VISIBLE_DEVICES to use the first GPU
           export CUDA_VISIBLE_DEVICES=0
           
           # Run the script
-          uv run embeddings.py --input-file /app/data/milady_report.md --chunks-output /app/saved_data/chunks.pkl --faiss-index /app/faiss_index
+          cd /app
+          # Debug paths
+          echo "Current directory: $(pwd)"
+          echo "Data directory contents:"
+          ls -la /app/data/
+          
+          # Run with absolute paths
+          uv run embeddings.py --input-file="/app/data/MiladyOS_Documentation.md" --chunks-output="/app/saved_data/chunks.pkl" --faiss-index="/app/faiss_index"
         resources:
           requests:
             memory: "16Gi"
@@ -47,19 +71,17 @@ spec:
         - name: autodidact-pvc
           mountPath: /app/faiss_index
           subPath: faiss_index
-        - name: autodidact-embeddings-script
-          mountPath: /scripts
-        - name: autodidact-sample-data
-          mountPath: /sample-data
+        - name: autodidact-pvc
+          mountPath: /app
       volumes:
       - name: autodidact-pvc
         persistentVolumeClaim:
           claimName: autodidact-data
-      - name: autodidact-embeddings-script
+      - name: all-files
         configMap:
-          name: autodidact-embeddings
-      - name: autodidact-sample-data
+          name: autodidact-all-files
+      - name: docs-files
         configMap:
-          name: autodidact-sample-data
+          name: autodidact-docs
       restartPolicy: OnFailure
   backoffLimit: 2

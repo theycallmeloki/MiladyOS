@@ -1,0 +1,43 @@
+apiVersion: v1
+data:
+  MiladyOS_Documentation.md: "# MiladyOS Documentation\nGenerated on Tuesday 22 April
+    2025 03:27:48 PM IST\n\n## README\n\n```markdown\n# MiladyOS\n\n![Gn8cc0VWwAAmakN](https://github.com/user-attachments/assets/ea68e45b-49fa-4d70-a6f6-18f223dd4689)\n\n\n\nmilady
+    themed operations runner with optimized defaults for maximizing cpu+ram+gpu utilization
+    accross a cluster\n\nDISCLAIMER: This tool encapsulates what could be considered
+    \"best practices\" for... bad practices.\n\nAs a distributed computing framework,
+    MiladyOS enables the remote execution of arbitrary code. You should only install
+    MiladyOS workers within networks that you trust. This is standard among distributed
+    computing frameworks, but is worth repeating.\n\nThe client is able to download
+    runners, greet milady neibours, create decentralized overlay networks, which then
+    performs any number of Inference/Training tasks. This can potentially be used
+    in a bad manner. Run the client with the least priviliges where possble. \n\nFind
+    more information about the \"principle of least privilege\" on wikipedia: https://en.wikipedia.org/wiki/Principle_of_least_privilege\n\n##
+    Instructions to Run: \nYou should have [Nvidia drivers](https://www.nvidia.com/download/index.aspx)
+    installed and [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+    configured, post which it's recommended to reboot once prior to running this.
+    \n\n```\ncurl -sSL https://raw.githubusercontent.com/theycallmeloki/MiladyOS/main/install_miladyos.sh
+    | bash\n```\n\nThe default username is `admin` and the default password is `password`\n\n\n##
+    Instructions to Build:\n\n```\n# docker buildx build --platform linux/amd64,linux/arm64
+    -t ogmiladyloki/miladyos --push .\n```\n\n## Instructions to Ingress (Proof-Of-Work
+    - Full node): \n\nLook for the Caddyfile in the repo and update it to point to
+    your domain\nYou would also set the A record to point to your IP address on your
+    domain provider\n\n```\nyourfancydomain.com\n```\n\nTODO: Drop edith-cli dependency
+    \n\n## Pachyderm bootrstrapped from [edith-cli](https://github.com/theycallmeloki/edith-cli)\n\n###
+    You will need [this script](https://gist.github.com/theycallmeloki/aa4df404c3df85c31dac91216e22f678)
+    at the end of the edith-cli installation\n\nAdd the following to the Dockerfile
+    in the root section and build yourself a container, checkout builder.sh\n\n```\n#
+    Add kubeconfig file to the docker\nADD kubeconfig.yaml /root/.kube/config\n\n#
+    Add Pachctl config to the container\nCOPY config.json /root/.pachyderm/config.json\n```\n```\n\n##
+    Core Python Files\n### main.py\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nMiladyOS
+    - AI for Hardware Infrastructure\nMain entry point for MiladyOS CLI and MCP server\n\"\"\"\n\nimport
+    sys\nimport logging\nimport click\nimport colorlog\nfrom dotenv import load_dotenv\n\n#
+    Load environment variables\nload_dotenv()\n\n# Configure logger\nlogger = colorlog.getLogger(\"miladyos\")\nhandler
+    = colorlog.StreamHandler()\nhandler.setFormatter(colorlog.ColoredFormatter(\n
+    \   \"%(log_color)s%(levelname)s%(reset)s: %(message)s\"\n))\nlogger.addHandler(handler)\nlogger.setLevel(logging.INFO)\n\n\n@click.group()\ndef
+    cli():\n    \"\"\"MiladyOS CLI and MCP server for hardware infrastructure.\"\"\"\n
+    \   pass\n\n\n@cli.command()\n# THIS IS A PRUNED VERSION FOR TESTING ONLY\n"
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: autodidact-docs
+  namespace: autodidact
