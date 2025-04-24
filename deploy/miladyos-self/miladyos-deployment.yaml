@@ -1,10 +1,8 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: miladyos-pvc
+  name: miladyos-home-pvc
   namespace: default
-  annotations:
-    volume.kubernetes.io/selected-node: talos-o0r-78y
 spec:
   accessModes:
     - ReadWriteOnce
@@ -16,10 +14,8 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pachyderm-config-pvc
+  name: miladyos-kube-config-pvc
   namespace: default
-  annotations:
-    volume.kubernetes.io/selected-node: talos-o0r-78y
 spec:
   accessModes:
     - ReadWriteOnce
@@ -31,16 +27,27 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: kube-config-pvc
+  name: miladyos-pachyderm-config-pvc
   namespace: default
-  annotations:
-    volume.kubernetes.io/selected-node: talos-o0r-78y
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 50Mi
+  storageClassName: longhorn-single-replica
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: docker-storage-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
   storageClassName: longhorn-single-replica
 ---
 apiVersion: apps/v1
@@ -59,7 +66,7 @@ spec:
         app: miladyos
     spec:
       nodeSelector:
-        kubernetes.io/hostname: talos-o0r-78y
+        longhorn.io/node: "true"
       initContainers:
       - name: volume-permissions
         image: busybox
@@ -74,6 +81,23 @@ spec:
         - name: pachyderm-config
           mountPath: /root/.pachyderm
       containers:
+      - name: dind
+        image: docker:dind
+        securityContext:
+          privileged: true
+        env:
+          - name: DOCKER_TLS_CERTDIR
+            value: ""
+        volumeMounts:
+          - name: docker-storage
+            mountPath: /var/lib/docker
+          - name: docker-run
+            mountPath: /var/run
+        readinessProbe:
+          exec:
+            command: ["docker", "info"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
       - name: miladyos
         image: ogmiladyloki/miladyos:latest
         securityContext:
@@ -94,7 +118,7 @@ spec:
         - name: KUBERNETES_MODE
           value: "true"
         - name: DISABLE_DOCKER
-          value: "true"
+          value: "false"
         - name: JENKINS_URL
           value: "http://miladyos:8080"
         - name: REDIS_HOST
@@ -106,26 +130,39 @@ spec:
           mountPath: /var/jenkins_home
         - name: varlog
           mountPath: /var/log
-        - name: docker-socket
-          mountPath: /var/run/docker.sock
+        - name: docker-run
+          mountPath: /var/run
         - name: kube-config
           mountPath: /root/.kube
         - name: pachyderm-config
           mountPath: /root/.pachyderm
+      - name: redis
+        image: redis:6.2-alpine
+        ports:
+        - containerPort: 6379
+        command: ["redis-server", "--appendonly", "yes"]
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
       volumes:
       - name: miladyos-home
         persistentVolumeClaim:
-          claimName: miladyos-pvc
-      - name: docker-socket
+          claimName: miladyos-home-pvc
+      - name: docker-storage
+        persistentVolumeClaim:
+          claimName: docker-storage-pvc
+      - name: docker-run
         emptyDir: {}
       - name: varlog
         emptyDir: {}
+      - name: redis-data
+        emptyDir: {}
       - name: kube-config
         persistentVolumeClaim:
-          claimName: kube-config-pvc
+          claimName: miladyos-kube-config-pvc
       - name: pachyderm-config
         persistentVolumeClaim:
-          claimName: pachyderm-config-pvc
+          claimName: miladyos-pachyderm-config-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -148,4 +185,4 @@ spec:
   - name: redka
     port: 6379
     targetPort: 6379
-  type: ClusterIP
+  type: ClusterIP 
