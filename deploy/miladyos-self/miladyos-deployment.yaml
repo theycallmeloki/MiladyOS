@@ -14,6 +14,19 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  name: registry-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: longhorn-single-replica
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
   name: miladyos-kube-config-pvc
   namespace: default
 spec:
@@ -98,6 +111,13 @@ spec:
             command: ["docker", "info"]
           initialDelaySeconds: 10
           periodSeconds: 5
+      - name: registry
+        image: registry:2
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: registry-data
+          mountPath: /var/lib/registry
       - name: miladyos
         image: ogmiladyloki/miladyos:latest
         securityContext:
@@ -163,6 +183,9 @@ spec:
       - name: pachyderm-config
         persistentVolumeClaim:
           claimName: miladyos-pachyderm-config-pvc
+      - name: registry-data
+        persistentVolumeClaim:
+          claimName: registry-data-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -185,4 +208,7 @@ spec:
   - name: redka
     port: 6379
     targetPort: 6379
+  - name: registry
+    port: 5000
+    targetPort: 5000
   type: ClusterIP 
