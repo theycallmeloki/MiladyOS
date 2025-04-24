@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autodidact-embeddings
+  namespace: autodidact
+data:
+  embeddings.py: |
+    # /// script
+    # requires-python = ">=3.8"
+    # dependencies = [
+    #   "torch>=2.0.0",
+    #   "transformers>=4.49.0",
+    #   "langchain",
+    #   "langchain-community",
+    #   "faiss-cpu",
+    #   "unstructured",
+    #   "pydantic",
+    #   "markdown",
+    # ]
+    # ///
+
+    from typing import List, Union
+    import torch
+    import torch.nn.functional as F
+    from transformers import AutoModel, AutoTokenizer
+    from langchain.embeddings.base import Embeddings
+
+    # Set a default model here
+    DEFAULT_MODEL_NAME = "avsolatorio/NoInstruct-small-Embedding-v0"
+
+    class CustomHuggingFaceEmbeddings(Embeddings):
+        """
+        A custom embeddings class that wraps a Hugging Face model for generating embeddings.
+        
+        Supports two modes:
+        - "sentence": uses the [CLS] token representation for sentence/document embeddings.
+        - "query": uses mean pooling over tokens (weighted by the attention mask) for query embeddings.
+        """
+        def __init__(self, model_name: str = DEFAULT_MODEL_NAME, default_mode: str = "sentence"):
+            self.model_name = model_name
+            # Set device to GPU if available, else CPU
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"Using device: {self.device}")
+            self.model = AutoModel.from_pretrained(model_name).to(self.device)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.default_mode = default_mode  # "sentence" or "query"
+            self.model.eval()  # Set model to evaluation mode
+
+        def get_embedding(self, text: Union[str, List[str]], mode: str = None):
+            if mode is None:
+                mode = self.default_mode
+            assert mode in ("query", "sentence"), f"Unsupported mode: {mode}. Only 'query' and 'sentence' are supported."
+
+            # Ensure we are working with a list of texts
+            if isinstance(text, str):
+                text = [text]
+
+            # Tokenize the input texts
+            inp = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+            # Move the input tensors to the same device as the model
+            inp = {key: value.to(self.device) for key, value in inp.items()}
+
+            # Forward pass (no gradients needed)
+            with torch.no_grad():
+                output = self.model(**inp)
+
+            if mode == "query":
+                # Mean pooling: weight by attention mask and average across tokens
+                vectors = output.last_hidden_state * inp["attention_mask"].unsqueeze(2)
+                vectors = vectors.sum(dim=1) / inp["attention_mask"].sum(dim=-1).view(-1, 1)
+            else:
+                # Sentence/document embedding: use the [CLS] token (first token) representation
+                vectors = output.last_hidden_state[:, 0, :]
+            return vectors
+
+        def embed_documents(self, texts: List[str]) -> List[List[float]]:
+            """
+            Compute embeddings for a list of documents (using sentence mode).
+            Process in batches to avoid CUDA OOM errors.
+            """
+            batch_size = 32  # Adjust this based on your GPU memory
+            all_vectors = []
+            
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i+batch_size]
+                print(f"Processing batch {i//batch_size + 1}/{(len(texts)+batch_size-1)//batch_size}")
+                vectors = self.get_embedding(batch_texts, mode="sentence")
+                all_vectors.extend(vectors.cpu().numpy().tolist())
+                
+            return all_vectors
+
+        def embed_query(self, text: str) -> List[float]:
+            """
+            Compute an embedding for a single query.
+            """
+            vector = self.get_embedding(text, mode="query")
+            return vector.cpu().numpy()[0].tolist()
+
+    if __name__ == "__main__":
+        import argparse
+        import os
+        import json
+        import pickle
+        from langchain.document_loaders import UnstructuredMarkdownLoader
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        from langchain.vectorstores import FAISS
+        
+        parser = argparse.ArgumentParser(description="Generate embeddings for documents")
+        parser.add_argument("--input-file", type=str, default="data/milady_report.md", 
+                           help="Input markdown file to process")
+        parser.add_argument("--chunks-output", type=str, default="saved_data/chunks.pkl",
+                           help="Output file for document chunks")
+        parser.add_argument("--faiss-index", type=str, default="faiss_index",
+                           help="Output directory for FAISS index")
+        parser.add_argument("--max-chunks", type=int, default=100,
+                           help="Maximum number of chunks to process")
+        parser.add_argument("--chunk-size", type=int, default=500,
+                           help="Size of each document chunk in characters")
+        
+        args = parser.parse_args()
+        
+        print(f"Loading document from {args.input_file}")
+        loader = UnstructuredMarkdownLoader(args.input_file)
+        docs = loader.load()
+        
+        print(f"Splitting document into chunks of size {args.chunk_size}")
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=args.chunk_size, chunk_overlap=0)
+        chunks = text_splitter.split_documents(docs)
+        
+        max_chunks = args.max_chunks
+        if len(chunks) > max_chunks:
+            print(f"Limiting to {max_chunks} chunks to avoid CUDA OOM (out of {len(chunks)} total)")
+            chunks = chunks[:max_chunks]
+        
+        # Save chunks for later use
+        os.makedirs(os.path.dirname(args.chunks_output), exist_ok=True)
+        with open(args.chunks_output, "wb") as f:
+            pickle.dump(chunks, f)
+        print(f"Saved {len(chunks)} chunks to {args.chunks_output}")
+        
+        print("Initializing custom embeddings model")
+        embeddings = CustomHuggingFaceEmbeddings()
+        
+        print("Creating FAISS vector store from document chunks")
+        vectorstore = FAISS.from_documents(chunks, embeddings)
+        vectorstore.save_local(args.faiss_index)
+        print(f"Saved FAISS index to '{args.faiss_index}'")
+        
+        print("Embeddings generation complete!")

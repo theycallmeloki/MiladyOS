@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#   "langchain",
+#   "faiss-cpu",
+#   "pickle",
+#   "json",
+#   "asyncio",
+# ]
+# ///
 """
 Simple command-line Q&A environment for testing with search functionality.
 """

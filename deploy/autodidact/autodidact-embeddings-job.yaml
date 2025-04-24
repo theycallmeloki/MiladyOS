@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autodidact-embeddings
+  namespace: autodidact
+spec:
+  template:
+    spec:
+      nodeSelector:
+        nvidia.com/gpu.count: "4"  # Select the RTX 3090 node
+      containers:
+      - name: embeddings
+        image: ghcr.io/astral-sh/uv:python3.10-bookworm
+        command:
+        - "bash"
+        - "-c"
+        - |
+          # Set up directories
+          mkdir -p /app/data /app/saved_data /app/faiss_index
+          
+          # Copy sample data
+          cp /sample-data/milady_report.md /app/data/
+          
+          # Install and run the embeddings script with uv
+          cd /app
+          cp /scripts/embeddings.py .
+          
+          # Set CUDA_VISIBLE_DEVICES to use the first GPU
+          export CUDA_VISIBLE_DEVICES=0
+          
+          # Run the script
+          uv run embeddings.py --input-file /app/data/milady_report.md --chunks-output /app/saved_data/chunks.pkl --faiss-index /app/faiss_index
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "4"
+          limits:
+            memory: "32Gi"
+            cpu: "8"
+        volumeMounts:
+        - name: autodidact-data
+          mountPath: /app/data
+        - name: autodidact-embeddings-script
+          mountPath: /scripts
+        - name: autodidact-sample-data
+          mountPath: /sample-data
+      volumes:
+      - name: autodidact-data
+        persistentVolumeClaim:
+          claimName: autodidact-data
+      - name: autodidact-embeddings-script
+        configMap:
+          name: autodidact-embeddings
+      - name: autodidact-sample-data
+        configMap:
+          name: autodidact-sample-data
+      restartPolicy: OnFailure
+  backoffLimit: 2

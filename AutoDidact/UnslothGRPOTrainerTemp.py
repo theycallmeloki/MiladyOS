@@ -1,3 +1,16 @@
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#   "torch",
+#   "trl",
+#   "transformers==4.49.0",
+#   "unsloth==2025.3.6",
+#   "unsloth_zoo==2025.3.4",
+#   "numpy",
+#   "packaging",
+# ]
+# ///
+
 from torch import Tensor
 import torch
 import torch.nn as nn
