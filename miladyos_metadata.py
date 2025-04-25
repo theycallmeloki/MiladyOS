@@ -719,36 +719,10 @@ class RedkaMetadataManager:
         # Update the template in the sorted set (update score to current time)
         self.redis.zadd("miladyos:templates", {template_name: time.time()})
         
-        # Also update the description in the Jenkinsfile
-        try:
-            template_path = os.path.join(self.templates_dir, f"{template_name}.Jenkinsfile")
-            if os.path.exists(template_path):
-                with open(template_path, 'r') as f:
-                    content = f.read()
-                
-                # Update the description line if it exists
-                new_content_lines = []
-                description_updated = False
-                
-                for line in content.split("\n"):
-                    if line.strip().startswith("// Description:"):
-                        new_content_lines.append(f"// Description: {description}")
-                        description_updated = True
-                    else:
-                        new_content_lines.append(line)
-                
-                # Add description if it wasn't found
-                if not description_updated and len(new_content_lines) > 0:
-                    if new_content_lines[0].startswith("//"):
-                        new_content_lines.insert(1, f"// Description: {description}")
-                    else:
-                        new_content_lines.insert(0, f"// Description: {description}")
-                
-                # Write updated content
-                with open(template_path, 'w') as f:
-                    f.write("\n".join(new_content_lines))
-        except Exception as e:
-            logger.error(f"Error updating template description in file: {e}")
+        # Don't modify the file content - only update in Redis
+        # This preserves the exact formatting of the original file
+        # Description is updated in Redis metadata only
+        logger.info(f"Description updated in metadata only (file left untouched): {template_name}")
         
         # Get updated template data
         updated_data = self.redis.hgetall(template_key)
@@ -1232,36 +1206,10 @@ class MetadataManager:
         
         logger.info(f"Updated template: {template_name} (v{pipeline_info['version']}) - {description}")
         
-        # Update the description in the Jenkinsfile too
-        try:
-            template_path = os.path.join(self.templates_dir, f"{template_name}.Jenkinsfile")
-            if os.path.exists(template_path):
-                with open(template_path, 'r') as f:
-                    content = f.read()
-                
-                # Update the description line if it exists
-                new_content_lines = []
-                description_updated = False
-                
-                for line in content.split("\n"):
-                    if line.strip().startswith("// Description:"):
-                        new_content_lines.append(f"// Description: {description}")
-                        description_updated = True
-                    else:
-                        new_content_lines.append(line)
-                
-                # Add description if it wasn't found
-                if not description_updated and len(new_content_lines) > 0:
-                    if new_content_lines[0].startswith("//"):
-                        new_content_lines.insert(1, f"// Description: {description}")
-                    else:
-                        new_content_lines.insert(0, f"// Description: {description}")
-                
-                # Write updated content
-                with open(template_path, 'w') as f:
-                    f.write("\n".join(new_content_lines))
-        except Exception as e:
-            logger.error(f"Error updating template description in file: {e}")
+        # Don't modify the file content - only update in metadata
+        # This preserves the exact formatting of the original file
+        # Description is updated in the metadata only
+        logger.info(f"Description updated in metadata only (file left untouched): {template_name}")
         
         return pipeline_info
     
