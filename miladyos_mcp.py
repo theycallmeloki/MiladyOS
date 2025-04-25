@@ -511,8 +511,19 @@ class TemplateUtils:
     """Utility functions for template management."""
     
     @staticmethod
-    def generate_jenkinsfile_content(template_name, description, agent="any", environment_vars=None):
-        """Generate Jenkinsfile content based on description."""
+    def generate_jenkinsfile_content(template_name, description, agent="any", environment_vars=None, raw_content=None):
+        """Generate Jenkinsfile content based on description.
+        
+        If raw_content is provided, it will be used directly without any formatting changes.
+        """
+        # If raw content is provided, use it directly with no formatting changes
+        if raw_content:
+            # Only add the description comment if it doesn't already have one
+            if "// Description:" not in raw_content:
+                return f"// Jenkinsfile for {template_name}\n// Description: {description}\n{raw_content}"
+            return raw_content
+            
+        # Otherwise, generate a default template
         # Check for existing Jenkinsfiles to use as templates/reference
         try:
             example_files = os.listdir(Config.TEMPLATES_DIR)
@@ -830,6 +841,10 @@ class MiladyOSToolServer:
                             "items": {
                                 "type": "string"
                             }
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Raw Jenkinsfile content to use without automatic formatting (optional)"
                         }
                     },
                     "required": ["template_name", "description"]
@@ -1277,6 +1292,8 @@ class MiladyOSToolServer:
                 description = arguments.get("description")
                 agent = arguments.get("agent", "any")
                 environment_vars = arguments.get("environment", [])
+                # New parameter for raw content
+                content = arguments.get("content")
                 
                 if not template_name:
                     logger.error("template_name is required")
@@ -1295,11 +1312,13 @@ class MiladyOSToolServer:
                 
                 try:
                     # Generate Jenkinsfile content based on description
+                    # If content is provided, use it directly without formatting
                     jenkinsfile_content = TemplateUtils.generate_jenkinsfile_content(
                         template_name,
                         description,
                         agent,
-                        environment_vars
+                        environment_vars,
+                        raw_content=content  # Pass the raw content if available
                     )
                     
                     # Save the generated Jenkinsfile
