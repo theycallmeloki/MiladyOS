@@ -7,7 +7,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        nvidia.com/gpu.count: "4"  # Select the RTX 3090 node
+        kubernetes.io/hostname: talos-dkp-mps
       initContainers:
       - name: setup-files
         image: busybox
@@ -76,12 +76,14 @@ spec:
       volumes:
       - name: autodidact-pvc
         persistentVolumeClaim:
-          claimName: autodidact-data
+          claimName: autodidact-data-v2
       - name: all-files
         configMap:
           name: autodidact-all-files
+          defaultMode: 0644
       - name: docs-files
         configMap:
           name: autodidact-docs
+          defaultMode: 0644
       restartPolicy: OnFailure
   backoffLimit: 2

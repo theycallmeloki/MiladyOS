@@ -113,7 +113,7 @@ spec:
       volumes:
       - name: autodidact-pvc
         persistentVolumeClaim:
-          claimName: autodidact-data
+          claimName: autodidact-data-v2
       - name: all-files
         configMap:
           name: autodidact-all-files

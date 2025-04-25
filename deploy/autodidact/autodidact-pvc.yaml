@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: autodidact-data
+  name: autodidact-data-v2
   namespace: autodidact
 spec:
   accessModes:
