@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ups-test-client
+  namespace: monitoring
+spec:
+  containers:
+  - name: test-client
+    image: python:3.9-slim
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        set -euo pipefail
+        apt-get update
+        apt-get install -y nut-client
+        
+        echo "===== Testing UPS connection ====="
+        upsc microtek@ups-server || echo "Failed to connect to UPS"
+        
+        # Keep container running for debugging
+        sleep 3600
+  restartPolicy: Never
