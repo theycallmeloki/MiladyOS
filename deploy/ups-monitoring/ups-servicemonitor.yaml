@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ups-exporter
+  namespace: monitoring
+  labels:
+    app: ups-exporter
+    release: prometheus # Must match your Prometheus Operator release label
+spec:
+  selector:
+    matchLabels:
+      app: ups-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+  namespaceSelector:
+    matchNames:
+    - monitoring

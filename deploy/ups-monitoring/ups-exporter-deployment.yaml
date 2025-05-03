@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ups-exporter
+  namespace: monitoring
+  labels:
+    app: ups-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ups-exporter
+  template:
+    metadata:
+      labels:
+        app: ups-exporter
+    spec:
+      containers:
+      - name: ups-exporter
+        image: python:3.9-slim
+        env:
+        - name: UPS_NAME
+          value: "microtek"
+        - name: UPS_HOST
+          value: "ups-server"
+        - name: EXPORTER_PORT
+          value: "9099"
+        - name: POLL_INTERVAL
+          value: "30"
+        - name: DEBUG
+          value: "false"
+        ports:
+        - name: metrics
+          containerPort: 9099
+        volumeMounts:
+        - name: script
+          mountPath: /app/script
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends nut-client python3-pip
+          python3 -m pip install --no-cache-dir prometheus-client
+          echo "Starting UPS exporter..."
+          python3 /app/script/exporter.py
+      volumes:
+      - name: script
+        configMap:
+          name: ups-exporter-script
+          items:
+          - key: exporter.py
+            path: exporter.py

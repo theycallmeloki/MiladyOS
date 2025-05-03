@@ -1,0 +1,244 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ups-exporter-script
+  namespace: monitoring
+data:
+  exporter.py: |
+    #!/usr/bin/env python3
+    import os
+    import sys
+    import time
+    import json
+    import traceback
+    import subprocess
+    from prometheus_client import start_http_server, Gauge, Counter, REGISTRY, PROCESS_COLLECTOR, PLATFORM_COLLECTOR, GC_COLLECTOR
+
+    # Configuration from environment variables
+    UPS_NAME = os.environ.get('UPS_NAME', 'microtek')
+    UPS_HOST = os.environ.get('UPS_HOST', 'ups-server')
+    EXPORTER_PORT = int(os.environ.get('EXPORTER_PORT', 9099))
+    POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', 30))
+    DEBUG = os.environ.get('DEBUG', 'false').lower() == 'true'
+
+    # Cleanup existing metrics
+    for collector in list(REGISTRY._collector_to_names.keys()):
+        try:
+            REGISTRY.unregister(collector)
+        except:
+            pass
+
+    # Define metrics
+    ups_metrics = {
+        # Basic status metrics
+        'status_online': Gauge('ups_status_online', 'UPS online status (1=online, 0=offline)'),
+        'status_on_battery': Gauge('ups_status_on_battery', 'UPS on battery status (1=on battery, 0=not on battery)'),
+        'status_low_battery': Gauge('ups_status_low_battery', 'UPS low battery status (1=low, 0=normal)'),
+        
+        # Battery metrics
+        'battery_charge': Gauge('ups_battery_charge_percent', 'UPS battery charge percentage'),
+        'battery_voltage': Gauge('ups_battery_voltage_volts', 'UPS battery voltage in volts'),
+        'battery_runtime': Gauge('ups_battery_runtime_seconds', 'UPS estimated runtime in seconds'),
+        
+        # Power metrics
+        'input_voltage': Gauge('ups_input_voltage_volts', 'UPS input voltage in volts'),
+        'output_voltage': Gauge('ups_output_voltage_volts', 'UPS output voltage in volts'),
+        'load_percent': Gauge('ups_load_percent', 'UPS load percentage'),
+        
+        # Temperature if available
+        'temperature': Gauge('ups_temperature_celsius', 'UPS temperature in Celsius'),
+        
+        # Outage tracking
+        'outage_count': Counter('ups_outage_count_total', 'Number of power outages'),
+        'last_outage_timestamp': Gauge('ups_last_outage_timestamp_seconds', 'Timestamp of the last power outage'),
+        'last_outage_duration': Gauge('ups_last_outage_duration_seconds', 'Duration of the last power outage'),
+        'total_battery_time': Counter('ups_total_battery_time_seconds', 'Total time spent on battery'),
+        
+        # Device information
+        'device_info': Gauge('ups_device_info', 'UPS device information', 
+                            ['manufacturer', 'model', 'firmware', 'serial']),
+    }
+
+    # Track state for calculations
+    last_check_time = time.time()
+    on_battery = False
+    outage_start_time = None
+    initialized = False
+
+    def run_upsc_command(ups_name, ups_host):
+        """Run upsc command to get UPS variables"""
+        try:
+            cmd = ['upsc', f'{ups_name}@{ups_host}']
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                print(f"Error running upsc: {result.stderr}")
+                return {}
+            
+            variables = {}
+            for line in result.stdout.strip().split('\n'):
+                if line and ':' in line:
+                    key, value = line.split(':', 1)
+                    variables[key.strip()] = value.strip()
+            
+            return variables
+        except Exception as e:
+            print(f"Error executing upsc command: {e}")
+            traceback.print_exc()
+            return {}
+    
+    def update_metrics():
+        """Update all UPS metrics"""
+        global last_check_time, on_battery, outage_start_time, initialized
+        
+        current_time = time.time()
+        
+        # Get UPS variables
+        variables = run_upsc_command(UPS_NAME, UPS_HOST)
+        
+        if not variables:
+            print("No UPS variables found. Is upsd running and configured correctly?")
+            ups_metrics['status_online'].set(0)
+            return
+        
+        if DEBUG:
+            print(f"UPS variables: {json.dumps(variables, indent=2)}")
+        
+        # Set online status
+        ups_metrics['status_online'].set(1)
+        
+        # Process battery charge
+        if 'battery.charge' in variables:
+            try:
+                ups_metrics['battery_charge'].set(float(variables['battery.charge']))
+            except (ValueError, TypeError):
+                print(f"Invalid battery charge value: {variables['battery.charge']}")
+        
+        # Process battery voltage
+        if 'battery.voltage' in variables:
+            try:
+                ups_metrics['battery_voltage'].set(float(variables['battery.voltage']))
+            except (ValueError, TypeError):
+                print(f"Invalid battery voltage value: {variables['battery.voltage']}")
+        
+        # Process input voltage
+        if 'input.voltage' in variables:
+            try:
+                ups_metrics['input_voltage'].set(float(variables['input.voltage']))
+            except (ValueError, TypeError):
+                print(f"Invalid input voltage value: {variables['input.voltage']}")
+        
+        # Process output voltage
+        if 'output.voltage' in variables:
+            try:
+                ups_metrics['output_voltage'].set(float(variables['output.voltage']))
+            except (ValueError, TypeError):
+                print(f"Invalid output voltage value: {variables['output.voltage']}")
+        
+        # Process load percentage
+        if 'ups.load' in variables:
+            try:
+                ups_metrics['load_percent'].set(float(variables['ups.load']))
+            except (ValueError, TypeError):
+                print(f"Invalid load percentage value: {variables['ups.load']}")
+        
+        # Process runtime
+        if 'battery.runtime' in variables:
+            try:
+                ups_metrics['battery_runtime'].set(float(variables['battery.runtime']))
+            except (ValueError, TypeError):
+                print(f"Invalid runtime value: {variables['battery.runtime']}")
+        
+        # Process temperature if available
+        if 'ups.temperature' in variables:
+            try:
+                ups_metrics['temperature'].set(float(variables['ups.temperature']))
+            except (ValueError, TypeError):
+                print(f"Invalid temperature value: {variables['ups.temperature']}")
+        
+        # Process UPS status
+        if 'ups.status' in variables:
+            status = variables['ups.status'].lower()
+            
+            # Check if on battery
+            is_on_battery = 'on battery' in status or 'onbatt' in status
+            ups_metrics['status_on_battery'].set(1 if is_on_battery else 0)
+            
+            # If we just switched to battery, record the time
+            if is_on_battery and not on_battery:
+                outage_start_time = current_time
+                if initialized:  # Don't count initial state as an outage
+                    ups_metrics['outage_count'].inc()
+                    print(f"Power outage detected at {time.ctime(current_time)}")
+            
+            # If we just switched off battery, calculate duration
+            if not is_on_battery and on_battery and outage_start_time is not None:
+                outage_duration = current_time - outage_start_time
+                ups_metrics['last_outage_timestamp'].set(outage_start_time)
+                ups_metrics['last_outage_duration'].set(outage_duration)
+                print(f"Power restored after {outage_duration:.1f} seconds on battery")
+            
+            # Update on_battery state for next check
+            on_battery = is_on_battery
+            
+            # Check for low battery
+            is_low_battery = 'low battery' in status or 'lowbatt' in status
+            ups_metrics['status_low_battery'].set(1 if is_low_battery else 0)
+        
+        # Set device info metrics
+        manufacturer = variables.get('device.mfr', variables.get('ups.mfr', 'Unknown'))
+        model = variables.get('device.model', variables.get('ups.model', 'Unknown'))
+        firmware = variables.get('ups.firmware', 'Unknown')
+        serial = variables.get('ups.serial', 'Unknown')
+        
+        ups_metrics['device_info'].labels(
+            manufacturer=manufacturer,
+            model=model,
+            firmware=firmware,
+            serial=serial
+        ).set(1)
+        
+        # If on battery, update the total battery time counter
+        if on_battery:
+            time_since_last_check = current_time - last_check_time
+            ups_metrics['total_battery_time'].inc(time_since_last_check)
+        
+        # Update last check time
+        last_check_time = current_time
+        
+        # Mark as initialized
+        if not initialized:
+            initialized = True
+            
+        print(f"UPS status updated: {'ON BATTERY' if on_battery else 'ONLINE (AC Power)'}")
+    
+    if __name__ == '__main__':
+        # Print environment variables and configuration
+        print("\n--- UPS Exporter Starting ---")
+        print(f"Python version: {sys.version}")
+        print(f"UPS_NAME: {UPS_NAME}")
+        print(f"UPS_HOST: {UPS_HOST}")
+        print(f"EXPORTER_PORT: {EXPORTER_PORT}")
+        print(f"POLL_INTERVAL: {POLL_INTERVAL}")
+        print(f"Current working directory: {os.getcwd()}")
+        
+        # Start the server to expose metrics
+        try:
+            start_http_server(EXPORTER_PORT)
+            print(f"Exporter HTTP server successfully started on port {EXPORTER_PORT}")
+        except Exception as e:
+            print(f"Error starting HTTP server: {e}")
+            traceback.print_exc()
+            sys.exit(1)
+        
+        print(f"Starting UPS metrics polling every {POLL_INTERVAL} seconds")
+        
+        # Main loop
+        while True:
+            try:
+                update_metrics()
+                time.sleep(POLL_INTERVAL)
+            except Exception as e:
+                print(f"Error in main loop: {e}")
+                traceback.print_exc()
+                time.sleep(POLL_INTERVAL)

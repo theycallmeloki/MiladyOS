@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: microtek-nut-pod
+  namespace: monitoring
+  labels:
+    app: ups-server
+spec:
+  hostPID: true
+  initContainers:
+  - name: nut-setup
+    image: python:3.9-slim
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: usb-devices
+      mountPath: /dev/bus/usb
+    - name: run-nut
+      mountPath: /var/run/nut
+    - name: config
+      mountPath: /etc/nut
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        set -euo pipefail
+        
+        # Install required tools
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y usbutils nut
+        
+        # Show USB devices
+        echo "===== USB Devices ====="
+        lsusb
+        
+        # Create necessary directories with proper permissions
+        mkdir -p /var/run/nut /etc/nut
+        chmod -R 777 /var/run/nut /etc/nut
+        
+        # Set permissions for USB device
+        chmod 666 /dev/bus/usb/001/002
+        
+        # Configure NUT in standalone mode
+        echo "MODE=standalone" > /etc/nut/nut.conf
+        
+        # Configure UPS
+        echo "[microtek]" > /etc/nut/ups.conf
+        echo "driver = \"blazer_usb\"" >> /etc/nut/ups.conf
+        echo "port = \"auto\"" >> /etc/nut/ups.conf
+        echo "vendorid = \"0665\"" >> /etc/nut/ups.conf
+        echo "productid = \"5161\"" >> /etc/nut/ups.conf
+        
+        # Configure upsd to listen on all interfaces
+        echo "LISTEN 0.0.0.0 3493" > /etc/nut/upsd.conf
+        
+        # Configure users
+        echo "[admin]" > /etc/nut/upsd.users
+        echo "  password = upsadmin" >> /etc/nut/upsd.users
+        echo "  actions = SET" >> /etc/nut/upsd.users
+        echo "  instcmds = ALL" >> /etc/nut/upsd.users
+        echo "" >> /etc/nut/upsd.users
+        echo "[monitor]" >> /etc/nut/upsd.users
+        echo "  password = upsmonitor" >> /etc/nut/upsd.users
+        echo "  upsmon master" >> /etc/nut/upsd.users
+        
+        echo "===== NUT configuration completed ====="
+  containers:
+  - name: nut
+    image: untouchedwagons/network-ups-tools:1.0.0
+    securityContext:
+      privileged: true  # Needed for USB access
+    volumeMounts:
+    - name: usb-devices
+      mountPath: /dev/bus/usb
+    - name: run-nut
+      mountPath: /var/run/nut
+    - name: config
+      mountPath: /etc/nut
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        # Start the UPS driver
+        upsdrvctl start
+        sleep 2
+        
+        # Start the UPS daemon
+        upsd
+        sleep 2
+        
+        # Print status
+        echo "===== UPS Status ====="
+        upsc microtek || echo "Failed to get UPS status"
+        
+        # Keep container running
+        touch /tmp/hold-container
+        tail -f /tmp/hold-container
+  nodeSelector:
+    kubernetes.io/hostname: talos-ti8-jr0  # Node with the UPS connected
+  volumes:
+  - name: usb-devices
+    hostPath:
+      path: /dev/bus/usb
+      type: Directory
+  - name: run-nut
+    emptyDir: {}
+  - name: config
+    emptyDir: {}
