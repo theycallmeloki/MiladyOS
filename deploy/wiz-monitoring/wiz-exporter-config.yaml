@@ -7,3 +7,20 @@ data:
   HASS_URL: "http://homeassistant.homeassistant.svc.cluster.local:80"
   EXPORTER_PORT: "9678"
   POLL_INTERVAL: "60"
+  
+  # Entity pattern configuration - used to identify relevant entities
+  ENTITY_PATTERNS: "wiz,socket,plug"
+  POWER_PATTERNS: "power,energy,consumption,watt"
+  SWITCH_PATTERNS: "switch,outlet,toggle,state"
+  
+  # Device ID regex pattern (for extracting device IDs from entity names)
+  DEVICE_ID_PATTERN: "([a-f0-9]{6})"
+  
+  # Auto-discover mode - finds all devices matching patterns automatically
+  AUTO_DISCOVER: "true"
+  
+  # Friendly name template for discovered devices (uses device ID if no friendly name found)
+  DEVICE_NAME_TEMPLATE: "Smart Socket {id}"
+  
+  # Log level (0=error only, 1=info, 2=debug, 3=trace)
+  LOG_LEVEL: "1"

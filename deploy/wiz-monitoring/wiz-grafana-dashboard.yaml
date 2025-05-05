@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: prometheus-wiz-socket-dashboard
+  name: smart-socket-dashboard
   namespace: monitoring
   labels:
     grafana_dashboard: "1"
 data:
-  wiz-socket-dashboard.json: |-
+  smart-socket-dashboard.json: |-
     {
       "annotations": {
         "list": [
@@ -71,13 +71,14 @@ data:
                     "value": 1
                   }
                 ]
-              }
+              },
+              "noValue": "0"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 4,
-            "w": 5,
+            "h": 5,
+            "w": 8,
             "x": 0,
             "y": 0
           },
@@ -104,95 +105,11 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "max(wiz_state_c6d96e)",
-              "instant": false,
-              "legendFormat": "Socket 1 (C6D96E)",
-              "range": true,
+              "expr": "{__name__=~\"smart_socket_state_[a-f0-9]+$\", device_id=~\".*\"}",
+              "instant": true,
+              "legendFormat": "{{device_name}}",
+              "range": false,
               "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "max(wiz_state_c6cf6c)",
-              "instant": false,
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "max(wiz_state_c6c78e)",
-              "instant": false,
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "max(wiz_state_c6cf06)",
-              "instant": false,
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "max(wiz_state_c6c532)",
-              "instant": false,
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "max(wiz_state_c6d836)",
-              "instant": false,
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "max(wiz_state_c6cc5a)",
-              "instant": false,
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "max(wiz_state_c6bfd6)",
-              "instant": false,
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "H"
             }
           ],
           "title": "Socket Status",
@@ -227,14 +144,15 @@ data:
                   }
                 ]
               },
-              "unit": "watt"
+              "unit": "watt",
+              "noValue": "0"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 4,
-            "w": 5,
-            "x": 5,
+            "h": 5,
+            "w": 8,
+            "x": 8,
             "y": 0
           },
           "id": 2,
@@ -260,10 +178,10 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_total_power_watts",
-              "instant": false,
+              "expr": "smart_socket_total_power_watts",
+              "instant": true,
               "legendFormat": "Total Power",
-              "range": true,
+              "range": false,
               "refId": "A"
             }
           ],
@@ -275,7 +193,7 @@ data:
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "description": "Total energy consumption in kWh",
+          "description": "Total energy consumption in Wh",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -291,14 +209,15 @@ data:
                   }
                 ]
               },
-              "unit": "kwatth"
+              "unit": "watth",
+              "noValue": "0"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 4,
-            "w": 4,
-            "x": 10,
+            "h": 5,
+            "w": 8,
+            "x": 16,
             "y": 0
           },
           "id": 4,
@@ -324,10 +243,10 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_aggregated_power_total_kwh",
-              "instant": false,
+              "expr": "smart_socket_aggregated_power_total_watt_hours_total",
+              "instant": true,
               "legendFormat": "Total Energy",
-              "range": true,
+              "range": false,
               "refId": "A"
             }
           ],
@@ -339,11 +258,11 @@ data:
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "description": "Active sockets and averages",
           "fieldConfig": {
             "defaults": {
               "color": {
-                "mode": "thresholds"
+                "fixedColor": "blue",
+                "mode": "fixed"
               },
               "mappings": [],
               "thresholds": {
@@ -354,79 +273,22 @@ data:
                     "value": null
                   }
                 ]
-              }
+              },
+              "noValue": "0",
+              "unit": "none"
             },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Peak Power"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "watt"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "red",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Hourly Avg"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "watt"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Daily Avg"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "watt"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Active Sockets"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "green",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              }
-            ]
+            "overrides": []
           },
           "gridPos": {
-            "h": 4,
-            "w": 10,
-            "x": 14,
-            "y": 0
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 5
           },
           "id": 20,
           "options": {
             "colorMode": "value",
-            "graphMode": "none",
+            "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
             "reduceOptions": {
@@ -436,8 +298,7 @@ data:
               "fields": "",
               "values": false
             },
-            "textMode": "auto",
-            "wideLayout": true
+            "textMode": "auto"
           },
           "pluginVersion": "10.0.3",
           "targets": [
@@ -447,51 +308,354 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_devices_on_count",
-              "instant": false,
-              "legendFormat": "Active Sockets",
-              "range": true,
+              "expr": "smart_socket_device_count",
+              "instant": true,
+              "legendFormat": "Total Devices",
+              "range": false,
               "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_system_peak_power_watts",
-              "instant": false,
-              "legendFormat": "Peak Power",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_watts",
-              "instant": false,
-              "legendFormat": "Hourly Avg",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_daily_avg_power_watts",
-              "instant": false,
-              "legendFormat": "Daily Avg",
-              "range": true,
-              "refId": "D"
             }
           ],
-          "title": "System Metrics",
+          "title": "Total Devices",
           "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "green",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "0",
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 5
+          },
+          "id": 21,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "10.0.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "smart_socket_devices_on_count",
+              "instant": true,
+              "legendFormat": "Active Sockets",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Active Sockets",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "red",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "0",
+              "unit": "watt"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 5
+          },
+          "id": 22,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "10.0.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "smart_socket_system_peak_power_watts",
+              "instant": true,
+              "legendFormat": "Peak Power",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Peak Power",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "purple",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "purple",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "0",
+              "unit": "watt"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 11
+          },
+          "id": 23,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "10.0.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "smart_socket_hourly_avg_power_watts",
+              "instant": true,
+              "legendFormat": "Hourly Avg",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Hourly Average Power",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "orange",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "orange",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "0",
+              "unit": "watt"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 11
+          },
+          "id": 24,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "10.0.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "smart_socket_daily_avg_power_watts",
+              "instant": true,
+              "legendFormat": "Daily Avg",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Daily Average Power",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "semi-dark-yellow",
+                "mode": "fixed"
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 25
+                  },
+                  {
+                    "color": "orange",
+                    "value": 50
+                  },
+                  {
+                    "color": "red",
+                    "value": 75
+                  }
+                ]
+              },
+              "noValue": "0",
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 11
+          },
+          "id": 25,
+          "options": {
+            "displayMode": "basic",
+            "minVizHeight": 10,
+            "minVizWidth": 0,
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showUnfilled": true,
+            "text": {}
+          },
+          "pluginVersion": "10.0.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "100 * smart_socket_devices_on_count / smart_socket_device_count",
+              "instant": true,
+              "legendFormat": "Uptime",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Device Utilization",
+          "type": "bargauge"
         },
         {
           "datasource": {
@@ -560,10 +724,10 @@ data:
             "overrides": []
           },
           "gridPos": {
-            "h": 4,
+            "h": 6,
             "w": 24,
             "x": 0,
-            "y": 4
+            "y": 17
           },
           "id": 5,
           "options": {
@@ -591,7 +755,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_total_power_watts",
+              "expr": "smart_socket_total_power_watts",
               "instant": false,
               "legendFormat": "Total Power",
               "range": true,
@@ -671,7 +835,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 8
+            "y": 23
           },
           "id": 22,
           "options": {
@@ -699,99 +863,92 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_power_c6d96e_watts",
+              "expr": "{__name__=~\"smart_socket_power_[a-f0-9]+_watts\", device_id=~\".*\"}",
               "interval": "",
-              "legendFormat": "Socket 1 (C6D96E)",
+              "legendFormat": "{{device_name}}",
               "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6cf6c_watts",
-              "interval": "",
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6c78e_watts",
-              "interval": "",
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6cf06_watts",
-              "interval": "",
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6c532_watts",
-              "interval": "",
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6d836_watts",
-              "interval": "",
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6cc5a_watts",
-              "interval": "",
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "H"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6bfd6_watts",
-              "interval": "",
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "I"
+              "refId": "A"
             }
           ],
           "title": "Individual Socket Power Consumption",
           "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Individual socket power usage",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "fillOpacity": 70,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineWidth": 2
+              },
+              "decimals": 1,
+              "mappings": [],
+              "min": 0,
+              "noValue": "0",
+              "unit": "watt"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 31
+          },
+          "id": 8,
+          "options": {
+            "display": "gradient",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "values": [
+                "value"
+              ]
+            },
+            "pieType": "pie",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.0.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "{__name__=~\"smart_socket_power_[a-f0-9]+_watts\", device_id=~\".*\"} > 0",
+              "instant": true,
+              "legendFormat": "{{device_name}}",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Power Distribution",
+          "type": "piechart"
         },
         {
           "datasource": {
@@ -944,10 +1101,10 @@ data:
             ]
           },
           "gridPos": {
-            "h": 8,
+            "h": 9,
             "w": 12,
-            "x": 0,
-            "y": 16
+            "x": 12,
+            "y": 31
           },
           "id": 15,
           "options": {
@@ -972,7 +1129,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_total_power_watts",
+              "expr": "smart_socket_total_power_watts",
               "instant": false,
               "legendFormat": "Current Power",
               "range": true,
@@ -984,7 +1141,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_watts",
+              "expr": "smart_socket_hourly_avg_power_watts",
               "instant": false,
               "legendFormat": "Hourly Average",
               "range": true,
@@ -996,7 +1153,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_daily_avg_power_watts",
+              "expr": "smart_socket_daily_avg_power_watts",
               "instant": false,
               "legendFormat": "Daily Average",
               "range": true,
@@ -1008,7 +1165,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_system_peak_power_watts",
+              "expr": "smart_socket_system_peak_power_watts",
               "instant": false,
               "legendFormat": "Peak Power",
               "range": true,
@@ -1017,161 +1174,6 @@ data:
           ],
           "title": "Power Comparisons",
           "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "description": "Individual socket power usage",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "fillOpacity": 70,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineWidth": 2
-              },
-              "mappings": [],
-              "unit": "watt"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 16
-          },
-          "id": 8,
-          "options": {
-            "display": "gradient",
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "pieType": "pie",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "tooltip": {
-              "mode": "single",
-              "sort": "none"
-            }
-          },
-          "pluginVersion": "10.0.3",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6d96e_watts",
-              "instant": false,
-              "legendFormat": "Socket 1 (C6D96E)",
-              "range": true,
-              "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6cf6c_watts",
-              "instant": false,
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6c78e_watts",
-              "instant": false,
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6cf06_watts",
-              "instant": false,
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6c532_watts",
-              "instant": false,
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6d836_watts",
-              "instant": false,
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6cc5a_watts",
-              "instant": false,
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_c6bfd6_watts",
-              "instant": false,
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "H"
-            }
-          ],
-          "title": "Power Distribution",
-          "type": "piechart"
         },
         {
           "datasource": {
@@ -1224,7 +1226,8 @@ data:
                   }
                 ]
               },
-              "unit": "kwatth"
+              "unit": "watth",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -1232,7 +1235,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 32
           },
           "id": 7,
           "options": {
@@ -1257,9 +1260,9 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_aggregated_power_total_kwh",
+              "expr": "smart_socket_aggregated_power_total_watt_hours_total",
               "instant": false,
-              "legendFormat": "Total Energy (kWh)",
+              "legendFormat": "Total Energy (Wh)",
               "range": true,
               "refId": "A"
             }
@@ -1279,6 +1282,9 @@ data:
                 "mode": "thresholds"
               },
               "mappings": [],
+              "max": 500,
+              "min": 0,
+              "noValue": "0",
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -1304,336 +1310,9 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 24
+            "y": 32
           },
           "id": 16,
-          "options": {
-            "displayMode": "basic",
-            "minVizHeight": 10,
-            "minVizWidth": 0,
-            "orientation": "horizontal",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showUnfilled": true,
-            "text": {}
-          },
-          "pluginVersion": "10.0.3",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6d96e_watts",
-              "instant": false,
-              "legendFormat": "Socket 1 (C6D96E)",
-              "range": true,
-              "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6cf6c_watts",
-              "instant": false,
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6c78e_watts",
-              "instant": false,
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6cf06_watts",
-              "instant": false,
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6c532_watts",
-              "instant": false,
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6d836_watts",
-              "instant": false,
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6cc5a_watts",
-              "instant": false,
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_peak_power_c6bfd6_watts",
-              "instant": false,
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "H"
-            }
-          ],
-          "title": "Peak Power by Socket",
-          "type": "bargauge"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "description": "Hourly average power consumption per socket",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 15,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "lineInterpolation": "smooth",
-                "lineWidth": 2,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "unit": "watt"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 32
-          },
-          "id": 17,
-          "options": {
-            "legend": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "none"
-            }
-          },
-          "pluginVersion": "10.0.3",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6d96e_watts",
-              "instant": false,
-              "legendFormat": "Socket 1 (C6D96E)",
-              "range": true,
-              "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6cf6c_watts",
-              "instant": false,
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6c78e_watts",
-              "instant": false,
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6cf06_watts",
-              "instant": false,
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6c532_watts",
-              "instant": false,
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6d836_watts",
-              "instant": false,
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6cc5a_watts",
-              "instant": false,
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_hourly_avg_power_c6bfd6_watts",
-              "instant": false,
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "H"
-            }
-          ],
-          "title": "Hourly Average Power by Socket",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "description": "Socket operation time tracking",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "blue",
-                    "value": null
-                  }
-                ]
-              },
-              "unit": "s"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 32
-          },
-          "id": 18,
           "options": {
             "displayMode": "gradient",
             "minVizHeight": 10,
@@ -1657,98 +1336,14 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_on_duration_c6d96e_seconds",
-              "instant": false,
-              "legendFormat": "Socket 1 (C6D96E)",
-              "range": true,
+              "expr": "{__name__=~\"smart_socket_peak_power_[a-f0-9]+_watts\", device_id=~\".*\"} > 0",
+              "instant": true,
+              "legendFormat": "{{device_name}}",
+              "range": false,
               "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_on_duration_c6cf6c_seconds",
-              "instant": false,
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_on_duration_c6c78e_seconds",
-              "instant": false,
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_on_duration_c6cf06_seconds",
-              "instant": false,
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_on_duration_c6c532_seconds",
-              "instant": false,
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_on_duration_c6d836_seconds",
-              "instant": false,
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_on_duration_c6cc5a_seconds",
-              "instant": false,
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_on_duration_c6bfd6_seconds",
-              "instant": false,
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "H"
             }
           ],
-          "title": "Uptime by Socket",
+          "title": "Peak Power by Socket",
           "type": "bargauge"
         },
         {
@@ -1756,7 +1351,7 @@ data:
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "description": "Energy usage of each socket in kWh",
+          "description": "Energy usage of each socket in Wh",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -1802,7 +1397,8 @@ data:
                   }
                 ]
               },
-              "unit": "kwatth"
+              "unit": "watth",
+              "noValue": "0"
             },
             "overrides": []
           },
@@ -1835,95 +1431,11 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_power_total_c6d96e_kwh",
+              "expr": "{__name__=~\"smart_socket_power_total_[a-f0-9]+_watt_hours_total\", device_id=~\".*\"} > 0",
               "instant": false,
-              "legendFormat": "Socket 1 (C6D96E)",
+              "legendFormat": "{{device_name}}",
               "range": true,
               "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_total_c6cf6c_kwh",
-              "instant": false,
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_total_c6c78e_kwh",
-              "instant": false,
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_total_c6cf06_kwh",
-              "instant": false,
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_total_c6c532_kwh",
-              "instant": false,
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_total_c6d836_kwh",
-              "instant": false,
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_total_c6cc5a_kwh",
-              "instant": false,
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_power_total_c6bfd6_kwh",
-              "instant": false,
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "H"
             }
           ],
           "title": "Energy Consumption by Socket",
@@ -1943,6 +1455,7 @@ data:
               "mappings": [],
               "max": 100,
               "min": 0,
+              "noValue": "0",
               "thresholds": {
                 "mode": "percentage",
                 "steps": [
@@ -1991,95 +1504,11 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "wiz_utilization_c6d96e_percent",
-              "instant": false,
-              "legendFormat": "Socket 1 (C6D96E)",
-              "range": true,
+              "expr": "{__name__=~\"smart_socket_utilization_[a-f0-9]+_percent\", device_id=~\".*\"} > 0",
+              "instant": true,
+              "legendFormat": "{{device_name}}",
+              "range": false,
               "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_utilization_c6cf6c_percent",
-              "instant": false,
-              "legendFormat": "Socket 2 (C6CF6C)",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_utilization_c6c78e_percent",
-              "instant": false,
-              "legendFormat": "Socket 3 (C6C78E)",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_utilization_c6cf06_percent",
-              "instant": false,
-              "legendFormat": "Socket 4 (C6CF06)",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_utilization_c6c532_percent",
-              "instant": false,
-              "legendFormat": "Socket 5 (C6C532)",
-              "range": true,
-              "refId": "E"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_utilization_c6d836_percent",
-              "instant": false,
-              "legendFormat": "Socket 6 (C6D836)",
-              "range": true,
-              "refId": "F"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_utilization_c6cc5a_percent",
-              "instant": false,
-              "legendFormat": "Socket 7 (C6CC5A)",
-              "range": true,
-              "refId": "G"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "wiz_utilization_c6bfd6_percent",
-              "instant": false,
-              "legendFormat": "Socket 8 (C6BFD6)",
-              "range": true,
-              "refId": "H"
             }
           ],
           "title": "Socket Utilization",
@@ -2089,7 +1518,7 @@ data:
       "refresh": "10s",
       "schemaVersion": 38,
       "style": "dark",
-      "tags": ["wiz", "energy", "iot"],
+      "tags": ["socket", "energy", "iot"],
       "templating": {
         "list": []
       },
@@ -2099,8 +1528,8 @@ data:
       },
       "timepicker": {},
       "timezone": "",
-      "title": "WiZ Socket Energy Monitoring",
-      "uid": "wiz-socket-monitoring",
-      "version": 3,
+      "title": "Smart Socket Energy Monitoring",
+      "uid": "smart-socket-monitoring",
+      "version": 1,
       "weekStart": ""
     }
