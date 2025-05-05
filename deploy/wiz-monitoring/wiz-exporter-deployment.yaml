@@ -14,19 +14,21 @@ spec:
     metadata:
       labels:
         app: wiz-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9678"
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
-      nodeSelector:
-        kubernetes.io/hostname: talos-o0r-78y
       containers:
       - name: wiz-exporter
         image: python:3.9-slim
         ports:
         - containerPort: 9678
+          name: metrics
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -56,11 +58,7 @@ spec:
             echo "Copying exporter script..."
             cp /app/script/exporter.py /data/exporter.py
             chmod +x /data/exporter.py
-            echo "Script copied. Contents:"
-            cat /data/exporter.py | head -n 20
-            echo "Environment variables:"
-            env | grep -E "HASS_|EXPORTER|POLL|PYTHON"
-            echo "Running exporter..."
+            echo "Script copied. Starting exporter..."
             python -u /data/exporter.py  # -u for unbuffered output
         resources:
           requests:
@@ -69,6 +67,19 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 15
+          periodSeconds: 15
       volumes:
       - name: script
         configMap:
