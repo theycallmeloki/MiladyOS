@@ -65,23 +65,34 @@ check_amd_gpu() {
 }
 
 install_amd_rocm() {
-    # Add ROCm apt repository
-    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | sudo apt-key add -
-    echo "deb [arch=amd64] https://repo.radeon.com/rocm/apt/5.7.1/debian/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/rocm.list
+    # Install prerequisites
+    sudo apt update
+    sudo apt install -y "linux-headers-$(uname -r)" python3-setuptools python3-wheel
     
-    # Update and install ROCm toolkit
+    # Set up GPG key in keyrings directory (more modern approach)
+    sudo mkdir -p /etc/apt/keyrings
+    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | \
+        gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+    
+    # Add ROCm repository (using Ubuntu Jammy packages as recommended by AMD)
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.4 jammy main" | \
+        sudo tee /etc/apt/sources.list.d/rocm.list
+    echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' | \
+        sudo tee /etc/apt/preferences.d/rocm-pin-600
+    
+    # Update and install ROCm (using --no-dkms to avoid kernel module compilation issues)
     sudo apt update
     sudo apt install -y rocm-dev rocm-libs rocm-smi
     
-    # Add user to video group
+    # Add user to video and render groups
     sudo usermod -a -G video $USER
     sudo usermod -a -G render $USER
     
     # Add ROCm to PATH
-    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/opencl/bin' | sudo tee -a /etc/profile.d/rocm.sh
+    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin' | sudo tee -a /etc/profile.d/rocm.sh
     echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' | sudo tee -a /etc/profile.d/rocm.sh
     
-    echo "AMD ROCm toolkit installed successfully."
+    echo "AMD ROCm toolkit installed successfully. You may need to reboot for group changes to take effect."
 }
 
 # Check if Docker is installed
@@ -104,7 +115,7 @@ if check_nvidia_gpu; then
 elif check_amd_gpu; then
     echo "AMD GPU detected. Installing AMD ROCm..."
     install_amd_rocm
-    GPU_OPTION="--device=/dev/kfd --device=/dev/dri --group-add video --group-add render"
+    GPU_OPTION="--device=/dev/kfd --device=/dev/dri --ipc=host --security-opt seccomp=unconfined --group-add video --group-add render"
     GPU_TYPE="amd"
 else
     echo "No supported GPU detected. Continuing with CPU-only mode."

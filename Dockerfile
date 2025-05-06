@@ -135,12 +135,16 @@ fi
 
 # For AMD: Add ROCm repository and install ROCm toolkit
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-    apt-get install -y libnuma-dev gnupg2 && \
-    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
-    echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/5.7.1/debian/ bookworm main' | tee /etc/apt/sources.list.d/rocm.list && \
+    apt-get install -y libnuma-dev gnupg2 python3-setuptools python3-wheel && \
+    mkdir -p /etc/apt/keyrings && \
+    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor > /etc/apt/keyrings/rocm.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.4 jammy main" \
+        | tee /etc/apt/sources.list.d/rocm.list && \
+    echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' \
+        | tee /etc/apt/preferences.d/rocm-pin-600 && \
     apt-get update && \
     apt-get install -y rocm-dev rocm-libs rocm-smi && \
-    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
+    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
     echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' >> /etc/profile.d/rocm.sh; \
 fi
 
@@ -202,9 +206,10 @@ RUN if command -v nvcc &> /dev/null; then \
              -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
     cmake --build . --config Release; \
 elif command -v hipcc &> /dev/null; then \
-    # Build with ROCm/HIP support
+    # Build with ROCm/HIP support - using recommended settings for ROCm 6.x
     mkdir -p build && cd build && \
     cmake .. -DGGML_HIP=ON \
+             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx90a;gfx1030;gfx1100;gfx1101" \
              -DLLAMA_NATIVE=OFF \
              -DLLAMA_CURL=ON \
              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
@@ -213,6 +218,7 @@ elif command -v hipcc &> /dev/null; then \
     cmake --build . --config Release -j 8 && \
     mkdir -p ../build-rpc && cd ../build-rpc && \
     cmake .. -DLLAMA_RPC=ON -DGGML_HIP=ON \
+             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx90a;gfx1030;gfx1100;gfx1101" \
              -DLLAMA_NATIVE=OFF \
              -DLLAMA_CURL=ON \
              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
