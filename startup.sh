@@ -252,13 +252,25 @@ else
     fi
 fi
 
-# Start the NVIDIA monitoring script if it exists
-if [ -x "/nvidia.sh" ]; then
-    echo "Starting NVIDIA monitoring..."
-    /nvidia.sh &
-    sleep 2
+# Start the appropriate GPU monitoring script based on detected hardware
+if command -v nvidia-smi &> /dev/null; then
+    echo "NVIDIA GPU detected. Starting NVIDIA monitoring..."
+    if [ -x "/nvidia.sh" ]; then
+        /nvidia.sh &
+        sleep 2
+    else
+        echo "NVIDIA monitoring script not found or not executable, skipping"
+    fi
+elif command -v rocm-smi &> /dev/null; then
+    echo "AMD GPU detected. Starting AMD monitoring..."
+    if [ -x "/amd.sh" ]; then
+        /amd.sh &
+        sleep 2
+    else
+        echo "AMD monitoring script not found or not executable, skipping"
+    fi
 else
-    echo "NVIDIA monitoring script not found or not executable, skipping"
+    echo "No supported GPU detected, skipping GPU monitoring"
 fi
 
 # Start MCP server if main.py exists
