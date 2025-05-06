@@ -56,6 +56,34 @@ check_nvidia_gpu() {
     fi
 }
 
+check_amd_gpu() {
+    if lspci | grep -i amd | grep -i vga > /dev/null || lspci | grep -i radeon > /dev/null; then
+        return 0  # AMD GPU found
+    else
+        return 1  # AMD GPU not found
+    fi
+}
+
+install_amd_rocm() {
+    # Add ROCm apt repository
+    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | sudo apt-key add -
+    echo "deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/rocm.list
+    
+    # Update and install ROCm toolkit
+    sudo apt update
+    sudo apt install -y rocm-dev rocm-libs rocm-smi
+    
+    # Add user to video group
+    sudo usermod -a -G video $USER
+    sudo usermod -a -G render $USER
+    
+    # Add ROCm to PATH
+    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/opencl/bin' | sudo tee -a /etc/profile.d/rocm.sh
+    echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' | sudo tee -a /etc/profile.d/rocm.sh
+    
+    echo "AMD ROCm toolkit installed successfully."
+}
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
     echo "Docker not found. Installing Docker..."
@@ -64,14 +92,22 @@ else
     echo "Docker is already installed."
 fi
 
-# Check for NVIDIA GPU
+# Check for GPU types
+GPU_OPTION=""
+GPU_TYPE=""
+
 if check_nvidia_gpu; then
     echo "NVIDIA GPU detected. Installing NVIDIA Container Toolkit..."
     install_nvidia_container_toolkit
     GPU_OPTION="--gpus all"
+    GPU_TYPE="nvidia"
+elif check_amd_gpu; then
+    echo "AMD GPU detected. Installing AMD ROCm..."
+    install_amd_rocm
+    GPU_OPTION="--device=/dev/kfd --device=/dev/dri --group-add video --group-add render"
+    GPU_TYPE="amd"
 else
-    echo "No NVIDIA GPU detected. Skipping NVIDIA Container Toolkit installation."
-    GPU_OPTION=""
+    echo "No supported GPU detected. Continuing with CPU-only mode."
 fi
 
 # Ensure the user is in the docker group
@@ -85,9 +121,17 @@ fi
 echo "Running MiladyOS container..."
 (
     # Refresh group membership
-    exec sg docker <<EOF
-    docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=admin --env JENKINS_ADMIN_PASSWORD=password -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
+    if [ -n "$GPU_TYPE" ]; then
+        echo "Using $GPU_TYPE GPU acceleration"
+        exec sg docker <<EOF
+        docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=admin --env JENKINS_ADMIN_PASSWORD=password --env GPU_TYPE=$GPU_TYPE -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
 EOF
+    else
+        echo "Running without GPU acceleration"
+        exec sg docker <<EOF
+        docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=admin --env JENKINS_ADMIN_PASSWORD=password -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
+EOF
+    fi
 )
 
 echo "MiladyOS boooooooooooooooooooooooooooting up! ^_^"

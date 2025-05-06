@@ -102,16 +102,17 @@ COPY main.py miladyos_mcp.py miladyos_metadata.py /app/
 
 RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
 
-# Add NVIDIA CUDA repository
-RUN apt-get update && apt-get install -y wget software-properties-common && \
+# Add GPU development dependencies based on architecture
+RUN apt-get update && apt-get install -y wget software-properties-common
+
+# For NVIDIA: Add CUDA repository and install CUDA toolkit
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
     wget https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/cuda-keyring_1.0-1_all.deb && \
     dpkg -i cuda-keyring_1.0-1_all.deb && \
     rm cuda-keyring_1.0-1_all.deb && \
     echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/ /" > /etc/apt/sources.list.d/cuda-debian11-x86_64.list && \
-    apt-get update
-
-# Install CUDA development dependencies with CUDA toolkit and other build dependencies
-RUN apt-get install -y --verbose-versions \
+    apt-get update && \
+    apt-get install -y --verbose-versions \
     cuda-compiler-11-8 \
     cuda-cudart-dev-11-8 \
     cuda-nvcc-11-8 \
@@ -123,15 +124,40 @@ RUN apt-get install -y --verbose-versions \
     cuda-cudart-11-8 \
     libcurl4-openssl-dev \
     curl \
-    ccache
+    ccache && \
+    # Set environment variables for CUDA
+    echo 'export CUDA_HOME=/usr/local/cuda-11.8' >> /etc/profile.d/cuda.sh && \
+    echo 'export PATH=${CUDA_HOME}/bin:${PATH}' >> /etc/profile.d/cuda.sh && \
+    echo 'export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}' >> /etc/profile.d/cuda.sh && \
+    echo 'export CUDACXX=${CUDA_HOME}/bin/nvcc' >> /etc/profile.d/cuda.sh && \
+    echo 'export NVCC_FLAGS="-allow-unsupported-compiler"' >> /etc/profile.d/cuda.sh; \
+fi
 
-# Set environment variables for CUDA
+# For AMD: Add ROCm repository and install ROCm toolkit
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+    apt-get install -y libnuma-dev gnupg2 && \
+    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
+    echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ debian main' | tee /etc/apt/sources.list.d/rocm.list && \
+    apt-get update && \
+    apt-get install -y rocm-dev rocm-libs rocm-smi && \
+    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
+    echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' >> /etc/profile.d/rocm.sh; \
+fi
+
+# Common dependencies for both architectures
+RUN apt-get install -y libcurl4-openssl-dev curl ccache
+
+# Set environment variables for CUDA (for NVIDIA builds)
 ENV CUDA_HOME=/usr/local/cuda-11.8
 ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 ENV CUDACXX=${CUDA_HOME}/bin/nvcc
 # Allow using unsupported compiler with CUDA as a backup option
 ENV NVCC_FLAGS="-allow-unsupported-compiler"
+
+# Set environment variables for ROCm (for AMD builds)
+ENV PATH=$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/opencl/bin
+ENV HSA_OVERRIDE_GFX_VERSION=10.3.0
 
 WORKDIR /llamacpp
 
@@ -152,8 +178,10 @@ RUN mkdir -p /usr/local/cuda-11.8/lib64/stubs && \
 # Patch the CMake file to avoid CUDA driver dependency
 RUN sed -i 's/target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/# Commented out: target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/' /llamacpp/ggml/src/ggml-cuda/CMakeLists.txt
 
-# Build the main project using CMake with CUDA support
-RUN mkdir -p build && cd build && \
+# Detect if NVIDIA or AMD GPU is present and build accordingly
+RUN if command -v nvcc &> /dev/null; then \
+    # Build with CUDA support
+    mkdir -p build && cd build && \
     export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
     cmake .. -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
              -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
@@ -162,10 +190,8 @@ RUN mkdir -p build && cd build && \
              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
              -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
              -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release -j 8
-
-# Create and build the RPC version with CUDA support
-RUN mkdir -p build-rpc && cd build-rpc && \
+    cmake --build . --config Release -j 8 && \
+    mkdir -p ../build-rpc && cd ../build-rpc && \
     export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
     cmake .. -DLLAMA_RPC=ON -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
              -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
@@ -174,7 +200,43 @@ RUN mkdir -p build-rpc && cd build-rpc && \
              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
              -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
              -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release
+    cmake --build . --config Release; \
+elif command -v hipcc &> /dev/null; then \
+    # Build with ROCm/HIP support
+    mkdir -p build && cd build && \
+    cmake .. -DGGML_HIP=ON \
+             -DLLAMA_NATIVE=OFF \
+             -DLLAMA_CURL=ON \
+             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+    cmake --build . --config Release -j 8 && \
+    mkdir -p ../build-rpc && cd ../build-rpc && \
+    cmake .. -DLLAMA_RPC=ON -DGGML_HIP=ON \
+             -DLLAMA_NATIVE=OFF \
+             -DLLAMA_CURL=ON \
+             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+    cmake --build . --config Release; \
+else \
+    # Build CPU-only version as fallback
+    mkdir -p build && cd build && \
+    cmake .. -DLLAMA_NATIVE=OFF \
+             -DLLAMA_CURL=ON \
+             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+    cmake --build . --config Release -j 8 && \
+    mkdir -p ../build-rpc && cd ../build-rpc && \
+    cmake .. -DLLAMA_RPC=ON \
+             -DLLAMA_NATIVE=OFF \
+             -DLLAMA_CURL=ON \
+             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+    cmake --build . --config Release; \
+fi
 
 WORKDIR /
 
@@ -258,9 +320,10 @@ USER root
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
 
-# Add and set permissions for the nvidia script
+# Add and set permissions for the GPU monitoring scripts
 COPY nvidia.sh /nvidia.sh
-RUN chmod +x /nvidia.sh
+COPY amd.sh /amd.sh
+RUN chmod +x /nvidia.sh /amd.sh
 
 # Copy Nebula configuration files
 COPY ca.crt miladyos.crt miladyos.key /etc/nebula/
