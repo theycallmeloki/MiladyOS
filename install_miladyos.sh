@@ -77,12 +77,16 @@ install_amd_rocm() {
     # Add ROCm repository (using Ubuntu Jammy packages as recommended by AMD)
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.4 jammy main" | \
         sudo tee /etc/apt/sources.list.d/rocm.list
-    echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' | \
+    printf "Package: *\nPin: origin repo.radeon.com\nPin-Priority: 600\n" | \
         sudo tee /etc/apt/preferences.d/rocm-pin-600
     
-    # Update and install ROCm (using --no-dkms to avoid kernel module compilation issues)
+    # Update and install ROCm packages
     sudo apt update
-    sudo apt install -y rocm-dev rocm-libs rocm-smi
+    
+    # Try installing packages - handle different package names across ROCm versions
+    sudo apt install -y rocm-dev rocm-libs rocm-smi 2>/dev/null || \
+    sudo apt install -y rocm-hip-sdk rocm-hip-libraries rocm-smi 2>/dev/null || \
+    sudo apt install -y rocm-hip-libraries rocm-smi
     
     # Add user to video and render groups
     sudo usermod -a -G video $USER
