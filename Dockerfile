@@ -133,19 +133,31 @@ RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
     echo 'export NVCC_FLAGS="-allow-unsupported-compiler"' >> /etc/profile.d/cuda.sh; \
 fi
 
-# For AMD: Install ROCm using the amdgpu-install script (more reliable method)
+# For AMD: Install minimal ROCm components
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
     apt-get update && \
     apt-get install -y libnuma-dev gnupg2 python3-setuptools python3-wheel wget && \
-    # Download and install the AMDGPU installer script
-    wget https://repo.radeon.com/amdgpu-install/6.0/ubuntu/jammy/amdgpu-install_6.0.60000-1_all.deb && \
-    apt-get install -y ./amdgpu-install_6.0.60000-1_all.deb && \
-    rm ./amdgpu-install_6.0.60000-1_all.deb && \
-    # Only install ROCm components, no DKMS to avoid kernel dependency issues
-    DEBIAN_FRONTEND=noninteractive amdgpu-install --usecase=rocm --no-dkms -y && \
+    mkdir -p /etc/apt/keyrings && \
+    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor > /etc/apt/keyrings/rocm.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/5.4.3 jammy main" \
+        > /etc/apt/sources.list.d/rocm.list && \
+    apt-get update && \
+    # Install only the minimal components needed for ROCm/HIP development
+    apt-get install -y --no-install-recommends --allow-downgrades \
+        rocm-device-libs \
+        hsakmt-roct \
+        rocm-smi \
+        hip-base \
+        hip-runtime-amd \
+        hipify-clang \
+        rocm-cmake \
+        rocm-core && \
     # Add environment variables
     echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/hip/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
-    echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' >> /etc/profile.d/rocm.sh; \
+    echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' >> /etc/profile.d/rocm.sh && \
+    # Create symlinks for compatibility
+    mkdir -p /opt/rocm/include/hip && \
+    ln -sf /opt/rocm/hip/include/* /opt/rocm/include/hip/ 2>/dev/null || true; \
 fi
 
 # Common dependencies for both architectures
@@ -206,10 +218,10 @@ RUN if command -v nvcc &> /dev/null; then \
              -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
     cmake --build . --config Release; \
 elif command -v hipcc &> /dev/null; then \
-    # Build with ROCm/HIP support - using recommended settings for ROCm 6.x
+    # Build with ROCm/HIP support - using settings compatible with ROCm 5.4.3
     mkdir -p build && cd build && \
     cmake .. -DGGML_HIP=ON \
-             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx90a;gfx1030;gfx1100;gfx1101" \
+             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
              -DLLAMA_NATIVE=OFF \
              -DLLAMA_CURL=ON \
              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
@@ -218,7 +230,7 @@ elif command -v hipcc &> /dev/null; then \
     cmake --build . --config Release -j 8 && \
     mkdir -p ../build-rpc && cd ../build-rpc && \
     cmake .. -DLLAMA_RPC=ON -DGGML_HIP=ON \
-             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx90a;gfx1030;gfx1100;gfx1101" \
+             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
              -DLLAMA_NATIVE=OFF \
              -DLLAMA_CURL=ON \
              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
