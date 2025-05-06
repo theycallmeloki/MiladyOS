@@ -67,33 +67,24 @@ check_amd_gpu() {
 install_amd_rocm() {
     # Install prerequisites
     sudo apt update
-    sudo apt install -y "linux-headers-$(uname -r)" python3-setuptools python3-wheel
+    sudo apt install -y "linux-headers-$(uname -r)" python3-setuptools python3-wheel wget
     
-    # Set up GPG key in keyrings directory (more modern approach)
-    sudo mkdir -p /etc/apt/keyrings
-    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | \
-        gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+    # Download and install AMDGPU installer script
+    echo "Downloading AMD GPU installer script..."
+    wget -q https://repo.radeon.com/amdgpu-install/6.0/ubuntu/jammy/amdgpu-install_6.0.60000-1_all.deb
+    sudo apt install -y ./amdgpu-install_6.0.60000-1_all.deb
+    rm ./amdgpu-install_6.0.60000-1_all.deb
     
-    # Add ROCm repository (using Ubuntu Jammy packages as recommended by AMD)
-    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.4 jammy main" | \
-        sudo tee /etc/apt/sources.list.d/rocm.list
-    printf "Package: *\nPin: origin repo.radeon.com\nPin-Priority: 600\n" | \
-        sudo tee /etc/apt/preferences.d/rocm-pin-600
-    
-    # Update and install ROCm packages
-    sudo apt update
-    
-    # Try installing packages - handle different package names across ROCm versions
-    sudo apt install -y rocm-dev rocm-libs rocm-smi 2>/dev/null || \
-    sudo apt install -y rocm-hip-sdk rocm-hip-libraries rocm-smi 2>/dev/null || \
-    sudo apt install -y rocm-hip-libraries rocm-smi
+    # Use the installer script to install ROCm without DKMS (avoids kernel module compilation issues)
+    echo "Installing ROCm components using amdgpu-install..."
+    sudo DEBIAN_FRONTEND=noninteractive amdgpu-install --usecase=rocm --no-dkms -y
     
     # Add user to video and render groups
     sudo usermod -a -G video $USER
     sudo usermod -a -G render $USER
     
     # Add ROCm to PATH
-    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin' | sudo tee -a /etc/profile.d/rocm.sh
+    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/hip/bin:/opt/rocm/opencl/bin' | sudo tee -a /etc/profile.d/rocm.sh
     echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' | sudo tee -a /etc/profile.d/rocm.sh
     
     echo "AMD ROCm toolkit installed successfully. You may need to reboot for group changes to take effect."

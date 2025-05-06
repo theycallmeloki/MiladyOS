@@ -133,21 +133,18 @@ RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
     echo 'export NVCC_FLAGS="-allow-unsupported-compiler"' >> /etc/profile.d/cuda.sh; \
 fi
 
-# For AMD: Add ROCm repository and install ROCm toolkit
+# For AMD: Install ROCm using the amdgpu-install script (more reliable method)
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-    apt-get install -y libnuma-dev gnupg2 python3-setuptools python3-wheel && \
-    mkdir -p /etc/apt/keyrings && \
-    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor > /etc/apt/keyrings/rocm.gpg && \
-    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.4 jammy main" \
-        | tee /etc/apt/sources.list.d/rocm.list && \
-    printf "Package: *\nPin: origin repo.radeon.com\nPin-Priority: 600\n" \
-        > /etc/apt/preferences.d/rocm-pin-600 && \
     apt-get update && \
-    # Try installing packages - handle different package names across ROCm versions
-    apt-get install -y rocm-dev rocm-libs rocm-smi 2>/dev/null || \
-    apt-get install -y rocm-hip-sdk rocm-hip-libraries rocm-smi 2>/dev/null || \
-    apt-get install -y rocm-hip-libraries rocm-smi && \
-    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
+    apt-get install -y libnuma-dev gnupg2 python3-setuptools python3-wheel wget && \
+    # Download and install the AMDGPU installer script
+    wget https://repo.radeon.com/amdgpu-install/6.0/ubuntu/jammy/amdgpu-install_6.0.60000-1_all.deb && \
+    apt-get install -y ./amdgpu-install_6.0.60000-1_all.deb && \
+    rm ./amdgpu-install_6.0.60000-1_all.deb && \
+    # Only install ROCm components, no DKMS to avoid kernel dependency issues
+    DEBIAN_FRONTEND=noninteractive amdgpu-install --usecase=rocm --no-dkms -y && \
+    # Add environment variables
+    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/hip/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
     echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' >> /etc/profile.d/rocm.sh; \
 fi
 
