@@ -65,24 +65,59 @@ trim() {
     printf '%s' "$var"
 }
 
+# Check rocm-smi version and capabilities
+ROCM_VERSION=$(rocm-smi --version 2>&1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" || echo "unknown")
+echo "Detected ROCm version: $ROCM_VERSION"
+
+# Log the output format for debugging
+echo "Testing rocm-smi output format..."
+rocm-smi --showdriverversion --csv | head -n 3 > /tmp/rocm_format.txt
+echo "Format sample saved to /tmp/rocm_format.txt"
+
+# Collect basic information first (more reliable)
+GPU_INFO=$(rocm-smi --json)
+DRIVER_VERSION=$(echo "$GPU_INFO" | grep -o '"Driver version".*' | head -1 | cut -d '"' -f 4 || echo "Unknown")
+
 # Collect and process AMD GPU data using rocm-smi
-rocm-smi --showdriverversion --showuse --showmemuse --showtemp --csv | \
+# Using separate options to make it more robust across different versions
+rocm-smi --showtemp --showuse --showmemuse --csv | \
 while IFS= read -r line
 do
-    # Skip headers
-    if [[ $line != *"ROCm"* && $line != *"GPU"* && $line != "=" ]]; then
-        # Parse the CSV line
-        bus_id=$(echo "$line" | awk -F, '{print $1}' | tr -d '[:space:]')
-        name="AMD GPU"
-        temp=$(echo "$line" | awk -F, '{print $3}' | tr -d '[:space:]' | cut -d'.' -f1)
-        gpu_use=$(echo "$line" | awk -F, '{print $2}' | tr -d '[:space:]' | sed 's/%//')
-        driver_version=$(echo "$line" | awk -F, '{print $6}' | tr -d '[:space:]')
+    # Print raw line for debugging
+    echo "RAW: $line" >> /tmp/amd_gpu_raw.log
+    
+    # Skip headers and empty lines
+    if [[ $line != *"ROCm"* && $line != *"GPU"* && $line != "=" && -n "$line" ]]; then
+        # Extract GPU card number or bus ID
+        if [[ $line == *"GPU"* ]]; then
+            # Format might be "GPU[0]" or similar
+            bus_id=$(echo "$line" | grep -o "GPU\[[0-9]\+\]" || echo "$line" | awk -F, '{print $1}' | tr -d '[:space:]')
+        else
+            # Try to get PCI bus ID format
+            bus_id=$(echo "$line" | awk -F, '{print $1}' | tr -d '[:space:]' || echo "GPU0")
+        fi
         
-        # Memory usage - convert percentages to values if possible
-        # Note: rocm-smi might not provide absolute memory values, only percentages
-        mem_total="100%" # Placeholder
-        mem_used=$(echo "$line" | awk -F, '{print $4}' | tr -d '[:space:]')
-        mem_free=$(echo "$line" | awk -F, '{print $5}' | tr -d '[:space:]')
+        name="AMD GPU"
+        
+        # Try different approaches to get temperature
+        temp=$(echo "$line" | grep -o "[0-9]\+\.* *C" | grep -o "[0-9]\+" || echo "0")
+        if [ "$temp" = "0" ]; then
+            temp=$(echo "$line" | awk -F, '{for(i=1;i<=NF;i++) if($i ~ /[0-9]+.?[0-9]* *C/) print $i}' | grep -o "[0-9]\+" || echo "N/A")
+        fi
+        
+        # Try to get GPU usage percentage
+        gpu_use=$(echo "$line" | grep -o "[0-9]\+%" | sed 's/%//' || echo "N/A")
+        if [ "$gpu_use" = "N/A" ]; then
+            gpu_use=$(echo "$line" | awk -F, '{for(i=1;i<=NF;i++) if($i ~ /[0-9]+%/) print $i}' | grep -o "[0-9]\+" || echo "N/A")
+        fi
+        
+        # Use pre-collected driver version as it's more reliable
+        driver_version="$DRIVER_VERSION"
+        
+        # Memory info is highly version dependent, try multiple approaches
+        mem_total=$(echo "$line" | grep -o "[0-9]\+ *MB" | head -1 | grep -o "[0-9]\+" || echo "100")
+        mem_used=$(echo "$line" | grep -o "[0-9]\+%" | head -1 || echo "N/A")
+        mem_free=$(echo "$line" | grep -o "[0-9]\+%" | tail -1 || echo "N/A")
         
         # Create timestamp
         timestamp=$(date +"%Y/%m/%d %H:%M:%S")
