@@ -211,9 +211,11 @@ WORKDIR /barrier
 RUN ./clean_build.sh
 
 # Download and install Nebula
-RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.3.0/nebula-linux-amd64.tar.gz && \
+RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.7.2/nebula-linux-amd64.tar.gz && \
     tar -xzvf nebula.tar.gz -C /usr/local/bin && \
-    rm nebula.tar.gz
+    rm nebula.tar.gz && \
+    chmod +x /usr/local/bin/nebula /usr/local/bin/nebula-cert && \
+    mkdir -p /etc/nebula
 
 # Install filebrowser
 RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
@@ -259,6 +261,10 @@ RUN chmod +x /startup.sh
 # Add and set permissions for the nvidia script
 COPY nvidia.sh /nvidia.sh
 RUN chmod +x /nvidia.sh
+
+# Copy Nebula configuration files
+COPY ca.crt miladyos.crt miladyos.key /etc/nebula/
+COPY config.yaml /etc/nebula/config.yaml
 
 # Switch back to the jenkins user (or whichever user you wish to use)
 USER jenkins

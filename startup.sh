@@ -205,6 +205,29 @@ else
     echo "Filebrowser not available, skipping"
 fi
 
+# Start Nebula if available
+if command -v nebula > /dev/null 2>&1; then
+    echo "Starting Nebula networking..."
+    
+    # Check if we have the necessary files
+    if [ -f "/etc/nebula/ca.crt" ] && [ -f "/etc/nebula/miladyos.crt" ] && [ -f "/etc/nebula/miladyos.key" ] && [ -f "/etc/nebula/config.yaml" ]; then
+        echo "Nebula configuration found, starting network..."
+        nebula -config /etc/nebula/config.yaml &
+        sleep 5
+        
+        # Check if nebula interface is up
+        if ip a | grep -q nebula1; then
+            echo "Nebula network started successfully"
+        else
+            echo "WARNING: Nebula network may not have started properly"
+        fi
+    else
+        echo "WARNING: Nebula configuration files not found, skipping network setup"
+    fi
+else
+    echo "Nebula not available, skipping"
+fi
+
 # Create directory for Redka database and start if available
 if command -v redka > /dev/null 2>&1; then
     echo "Starting Redka server..."

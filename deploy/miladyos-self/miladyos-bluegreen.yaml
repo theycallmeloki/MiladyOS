@@ -1,82 +1,21 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: miladyos-home-pvc
-  namespace: default
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Gi
-  storageClassName: longhorn-single-replica
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: registry-data-pvc
-  namespace: default
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
-  storageClassName: longhorn-single-replica
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: miladyos-kube-config-pvc
-  namespace: default
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Mi
-  storageClassName: longhorn-single-replica
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: miladyos-pachyderm-config-pvc
-  namespace: default
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Mi
-  storageClassName: longhorn-single-replica
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: docker-storage-pvc
-  namespace: default
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Gi
-  storageClassName: longhorn-single-replica
----
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: ctl.enisoc.com/v1
+kind: BlueGreenDeployment
 metadata:
   name: miladyos
-  namespace: default
+  labels:
+    app: miladyos
 spec:
   replicas: 1
+  minReadySeconds: 10
   selector:
     matchLabels:
       app: miladyos
+      component: server
   template:
     metadata:
       labels:
         app: miladyos
+        component: server
     spec:
       nodeSelector:
         longhorn.io/node: "true"
@@ -186,29 +125,29 @@ spec:
       - name: registry-data
         persistentVolumeClaim:
           claimName: registry-data-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: miladyos
-  namespace: default
-spec:
-  selector:
-    app: miladyos
-  ports:
-  - name: web
-    port: 8080
-    targetPort: 8080
-  - name: agent
-    port: 50000
-    targetPort: 50000
-  - name: mcp
-    port: 6000
-    targetPort: 6000
-  - name: redka
-    port: 6379
-    targetPort: 6379
-  - name: registry
-    port: 5000
-    targetPort: 5000
-  type: ClusterIP 
+  service:
+    metadata:
+      name: miladyos
+      labels:
+        app: miladyos
+        component: server
+    spec:
+      selector:
+        app: miladyos
+        component: server
+      ports:
+      - name: web
+        port: 8080
+        targetPort: 8080
+      - name: agent
+        port: 50000
+        targetPort: 50000
+      - name: mcp
+        port: 6000
+        targetPort: 6000
+      - name: redka
+        port: 6379
+        targetPort: 6379
+      - name: registry
+        port: 5000
+        targetPort: 5000
