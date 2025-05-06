@@ -140,10 +140,13 @@ RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
     wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor > /etc/apt/keyrings/rocm.gpg && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.4 jammy main" \
         | tee /etc/apt/sources.list.d/rocm.list && \
-    echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' \
-        | tee /etc/apt/preferences.d/rocm-pin-600 && \
+    printf "Package: *\nPin: origin repo.radeon.com\nPin-Priority: 600\n" \
+        > /etc/apt/preferences.d/rocm-pin-600 && \
     apt-get update && \
-    apt-get install -y rocm-dev rocm-libs rocm-smi && \
+    # Try installing packages - handle different package names across ROCm versions
+    apt-get install -y rocm-dev rocm-libs rocm-smi 2>/dev/null || \
+    apt-get install -y rocm-hip-sdk rocm-hip-libraries rocm-smi 2>/dev/null || \
+    apt-get install -y rocm-hip-libraries rocm-smi && \
     echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
     echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' >> /etc/profile.d/rocm.sh; \
 fi
