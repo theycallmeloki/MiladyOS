@@ -30,7 +30,7 @@ spec:
           mountPath: /config
       containers:
       - name: litellm-proxy
-        image: ghcr.io/berriai/litellm:main-latest
+        image: ghcr.io/berriai/litellm:main-v1.63.8-nightly
         imagePullPolicy: Always
         ports:
         - containerPort: 4000
@@ -40,6 +40,8 @@ spec:
         - name: PORT
           value: "4000"
         - name: LITELLM_LOAD_MODEL_CONFIG_AT_START
+          value: "True"
+        - name: STORE_MODEL_IN_DB
           value: "True"
         args:
         - "--config"
@@ -67,6 +69,8 @@ spec:
           mountPath: /etc/litellm
         - name: logs-volume
           mountPath: /var/log/litellm
+      nodeSelector:
+        longhorn: "true"
       volumes:
       - name: config-volume
         configMap:
