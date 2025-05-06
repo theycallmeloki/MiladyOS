@@ -67,7 +67,7 @@ check_amd_gpu() {
 install_amd_rocm() {
     # Add ROCm apt repository
     wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | sudo apt-key add -
-    echo "deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/rocm.list
+    echo "deb [arch=amd64] https://repo.radeon.com/rocm/apt/5.7.1/debian/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/rocm.list
     
     # Update and install ROCm toolkit
     sudo apt update

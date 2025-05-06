@@ -137,7 +137,7 @@ fi
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
     apt-get install -y libnuma-dev gnupg2 && \
     wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
-    echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ debian main' | tee /etc/apt/sources.list.d/rocm.list && \
+    echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/5.7.1/debian/ bookworm main' | tee /etc/apt/sources.list.d/rocm.list && \
     apt-get update && \
     apt-get install -y rocm-dev rocm-libs rocm-smi && \
     echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
