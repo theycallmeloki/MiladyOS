@@ -1,0 +1,267 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tuya-exporter-script
+  namespace: monitoring
+data:
+  exporter.py: |
+    #!/usr/bin/env python3
+    import os
+    import sys
+    import time
+    import json
+    import requests
+    import traceback
+    from prometheus_client import start_http_server, Gauge, Info, REGISTRY, PROCESS_COLLECTOR, PLATFORM_COLLECTOR, GC_COLLECTOR
+
+    # Configuration from environment variables
+    HASS_URL = os.environ.get('HASS_URL', 'http://homeassistant.homeassistant.svc.cluster.local:80')
+    HASS_TOKEN = os.environ.get('HASS_TOKEN', '')
+    EXPORTER_PORT = int(os.environ.get('EXPORTER_PORT', 9089))
+    POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', 60))
+    LOG_LEVEL = int(os.environ.get('LOG_LEVEL', 1))
+
+    # Clean up existing metrics to avoid conflicts
+    for collector in list(REGISTRY._collector_to_names.keys()):
+        try:
+            REGISTRY.unregister(collector)
+        except Exception:
+            pass
+
+    # Home Assistant API headers
+    headers = {
+        'Authorization': f'Bearer {HASS_TOKEN}',
+        'Content-Type': 'application/json',
+    }
+
+    # Device definitions with exact entity IDs
+    DEVICES = {
+        'temp_humidity': {
+            'name': 'Smart IR Controller',
+            'entities': {
+                'temperature': 'sensor.smart_ir_with_t_h_sensor_temperature',
+                'humidity': 'sensor.smart_ir_with_t_h_sensor_humidity'
+            }
+        },
+        'power_meter': {
+            'name': 'Mains Power',
+            'entities': {
+                'total_energy': 'sensor.tu_dien_veratti_total_energy',
+                'phase_a_voltage': 'sensor.tu_dien_veratti_phase_a_voltage',
+                'phase_a_current': 'sensor.tu_dien_veratti_phase_a_current',
+                'phase_a_power': 'sensor.tu_dien_veratti_phase_a_power',
+                'phase_b_voltage': 'sensor.tu_dien_veratti_phase_b_voltage',
+                'phase_b_current': 'sensor.tu_dien_veratti_phase_b_current',
+                'phase_b_power': 'sensor.tu_dien_veratti_phase_b_power',
+                'phase_c_voltage': 'sensor.tu_dien_veratti_phase_c_voltage',
+                'phase_c_current': 'sensor.tu_dien_veratti_phase_c_current',
+                'phase_c_power': 'sensor.tu_dien_veratti_phase_c_power'
+            }
+        }
+    }
+
+    # Prometheus metrics
+    device_metrics = {}
+    exporter_info = Info('tuya_exporter', 'Information about the Tuya exporter')
+    exporter_info.info({
+        'version': '1.0.0',
+        'poll_interval': str(POLL_INTERVAL)
+    })
+
+    # General metrics
+    scrape_count = Gauge('tuya_scrape_count', 'Number of times the exporter has scraped Home Assistant')
+    scrape_errors = Gauge('tuya_scrape_errors', 'Number of errors encountered while scraping Home Assistant')
+    scrape_duration = Gauge('tuya_scrape_duration_seconds', 'Time taken to scrape metrics from Home Assistant')
+    device_count = Gauge('tuya_device_count', 'Number of Tuya devices tracked')
+    device_online_count = Gauge('tuya_device_online_count', 'Number of Tuya devices currently online')
+
+    def log(level, message):
+        """Simple logging with timestamp"""
+        if level <= LOG_LEVEL:
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+            prefix = '[DEBUG]' if level >= 2 else '[INFO]' if level >= 1 else '[ERROR]'
+            print(f"{timestamp} {prefix} {message}")
+
+    def get_entity_state(entity_id):
+        """Get the state of a specific entity from Home Assistant"""
+        try:
+            url = f"{HASS_URL}/api/states/{entity_id}"
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            if LOG_LEVEL >= 2:
+                log(2, f"Entity data for {entity_id}: {data['state']}")
+                
+            state = data.get('state')
+            if state in ['unknown', 'unavailable', None, '']:
+                log(1, f"Entity {entity_id} has invalid state: {state}")
+                return None
+                
+            return state
+        except Exception as e:
+            log(0, f"Error getting entity {entity_id}: {e}")
+            scrape_errors.inc()
+            return None
+
+    def create_temp_humidity_metrics(device_id, device_name):
+        """Create metrics for temperature and humidity device"""
+        if 'temp_humidity' in device_metrics:
+            return  # Metrics already exist
+            
+        log(1, f"Creating metrics for device: {device_id} ({device_name})")
+        
+        # Create metrics for temperature and humidity sensor
+        device_metrics['temp_humidity'] = {
+            'temperature': Gauge('tuya_temperature', 'Temperature from Tuya sensor', ['device']),
+            'humidity': Gauge('tuya_humidity', 'Humidity from Tuya sensor', ['device']),
+            'available': Gauge('tuya_temp_humidity_available', 'Availability of the temperature/humidity sensor', ['device'])
+        }
+        
+        log(1, f"Successfully created metrics for temperature/humidity device")
+        
+    def create_power_meter_metrics(device_id, device_name):
+        """Create metrics for power meter device"""
+        if 'power_meter' in device_metrics:
+            return  # Metrics already exist
+            
+        log(1, f"Creating metrics for device: {device_id} ({device_name})")
+        
+        # Create metrics for power meter
+        device_metrics['power_meter'] = {
+            'total_energy': Gauge('tuya_total_energy', 'Total energy consumption from 3-phase meter', ['device']),
+            'phase_a_voltage': Gauge('tuya_phase_a_voltage', 'Phase A voltage from 3-phase meter', ['device']),
+            'phase_a_current': Gauge('tuya_phase_a_current', 'Phase A current from 3-phase meter', ['device']),
+            'phase_a_power': Gauge('tuya_phase_a_power', 'Phase A power from 3-phase meter', ['device']),
+            'phase_b_voltage': Gauge('tuya_phase_b_voltage', 'Phase B voltage from 3-phase meter', ['device']),
+            'phase_b_current': Gauge('tuya_phase_b_current', 'Phase B current from 3-phase meter', ['device']),
+            'phase_b_power': Gauge('tuya_phase_b_power', 'Phase B power from 3-phase meter', ['device']),
+            'phase_c_voltage': Gauge('tuya_phase_c_voltage', 'Phase C voltage from 3-phase meter', ['device']),
+            'phase_c_current': Gauge('tuya_phase_c_current', 'Phase C current from 3-phase meter', ['device']),
+            'phase_c_power': Gauge('tuya_phase_c_power', 'Phase C power from 3-phase meter', ['device']),
+            'available': Gauge('tuya_power_meter_available', 'Availability of the power meter', ['device'])
+        }
+        
+        log(1, f"Successfully created metrics for power meter device")
+
+    def update_metrics():
+        """Update Prometheus metrics with data from Home Assistant"""
+        start_time = time.time()
+        scrape_count.inc()
+        online_count = 0
+        total_devices = len(DEVICES)
+        
+        # Process temperature and humidity device
+        temp_device = DEVICES['temp_humidity']
+        temp_device_id = 'temp_humidity'
+        device_name = temp_device['name']
+        
+        # Create metrics if they don't exist
+        create_temp_humidity_metrics(temp_device_id, device_name)
+        
+        metrics = device_metrics['temp_humidity']
+        available = False
+        
+        # Process temperature
+        temp_entity_id = temp_device['entities'].get('temperature')
+        if temp_entity_id:
+            state = get_entity_state(temp_entity_id)
+            if state is not None:
+                try:
+                    value = float(state)
+                    metrics['temperature'].labels(device=device_name).set(value)
+                    log(1, f"Updated temperature: {value}°C")
+                    available = True
+                except (ValueError, TypeError):
+                    log(0, f"Invalid temperature value: {state}")
+        
+        # Process humidity
+        humidity_entity_id = temp_device['entities'].get('humidity')
+        if humidity_entity_id:
+            state = get_entity_state(humidity_entity_id)
+            if state is not None:
+                try:
+                    value = float(state)
+                    metrics['humidity'].labels(device=device_name).set(value)
+                    log(1, f"Updated humidity: {value}%")
+                    available = True
+                except (ValueError, TypeError):
+                    log(0, f"Invalid humidity value: {state}")
+        
+        # Update availability
+        metrics['available'].labels(device=device_name).set(1 if available else 0)
+        if available:
+            online_count += 1
+        
+        # Process power meter device
+        power_device = DEVICES['power_meter']
+        power_device_id = 'power_meter'
+        device_name = power_device['name']
+        
+        # Create metrics if they don't exist
+        create_power_meter_metrics(power_device_id, device_name)
+        
+        metrics = device_metrics['power_meter']
+        available = False
+        
+        # Process each metric for the power meter
+        for metric_key, entity_id in power_device['entities'].items():
+            state = get_entity_state(entity_id)
+            if state is not None:
+                try:
+                    value = float(state)
+                    metrics[metric_key].labels(device=device_name).set(value)
+                    
+                    # Determine the unit for logging
+                    unit = "kWh" if 'energy' in metric_key else "V" if 'voltage' in metric_key else "A" if 'current' in metric_key else "kW"
+                    log(1, f"Updated {metric_key}: {value}{unit}")
+                    available = True
+                except (ValueError, TypeError):
+                    log(0, f"Invalid {metric_key} value: {state}")
+        
+        # Update availability
+        metrics['available'].labels(device=device_name).set(1 if available else 0)
+        if available:
+            online_count += 1
+        
+        # Update device counts
+        device_count.set(total_devices)
+        device_online_count.set(online_count)
+        
+        # Record scrape duration
+        scrape_duration.set(time.time() - start_time)
+        log(1, f"Total Tuya devices: {total_devices}, Online: {online_count}")
+
+    if __name__ == '__main__':
+        # Print startup information
+        log(1, "\n--- Tuya Exporter Starting ---")
+        log(1, f"Python version: {sys.version}")
+        log(1, "Configuration:")
+        log(1, f"  HASS_URL: {HASS_URL}")
+        log(1, f"  EXPORTER_PORT: {EXPORTER_PORT}")
+        log(1, f"  POLL_INTERVAL: {POLL_INTERVAL}")
+        log(1, f"  Log level: {LOG_LEVEL}")
+        
+        # Start up the server to expose metrics
+        try:
+            start_http_server(EXPORTER_PORT)
+            log(1, f"Exporter HTTP server successfully started on port {EXPORTER_PORT}")
+        except Exception as e:
+            log(0, f"Error starting HTTP server: {e}")
+            traceback.print_exc()
+            sys.exit(1)
+            
+        log(1, f"Polling Home Assistant at {HASS_URL} every {POLL_INTERVAL} seconds")
+        
+        # Main loop
+        while True:
+            try:
+                log(1, "\n--- Starting polling cycle ---")
+                update_metrics()
+                log(1, f"--- Completed polling cycle, sleeping for {POLL_INTERVAL} seconds ---")
+            except Exception as e:
+                log(0, f"Error in main loop: {e}")
+                traceback.print_exc()
+                scrape_errors.inc()
+            finally:
+                time.sleep(POLL_INTERVAL)

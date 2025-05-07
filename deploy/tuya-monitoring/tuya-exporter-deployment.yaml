@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tuya-exporter
+  namespace: monitoring
+  labels:
+    app: tuya-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tuya-exporter
+  template:
+    metadata:
+      labels:
+        app: tuya-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9089"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: tuya-exporter
+        image: python:3.9-slim
+        ports:
+        - containerPort: 9089
+          name: metrics
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        envFrom:
+        - configMapRef:
+            name: tuya-exporter-config
+        - secretRef:
+            name: wiz-exporter-secret
+        volumeMounts:
+        - name: script
+          mountPath: /app/script
+          readOnly: true
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            mkdir -p /tmp/pip
+            export PIP_CACHE_DIR=/tmp/pip
+            export PYTHONUSERBASE=/tmp/pyuser
+            python -m pip install --user requests prometheus-client
+            export PYTHONPATH=/tmp/pyuser/lib/python3.9/site-packages
+            echo "Copying exporter script..."
+            mkdir -p /app/script
+            cp /app/script/exporter.py /tmp/exporter.py
+            chmod +x /tmp/exporter.py
+            echo "Script copied. Starting exporter..."
+            python -u /tmp/exporter.py  # -u for unbuffered output
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 15
+          periodSeconds: 15
+      volumes:
+      - name: script
+        configMap:
+          name: tuya-exporter-script
+          items:
+          - key: exporter.py
+            path: exporter.py
