@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tuya-exporter-config
+  namespace: monitoring
+data:
+  HASS_URL: "http://homeassistant.homeassistant.svc.cluster.local:80"
+  EXPORTER_PORT: "9089"
+  POLL_INTERVAL: "60"
+  
+  # Entity pattern configuration - used to identify relevant entities
+  ENTITY_PATTERNS: "tuya,smart,plug,outlet,current,voltage,meter,phase"
+  POWER_PATTERNS: "power,energy,consumption,watt,current,voltage,amp,volt"
+  SWITCH_PATTERNS: "switch,outlet,toggle,state"
+  SENSOR_PATTERNS: "temperature,humidity,sensor,meter,phase"
+  
+  # Auto-discover mode - finds all devices matching patterns automatically
+  AUTO_DISCOVER: "true"
+  
+  # Log level (0=error only, 1=info, 2=debug, 3=trace)
+  LOG_LEVEL: "3"
