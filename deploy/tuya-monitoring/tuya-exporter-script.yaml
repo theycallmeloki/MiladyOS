@@ -57,6 +57,18 @@ data:
                 'phase_c_current': 'sensor.tu_dien_veratti_phase_c_current',
                 'phase_c_power': 'sensor.tu_dien_veratti_phase_c_power'
             }
+        },
+        'fan_regulator_1': {
+            'name': 'Fan Regulator 1',
+            'entities': {
+                'state': 'fan.fan_regulator'
+            }
+        },
+        'fan_regulator_2': {
+            'name': 'Fan Regulator 2',
+            'entities': {
+                'state': 'fan.fan_regulator_2'
+            }
         }
     }
 
@@ -124,9 +136,9 @@ data:
         """Create metrics for power meter device"""
         if 'power_meter' in device_metrics:
             return  # Metrics already exist
-            
+
         log(1, f"Creating metrics for device: {device_id} ({device_name})")
-        
+
         # Create metrics for power meter
         device_metrics['power_meter'] = {
             'total_energy': Gauge('tuya_total_energy', 'Total energy consumption from 3-phase meter', ['device']),
@@ -141,8 +153,23 @@ data:
             'phase_c_power': Gauge('tuya_phase_c_power', 'Phase C power from 3-phase meter', ['device']),
             'available': Gauge('tuya_power_meter_available', 'Availability of the power meter', ['device'])
         }
-        
+
         log(1, f"Successfully created metrics for power meter device")
+
+    def create_fan_regulator_metrics(device_id, device_name):
+        """Create metrics for fan regulator device"""
+        if device_id in device_metrics:
+            return  # Metrics already exist
+
+        log(1, f"Creating metrics for device: {device_id} ({device_name})")
+
+        # Create metrics for fan regulator
+        device_metrics[device_id] = {
+            'state': Gauge(f'tuya_fan_{device_id.split("_")[-1]}_state', f'Fan state for {device_name}', ['device']),
+            'available': Gauge(f'tuya_fan_{device_id.split("_")[-1]}_available', f'Availability of {device_name}', ['device'])
+        }
+
+        log(1, f"Successfully created metrics for fan regulator device: {device_id}")
 
     def update_metrics():
         """Update Prometheus metrics with data from Home Assistant"""
@@ -223,11 +250,41 @@ data:
         metrics['available'].labels(device=device_name).set(1 if available else 0)
         if available:
             online_count += 1
-        
+
+        # Process fan regulator devices
+        for device_id in ['fan_regulator_1', 'fan_regulator_2']:
+            fan_device = DEVICES[device_id]
+            device_name = fan_device['name']
+
+            # Create metrics if they don't exist
+            create_fan_regulator_metrics(device_id, device_name)
+
+            metrics = device_metrics[device_id]
+            available = False
+
+            # Process fan state
+            fan_entity_id = fan_device['entities'].get('state')
+            if fan_entity_id:
+                state = get_entity_state(fan_entity_id)
+                if state is not None:
+                    try:
+                        # Convert state to binary value (1 for on, 0 for off)
+                        value = 1 if state.lower() == 'on' else 0
+                        metrics['state'].labels(device=device_name).set(value)
+                        log(1, f"Updated {device_name} state: {'ON' if value == 1 else 'OFF'}")
+                        available = True
+                    except (ValueError, TypeError):
+                        log(0, f"Invalid fan state value: {state}")
+
+            # Update availability
+            metrics['available'].labels(device=device_name).set(1 if available else 0)
+            if available:
+                online_count += 1
+
         # Update device counts
         device_count.set(total_devices)
         device_online_count.set(online_count)
-        
+
         # Record scrape duration
         scrape_duration.set(time.time() - start_time)
         log(1, f"Total Tuya devices: {total_devices}, Online: {online_count}")
