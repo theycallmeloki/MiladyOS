@@ -1,7 +1,6 @@
 # MiladyOS
 
-![127669 (1) (1) (1)](https://github.com/user-attachments/assets/4afc0590-a339-4989-8034-9d093b2d0581)
-
+![miladyos](https://github.com/user-attachments/assets/4b7f0d59-39ee-4b56-b884-e0207bf4a8ad)
 
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/chillgates_?style=social)](https://twitter.com/chillgates_)
