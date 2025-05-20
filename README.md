@@ -3,6 +3,8 @@
 ![Gn8cc0VWwAAmakN](https://github.com/user-attachments/assets/ea68e45b-49fa-4d70-a6f6-18f223dd4689)
 
 
+[![Twitter Follow](https://img.shields.io/twitter/follow/chillgates_?style=social)](https://twitter.com/chillgates_)
+
 
 milady themed operations runner with optimized defaults for maximizing cpu+ram+gpu utilization accross a cluster
 
