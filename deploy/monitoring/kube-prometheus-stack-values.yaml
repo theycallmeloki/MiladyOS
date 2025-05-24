@@ -1,0 +1,107 @@
+# Prometheus Stack Values - Optimized for MiladyOS
+# Includes Prometheus, Grafana, Alertmanager, and exporters
+
+## Grafana configuration
+grafana:
+  enabled: true
+  # Disable auth - anonymous access
+  grafana.ini:
+    auth:
+      disable_login_form: true
+      disable_signout_menu: true
+    auth.anonymous:
+      enabled: true
+      org_role: Admin
+    auth.basic:
+      enabled: false
+  adminPassword: "admin"  # Won't be used with anonymous access
+  persistence:
+    enabled: true
+    storageClassName: longhorn
+    size: 10Gi
+  ingress:
+    enabled: false  # We'll use Cloudflare tunnel instead
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+
+## Prometheus configuration
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+    # ServiceMonitor selector to find all monitors
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+## Alertmanager configuration
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+## Node exporter for node metrics
+nodeExporter:
+  enabled: true
+
+## Kube-state-metrics for Kubernetes metrics
+kubeStateMetrics:
+  enabled: true
+
+## Disable components we don't need
+kubeEtcd:
+  enabled: false  # Talos doesn't expose etcd metrics
+kubeControllerManager:
+  enabled: false  # Talos control plane metrics need special config
+kubeScheduler:
+  enabled: false  # Talos control plane metrics need special config
+kubeProxy:
+  enabled: false  # Talos uses kube-proxy-less mode
+
+## Default rules
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserverAvailability: true
+    kubeApiserverBurnrate: true
+    kubeApiserverHistogram: true
+    kubeApiserverSlos: true
+    kubeControllerManager: false
+    kubelet: true
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeScheduler: false
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true
