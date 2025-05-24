@@ -283,6 +283,8 @@ spec:
         env:
         - name: PYTHONUNBUFFERED
           value: "1"
+        - name: PYTHONPATH
+          value: "/app"
         volumeMounts:
         - name: script
           mountPath: /app
@@ -308,7 +310,7 @@ spec:
       initContainers:
       - name: install-deps
         image: python:3.11-slim
-        command: ["sh", "-c", "pip install prometheus_client requests kubernetes && cp /config/health_exporter.py /app/"]
+        command: ["sh", "-c", "pip install --target /app prometheus_client requests kubernetes && cp /config/health_exporter.py /app/"]
         volumeMounts:
         - name: script
           mountPath: /app
