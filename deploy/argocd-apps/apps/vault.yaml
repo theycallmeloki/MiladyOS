@@ -18,24 +18,24 @@ spec:
             raft:
               enabled: true
               setNodeId: true
-              config: |
+          extraSecretEnvironmentVars:
+            - envName: MONGODB_CONNECTION_STRING
+              secretName: vault-mongodb-credentials
+              secretKey: connection-string
+            - envName: MONGODB_DATABASE
+              secretName: vault-mongodb-credentials
+              secretKey: database
+          config: |
                 ui = true
                 listener "tcp" {
                   tls_disable = 1
                   address = "[::]:8200"
                   cluster_address = "[::]:8201"
                 }
-                storage "raft" {
-                  path = "/vault/data"
-                  retry_join {
-                    leader_api_addr = "http://vault-0.vault-internal:8200"
-                  }
-                  retry_join {
-                    leader_api_addr = "http://vault-1.vault-internal:8200"
-                  }
-                  retry_join {
-                    leader_api_addr = "http://vault-2.vault-internal:8200"
-                  }
+                storage "mongodb" {
+                  connection_url = "${MONGODB_CONNECTION_STRING}"
+                  database = "${MONGODB_DATABASE}"
+                  collection = "vault-data"
                 }
                 service_registration "kubernetes" {}
           dataStorage:

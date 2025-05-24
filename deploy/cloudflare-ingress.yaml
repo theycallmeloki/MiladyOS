@@ -154,3 +154,29 @@ spec:
   - hosts:
     - mcp.miladyos.net
     secretName: miladyos-mcp-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: litellm-proxy-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: lmm.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: litellm-proxy
+            port:
+              number: 4000
+  tls:
+  - hosts:
+    - lmm.miladyos.net
+    secretName: litellm-proxy-tls
