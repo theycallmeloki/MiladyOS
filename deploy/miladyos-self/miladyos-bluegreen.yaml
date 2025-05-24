@@ -17,8 +17,6 @@ spec:
         app: miladyos
         component: server
     spec:
-      nodeSelector:
-        longhorn.io/node: "true"
       initContainers:
       - name: volume-permissions
         image: busybox
