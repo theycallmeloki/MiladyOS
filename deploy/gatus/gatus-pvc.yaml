@@ -4,7 +4,7 @@ metadata:
   name: gatus-data
   namespace: default
 spec:
-  storageClassName: longhorn-single-replica
+  storageClassName: longhorn
   accessModes:
     - ReadWriteOnce
   resources:
