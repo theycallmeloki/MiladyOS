@@ -1,0 +1,153 @@
+# ArgoCD Values - Generous GitOps Configuration
+# This will automatically use Longhorn as default storage
+
+# Global configuration
+global:
+  # Use our default Longhorn storage automatically
+  storageClass: longhorn
+  # Generous resource allocation
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+
+# ArgoCD Server configuration - generous and automated
+server:
+  # High availability with multiple replicas
+  replicas: 2
+  
+  # Generous resource allocation
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  # Auto-sync and automated features
+  config:
+    # Enable auto-sync by default
+    application.instanceLabelKey: argocd.argoproj.io/instance
+    # Automatically create projects
+    application.resourceTrackingMethod: annotation
+    # OIDC disabled - no secrets for now
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    
+  # Ingress disabled for now (can be enabled later)
+  ingress:
+    enabled: false
+
+# Application Controller - handles GitOps automation
+controller:
+  # High availability
+  replicas: 2
+  
+  # Generous resources for handling many applications
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  
+  # Metrics and monitoring
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+
+# Repository Server - handles Git operations
+repoServer:
+  # High availability
+  replicas: 2
+  
+  # Generous resources for Git operations
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  # Persistent storage for repositories (uses Longhorn automatically)
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+    # storageClass automatically uses longhorn (default)
+
+# Application Set Controller - for managing multiple apps
+applicationSet:
+  enabled: true
+  
+  # Generous resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Notifications Controller - for alerts and webhooks
+notifications:
+  enabled: true
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Redis for caching - generous allocation
+redis:
+  # Generous resources for caching
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  
+  # Persistent storage (uses Longhorn automatically)
+  persistentVolume:
+    enabled: true
+    size: 5Gi
+
+# RBAC configuration - generous permissions for GitOps
+rbac:
+  # Create RBAC resources
+  create: true
+  
+  # Default policy for automated operations
+  policy.default: role:readonly
+  
+  # CSV format policies for automated GitOps
+  policy.csv: |
+    g, argocd-admins, role:admin
+    g, argocd-developers, role:readonly
+
+# Configurations - no secrets for now
+configs:
+  # Repository credentials disabled - no secrets
+  repositories: {}
+
+# Additional configurations can be added after CRDs are installed
+
+# High availability and automation settings
+highAvailability:
+  enabled: true
+
+# Disable unnecessary components for cleaner deployment
+dex:
+  enabled: false
+
+# Generous persistent volumes (will use Longhorn automatically)
+persistence:
+  enabled: true
