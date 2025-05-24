@@ -22,8 +22,6 @@ spec:
         runAsUser: 65534
         runAsGroup: 65534
         fsGroup: 65534
-      nodeSelector:
-        kubernetes.io/hostname: talos-o0r-78y
       containers:
       - name: gatus
         image: twinproduction/gatus:v5.7.0
