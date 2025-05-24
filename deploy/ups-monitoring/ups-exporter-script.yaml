@@ -84,10 +84,11 @@ data:
                     'firmware': attrs.get('ups.firmware', 'unknown')
                 })
             
-            # Get status (OL = Online, OB = On Battery)
+            # Get status (Online = on mains power, else on battery)
             status_state, _ = get_entity_state(entities['status'])
             if status_state:
-                ups_status.labels(ups_name=ups_name).set(1 if status_state == 'OL' else 0)
+                # Home Assistant returns "Online" when on mains power
+                ups_status.labels(ups_name=ups_name).set(1 if status_state.lower() == 'online' else 0)
             
             # Get numeric values
             for metric_name, entity_key in [
