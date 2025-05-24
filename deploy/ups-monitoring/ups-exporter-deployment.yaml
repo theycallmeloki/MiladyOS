@@ -28,7 +28,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: wiz-exporter-secret  # Reuse the same HA token
-              key: ha_token
+              key: HASS_TOKEN
         command: ["/bin/bash", "-c"]
         args:
           - |
