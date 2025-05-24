@@ -4,7 +4,7 @@ metadata:
   name: wiz-exporter-config
   namespace: monitoring
 data:
-  HASS_URL: "http://homeassistant.homeassistant.svc.cluster.local:80"
+  HASS_URL: "http://homeassistant.homeassistant.svc.cluster.local:8123"
   EXPORTER_PORT: "9678"
   POLL_INTERVAL: "60"
   
