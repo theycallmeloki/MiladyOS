@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-vault-plugin-config
+  namespace: argocd
+data:
+  AVP_TYPE: "vault"
+  AVP_AUTH_TYPE: "k8s"
+  AVP_K8S_ROLE: "argocd"
+  AVP_VAULT_ADDR: "http://vault.vault.svc.cluster.local:8200"
+  AVP_K8S_MOUNT_PATH: "kubernetes"
