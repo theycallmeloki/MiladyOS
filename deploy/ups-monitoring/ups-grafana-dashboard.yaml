@@ -111,7 +111,7 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Connection Status",
+          "title": "UPS Status",
           "type": "stat"
         },
         {
@@ -129,14 +129,14 @@ data:
                 {
                   "options": {
                     "0": {
-                      "color": "green",
+                      "color": "orange",
                       "index": 0,
-                      "text": "AC POWER"
+                      "text": "ON BATTERY"
                     },
                     "1": {
-                      "color": "orange",
+                      "color": "green",
                       "index": 1,
-                      "text": "ON BATTERY"
+                      "text": "AC POWER"
                     }
                   },
                   "type": "value"
@@ -188,7 +188,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "1 - ups_status{ups_name=\"microtek\"}",
+              "expr": "ups_status{ups_name=\"microtek\"}",
               "instant": false,
               "range": true,
               "refId": "A"
