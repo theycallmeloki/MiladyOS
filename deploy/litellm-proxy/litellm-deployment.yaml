@@ -30,7 +30,7 @@ spec:
           mountPath: /config
       containers:
       - name: litellm-proxy
-        image: ghcr.io/berriai/litellm:main-v1.63.8-nightly
+        image: ghcr.io/berriai/litellm:main-latest
         imagePullPolicy: Always
         ports:
         - containerPort: 4000
@@ -69,8 +69,6 @@ spec:
           mountPath: /etc/litellm
         - name: logs-volume
           mountPath: /var/log/litellm
-      nodeSelector:
-        longhorn: "true"
       volumes:
       - name: config-volume
         configMap:
