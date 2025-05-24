@@ -16,8 +16,6 @@ spec:
         app: homeassistant
     spec:
       hostNetwork: true
-      nodeSelector:
-        kubernetes.io/hostname: talos-4vi-s4q
       initContainers:
       - name: volume-permissions
         image: busybox
