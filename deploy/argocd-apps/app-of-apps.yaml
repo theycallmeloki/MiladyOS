@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: HEAD
-    path: deploy/argocd-apps
+    path: deploy/argocd-apps/apps
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
