@@ -45,14 +45,10 @@ data:
         'microtek': {
             'status': 'sensor.microtek_status',
             'battery_charge': 'sensor.microtek_battery_charge',
-            'battery_runtime': 'sensor.microtek_battery_runtime', 
             'load': 'sensor.microtek_load',
             'input_voltage': 'sensor.microtek_input_voltage',
             'output_voltage': 'sensor.microtek_output_voltage',
-            'temperature': 'sensor.microtek_temperature',
-            'power_nominal': 'sensor.microtek_nominal_power',
-            'model': 'sensor.microtek_model',
-            'firmware': 'sensor.microtek_firmware'
+            'status_data': 'sensor.microtek_status_data'
         }
     }
     
@@ -79,13 +75,13 @@ data:
         for ups_name, entities in UPS_ENTITIES.items():
             logger.info(f"Updating metrics for UPS: {ups_name}")
             
-            # Get UPS info
-            model_state, _ = get_entity_state(entities.get('model', ''))
-            firmware_state, _ = get_entity_state(entities.get('firmware', ''))
-            if model_state:
+            # Get status from status_data entity
+            status_data_state, attrs = get_entity_state(entities.get('status_data', ''))
+            if status_data_state:
+                # Extract UPS info from attributes if available
                 ups_info.labels(ups_name=ups_name).info({
-                    'model': model_state or 'unknown',
-                    'firmware': firmware_state or 'unknown'
+                    'model': attrs.get('ups.model', 'unknown'),
+                    'firmware': attrs.get('ups.firmware', 'unknown')
                 })
             
             # Get status (OL = Online, OB = On Battery)
@@ -98,9 +94,7 @@ data:
                 ('battery_charge', 'battery_charge'),
                 ('load', 'load'),
                 ('input_voltage', 'input_voltage'),
-                ('output_voltage', 'output_voltage'),
-                ('temperature', 'temperature'),
-                ('power_nominal', 'power_nominal')
+                ('output_voltage', 'output_voltage')
             ]:
                 entity_id = entities.get(entity_key)
                 if entity_id:
@@ -116,23 +110,8 @@ data:
                                 ups_input_voltage.labels(ups_name=ups_name).set(value)
                             elif metric_name == 'output_voltage':
                                 ups_output_voltage.labels(ups_name=ups_name).set(value)
-                            elif metric_name == 'temperature':
-                                ups_temperature.labels(ups_name=ups_name).set(value)
-                            elif metric_name == 'power_nominal':
-                                ups_power_nominal.labels(ups_name=ups_name).set(value)
                         except ValueError:
                             logger.warning(f"Could not parse {metric_name} value: {state}")
-            
-            # Battery runtime (convert from seconds)
-            runtime_entity = entities.get('battery_runtime')
-            if runtime_entity:
-                state, _ = get_entity_state(runtime_entity)
-                if state and state != 'unavailable':
-                    try:
-                        runtime = float(state)
-                        ups_battery_runtime.labels(ups_name=ups_name).set(runtime)
-                    except ValueError:
-                        logger.warning(f"Could not parse runtime value: {state}")
     
     def main():
         if not HA_TOKEN:
