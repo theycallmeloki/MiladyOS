@@ -128,3 +128,29 @@ spec:
   - hosts:
     - gateway.miladyos.net
     secretName: miladyos-gateway-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: miladyos-mcp-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: mcp.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: miladyos
+            port:
+              number: 6000
+  tls:
+  - hosts:
+    - mcp.miladyos.net
+    secretName: miladyos-mcp-tls
