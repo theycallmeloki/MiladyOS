@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ups-nut-server
+  name: tuya-monitoring
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: HEAD
-    path: deploy/ups-nut-server
+    path: deploy/tuya-monitoring
   destination:
     server: https://kubernetes.default.svc
-    namespace: ups-nut
+    namespace: monitoring
   syncPolicy:
     automated:
       prune: true

@@ -17,45 +17,34 @@ spec:
     spec:
       containers:
       - name: ups-exporter
-        image: python:3.9-slim
-        env:
-        - name: UPS_NAME
-          value: "microtek"
-        - name: UPS_HOST
-          value: "ups-server"
-        - name: EXPORTER_PORT
-          value: "9099"
-        - name: POLL_INTERVAL
-          value: "30"
-        - name: DEBUG
-          value: "false"
+        image: python:3.11-slim
         ports:
-        - name: metrics
-          containerPort: 9099
-        volumeMounts:
-        - name: script
-          mountPath: /app/script
-          readOnly: true
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi
+        - containerPort: 8000
+          name: metrics
+        env:
+        - name: HA_URL
+          value: "http://homeassistant.homeassistant.svc.cluster.local:8123"
+        - name: HA_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: wiz-exporter-secret  # Reuse the same HA token
+              key: ha_token
         command: ["/bin/bash", "-c"]
         args:
-        - |
-          set -euo pipefail
-          apt-get update
-          apt-get install -y --no-install-recommends nut-client python3-pip
-          python3 -m pip install --no-cache-dir prometheus-client
-          echo "Starting UPS exporter..."
-          python3 /app/script/exporter.py
+          - |
+            pip install prometheus_client requests
+            python /app/ups_exporter.py
+        volumeMounts:
+        - name: script
+          mountPath: /app
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
       volumes:
       - name: script
         configMap:
           name: ups-exporter-script
-          items:
-          - key: exporter.py
-            path: exporter.py
