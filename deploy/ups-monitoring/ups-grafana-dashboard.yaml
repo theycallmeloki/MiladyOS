@@ -105,7 +105,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_status_online",
+              "expr": "ups_status{ups_name=\"microtek\"}",
               "instant": false,
               "range": true,
               "refId": "A"
@@ -188,7 +188,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_status_on_battery",
+              "expr": "1 - ups_status{ups_name=\"microtek\"}",
               "instant": false,
               "range": true,
               "refId": "A"
@@ -264,7 +264,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_battery_charge_percent",
+              "expr": "ups_battery_charge{ups_name=\"microtek\"}",
               "instant": false,
               "range": true,
               "refId": "A"
@@ -340,7 +340,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_load_percent",
+              "expr": "ups_load{ups_name=\"microtek\"}",
               "instant": false,
               "range": true,
               "refId": "A"
@@ -348,81 +348,6 @@ data:
           ],
           "title": "UPS Load",
           "type": "gauge"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "description": "Battery Runtime",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 300
-                  },
-                  {
-                    "color": "yellow",
-                    "value": 600
-                  },
-                  {
-                    "color": "green",
-                    "value": 900
-                  }
-                ]
-              },
-              "unit": "s"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 5,
-            "w": 6,
-            "x": 18,
-            "y": 0
-          },
-          "id": 5,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "area",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.0.3",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "ups_battery_runtime_seconds",
-              "instant": false,
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "Estimated Runtime",
-          "type": "stat"
         },
         {
           "datasource": {
@@ -511,7 +436,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_input_voltage_volts",
+              "expr": "ups_input_voltage{ups_name=\"microtek\"}",
               "instant": false,
               "legendFormat": "Input Voltage",
               "range": true,
@@ -523,23 +448,11 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_output_voltage_volts",
+              "expr": "ups_output_voltage{ups_name=\"microtek\"}",
               "instant": false,
               "legendFormat": "Output Voltage",
               "range": true,
               "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "ups_battery_voltage_volts",
-              "instant": false,
-              "legendFormat": "Battery Voltage",
-              "range": true,
-              "refId": "C"
             }
           ],
           "title": "Voltage",
@@ -689,7 +602,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_battery_charge_percent",
+              "expr": "ups_battery_charge{ups_name=\"microtek\"}",
               "instant": false,
               "legendFormat": "Battery Charge",
               "range": true,
@@ -701,23 +614,11 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "ups_load_percent",
+              "expr": "ups_load{ups_name=\"microtek\"}",
               "instant": false,
               "legendFormat": "UPS Load",
               "range": true,
               "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "editorMode": "code",
-              "expr": "ups_temperature_celsius",
-              "instant": false,
-              "legendFormat": "Temperature",
-              "range": true,
-              "refId": "C"
             }
           ],
           "title": "UPS System Metrics",
