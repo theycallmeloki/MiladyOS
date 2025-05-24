@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: miladyos-health-exporter
+  namespace: default
+  labels:
+    app: miladyos-health-exporter
+    release: monitoring-stack
+spec:
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      app: miladyos-health-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics

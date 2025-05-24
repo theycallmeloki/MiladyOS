@@ -1,0 +1,375 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: miladyos-health-exporter-script
+  namespace: default
+data:
+  health_exporter.py: |
+    #!/usr/bin/env python3
+    import os
+    import time
+    import requests
+    import logging
+    from prometheus_client import start_http_server, Gauge, Info, Counter
+    from kubernetes import client, config
+    import json
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+    
+    # Load Kubernetes config
+    try:
+        config.load_incluster_config()
+    except:
+        config.load_kube_config()
+    
+    v1 = client.CoreV1Api()
+    apps_v1 = client.AppsV1Api()
+    
+    # Prometheus metrics
+    miladyos_health_info = Info('miladyos_health_info', 'MiladyOS health information', ['layer'])
+    miladyos_layer_status = Gauge('miladyos_layer_status', 'Layer health status (1=healthy, 0=unhealthy)', ['layer', 'component'])
+    miladyos_container_status = Gauge('miladyos_container_status', 'Container status (1=running, 0=not running)', ['container', 'pod'])
+    miladyos_service_response_time = Gauge('miladyos_service_response_time_seconds', 'Service response time', ['service', 'endpoint'])
+    miladyos_pvc_status = Gauge('miladyos_pvc_status', 'PVC status (1=bound, 0=not bound)', ['pvc'])
+    miladyos_bluegreen_status = Gauge('miladyos_bluegreen_status', 'BlueGreen deployment status', ['color'])
+    
+    def check_infrastructure_layer():
+        """Check Kubernetes infrastructure health"""
+        try:
+            # Check nodes
+            nodes = v1.list_node()
+            ready_nodes = sum(1 for node in nodes.items 
+                            if any(condition.type == "Ready" and condition.status == "True" 
+                                  for condition in node.status.conditions))
+            total_nodes = len(nodes.items)
+            
+            miladyos_layer_status.labels(layer="infrastructure", component="nodes").set(
+                1 if ready_nodes > 0 else 0
+            )
+            
+            # Check storage classes
+            storage_v1 = client.StorageV1Api()
+            storage_classes = storage_v1.list_storage_class()
+            longhorn_available = any(sc.metadata.name == "longhorn" for sc in storage_classes.items)
+            
+            miladyos_layer_status.labels(layer="infrastructure", component="storage").set(
+                1 if longhorn_available else 0
+            )
+            
+            logger.info(f"Infrastructure: {ready_nodes}/{total_nodes} nodes ready, Longhorn: {longhorn_available}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Infrastructure check failed: {e}")
+            miladyos_layer_status.labels(layer="infrastructure", component="nodes").set(0)
+            miladyos_layer_status.labels(layer="infrastructure", component="storage").set(0)
+            return False
+    
+    def check_platform_layer():
+        """Check platform services (ArgoCD, Metacontroller)"""
+        try:
+            # Check ArgoCD
+            argocd_pods = v1.list_namespaced_pod(
+                namespace="argocd",
+                label_selector="app.kubernetes.io/part-of=argocd"
+            )
+            argocd_healthy = sum(1 for pod in argocd_pods.items 
+                               if pod.status.phase == "Running")
+            
+            miladyos_layer_status.labels(layer="platform", component="argocd").set(
+                1 if argocd_healthy > 0 else 0
+            )
+            
+            # Check Metacontroller
+            meta_pods = v1.list_namespaced_pod(
+                namespace="metacontroller",
+                label_selector="app=metacontroller"
+            )
+            meta_healthy = sum(1 for pod in meta_pods.items 
+                             if pod.status.phase == "Running")
+            
+            miladyos_layer_status.labels(layer="platform", component="metacontroller").set(
+                1 if meta_healthy > 0 else 0
+            )
+            
+            logger.info(f"Platform: ArgoCD pods: {argocd_healthy}, Metacontroller pods: {meta_healthy}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Platform check failed: {e}")
+            return False
+    
+    def check_storage_layer():
+        """Check MiladyOS PVCs"""
+        try:
+            pvc_names = [
+                "miladyos-home-pvc",
+                "docker-storage-pvc", 
+                "registry-data-pvc",
+                "miladyos-kube-config-pvc",
+                "miladyos-pachyderm-config-pvc"
+            ]
+            
+            for pvc_name in pvc_names:
+                try:
+                    pvc = v1.read_namespaced_persistent_volume_claim(
+                        name=pvc_name,
+                        namespace="default"
+                    )
+                    is_bound = pvc.status.phase == "Bound"
+                    miladyos_pvc_status.labels(pvc=pvc_name).set(1 if is_bound else 0)
+                except:
+                    miladyos_pvc_status.labels(pvc=pvc_name).set(0)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Storage check failed: {e}")
+            return False
+    
+    def check_application_layer():
+        """Check MiladyOS BlueGreen deployment and containers"""
+        try:
+            # Check BlueGreen deployment
+            custom_api = client.CustomObjectsApi()
+            try:
+                bgd = custom_api.get_namespaced_custom_object(
+                    group="ctl.enisoc.com",
+                    version="v1",
+                    namespace="default",
+                    plural="bluegreendeployments",
+                    name="miladyos"
+                )
+                
+                # Check active/inactive status
+                active_replicas = bgd.get("status", {}).get("active", {}).get("replicas", 0)
+                miladyos_bluegreen_status.labels(color="active").set(active_replicas)
+                
+                inactive_replicas = bgd.get("status", {}).get("inactive", {}).get("replicas", 0)
+                miladyos_bluegreen_status.labels(color="inactive").set(inactive_replicas)
+                
+            except:
+                miladyos_bluegreen_status.labels(color="active").set(0)
+                miladyos_bluegreen_status.labels(color="inactive").set(0)
+            
+            # Check MiladyOS pods and containers
+            pods = v1.list_namespaced_pod(
+                namespace="default",
+                label_selector="app=miladyos"
+            )
+            
+            for pod in pods.items:
+                pod_name = pod.metadata.name
+                if pod.status.container_statuses:
+                    for container in pod.status.container_statuses:
+                        container_name = container.name
+                        is_running = container.state.running is not None
+                        miladyos_container_status.labels(
+                            container=container_name,
+                            pod=pod_name
+                        ).set(1 if is_running else 0)
+            
+            logger.info(f"Application: Active replicas: {active_replicas}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Application check failed: {e}")
+            return False
+    
+    def check_service_layer():
+        """Check MiladyOS service endpoints"""
+        try:
+            service_endpoints = [
+                {"service": "web", "url": "http://miladyos:8080/login", "port": 8080},
+                {"service": "registry", "url": "http://miladyos:5000/v2/", "port": 5000}
+            ]
+            
+            for endpoint in service_endpoints:
+                try:
+                    start_time = time.time()
+                    response = requests.get(
+                        endpoint["url"], 
+                        timeout=5,
+                        allow_redirects=True
+                    )
+                    response_time = time.time() - start_time
+                    
+                    miladyos_service_response_time.labels(
+                        service=endpoint["service"],
+                        endpoint=endpoint["url"]
+                    ).set(response_time)
+                    
+                    miladyos_layer_status.labels(
+                        layer="service", 
+                        component=endpoint["service"]
+                    ).set(1 if response.status_code < 500 else 0)
+                    
+                except Exception as e:
+                    miladyos_service_response_time.labels(
+                        service=endpoint["service"],
+                        endpoint=endpoint["url"]
+                    ).set(999)
+                    miladyos_layer_status.labels(
+                        layer="service", 
+                        component=endpoint["service"]
+                    ).set(0)
+                    logger.warning(f"Service {endpoint['service']} check failed: {e}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Service check failed: {e}")
+            return False
+    
+    def update_health_metrics():
+        """Update all health metrics"""
+        logger.info("Starting health check cycle")
+        
+        check_infrastructure_layer()
+        check_platform_layer() 
+        check_storage_layer()
+        check_application_layer()
+        check_service_layer()
+        
+        logger.info("Health check cycle completed")
+    
+    def main():
+        # Start Prometheus metrics server
+        start_http_server(8080)
+        logger.info("Started MiladyOS health exporter on port 8080")
+        
+        # Main loop
+        while True:
+            try:
+                update_health_metrics()
+            except Exception as e:
+                logger.error(f"Error updating health metrics: {e}")
+            
+            time.sleep(30)  # Update every 30 seconds
+    
+    if __name__ == '__main__':
+        main()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: miladyos-health-exporter
+  namespace: default
+  labels:
+    app: miladyos-health-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: miladyos-health-exporter
+  template:
+    metadata:
+      labels:
+        app: miladyos-health-exporter
+    spec:
+      serviceAccountName: miladyos-health-exporter
+      containers:
+      - name: health-exporter
+        image: python:3.11-slim
+        command: ["python3", "/app/health_exporter.py"]
+        ports:
+        - containerPort: 8080
+          name: metrics
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        volumeMounts:
+        - name: script
+          mountPath: /app
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+      initContainers:
+      - name: install-deps
+        image: python:3.11-slim
+        command: ["sh", "-c", "pip install prometheus_client requests kubernetes && cp /config/health_exporter.py /app/"]
+        volumeMounts:
+        - name: script
+          mountPath: /app
+        - name: config
+          mountPath: /config
+      volumes:
+      - name: script
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: miladyos-health-exporter-script
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: miladyos-health-exporter
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: miladyos-health-exporter
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "persistentvolumeclaims", "services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["ctl.enisoc.com"]
+  resources: ["bluegreendeployments"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: miladyos-health-exporter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: miladyos-health-exporter
+subjects:
+- kind: ServiceAccount
+  name: miladyos-health-exporter
+  namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: miladyos-health-exporter
+  namespace: default
+  labels:
+    app: miladyos-health-exporter
+spec:
+  selector:
+    app: miladyos-health-exporter
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
