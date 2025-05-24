@@ -88,7 +88,7 @@ data:
             # Check Metacontroller
             meta_pods = v1.list_namespaced_pod(
                 namespace="metacontroller",
-                label_selector="app=metacontroller"
+                label_selector="app.kubernetes.io/name=metacontroller"
             )
             meta_healthy = sum(1 for pod in meta_pods.items 
                              if pod.status.phase == "Running")
