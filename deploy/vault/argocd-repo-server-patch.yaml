@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+      - name: argocd-repo-server
+        envFrom:
+        - configMapRef:
+            name: argocd-vault-plugin-config
+      - name: avp
+        command: [/var/run/argocd/argocd-cmp-server]
+        image: registry.access.redhat.com/ubi8
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+        volumeMounts:
+        - mountPath: /var/run/argocd
+          name: var-files
+        - mountPath: /home/argocd/cmp-server/plugins
+          name: plugins
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+          subPath: avp.yaml
+          name: cmp-plugin
+        envFrom:
+        - configMapRef:
+            name: argocd-vault-plugin-config
+      volumes:
+      - configMap:
+          name: cmp-plugin
+        name: cmp-plugin
+      initContainers:
+      - name: download-tools
+        image: registry.access.redhat.com/ubi8
+        env:
+        - name: AVP_VERSION
+          value: 1.16.1
+        command: [sh, -c]
+        args:
+        - >-
+          curl -L https://github.com/argoproj-labs/argocd-vault-plugin/releases/download/v$(AVP_VERSION)/argocd-vault-plugin_$(AVP_VERSION)_linux_amd64 -o argocd-vault-plugin &&
+          chmod +x argocd-vault-plugin &&
+          mv argocd-vault-plugin /custom-tools/
+        volumeMounts:
+        - mountPath: /custom-tools
+          name: custom-tools
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cmp-plugin
+  namespace: argocd
+data:
+  avp.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: argocd-vault-plugin
+    spec:
+      allowConcurrency: true
+      discover:
+        find:
+          command:
+          - sh
+          - "-c"
+          - "find . -name '*.yaml' | xargs -I {} grep \"<path:\" {} | grep \":>\" | grep -v grep"
+      generate:
+        command:
+        - sh
+        - "-c"
+        - "/custom-tools/argocd-vault-plugin generate ."
+      lockRepo: false
