@@ -102,3 +102,29 @@ spec:
   - hosts:
     - radbrocorp.miladyos.net
     secretName: homeassistant-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: miladyos-gateway-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: gateway.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: miladyos
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - gateway.miladyos.net
+    secretName: miladyos-gateway-tls
