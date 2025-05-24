@@ -1,0 +1,41 @@
+# Longhorn Values - Generous Default Storage Configuration
+
+# Default settings - generous resource allocation
+defaultSettings:
+  # Use all 3 worker nodes for high availability
+  defaultReplicaCount: 3
+  # Allow generous over-provisioning for flexible storage
+  storageOverProvisioningPercentage: 200
+  # Only reserve 5% for system (generous allocation)
+  storageMinimalAvailablePercentage: 5
+  # Default data path for Talos
+  defaultDataPath: "/var/lib/longhorn"
+
+# Make this the default StorageClass so all PVCs use it automatically
+storageClass:
+  create: true
+  name: "longhorn"
+  isDefaultClass: true
+  allowVolumeExpansion: true
+  reclaimPolicy: "Delete"
+  volumeBindingMode: "WaitForFirstConsumer"
+  parameters:
+    numberOfReplicas: "3"
+    fsType: "ext4"
+
+# Persistence settings
+persistence:
+  defaultClass: true
+  defaultClassReplicaCount: 3
+
+# Node scheduling - use our existing worker node labels
+nodeSelector:
+  longhorn.io/node: "true"
+
+# UI service configuration
+service:
+  ui:
+    type: ClusterIP
+
+# Disable PSP (deprecated in modern Kubernetes)
+enablePSP: false
