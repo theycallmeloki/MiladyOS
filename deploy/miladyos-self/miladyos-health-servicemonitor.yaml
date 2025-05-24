@@ -2,10 +2,10 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: miladyos-health-exporter
-  namespace: default
+  namespace: monitoring
   labels:
     app: miladyos-health-exporter
-    release: monitoring-stack
+    release: prometheus
 spec:
   namespaceSelector:
     matchNames:
