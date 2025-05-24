@@ -9,7 +9,6 @@ spec:
   resources:
     requests:
       storage: 50Gi
-  storageClassName: longhorn-single-replica
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -22,7 +21,6 @@ spec:
   resources:
     requests:
       storage: 20Gi
-  storageClassName: longhorn-single-replica
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -35,7 +33,6 @@ spec:
   resources:
     requests:
       storage: 50Mi
-  storageClassName: longhorn-single-replica
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -48,7 +45,6 @@ spec:
   resources:
     requests:
       storage: 50Mi
-  storageClassName: longhorn-single-replica
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
