@@ -1,14 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: tuya-monitoring
+  name: wiz
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: HEAD
-    path: deploy/tuya-monitoring
+    path: deploy/wiz-monitoring
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
