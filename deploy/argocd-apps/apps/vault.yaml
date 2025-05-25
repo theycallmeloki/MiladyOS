@@ -5,53 +5,58 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    repoURL: https://helm.releases.hashicorp.com
-    targetRevision: 0.25.0
-    chart: vault
-    helm:
-      values: |
-        server:
-          ha:
-            enabled: true
-            replicas: 3
-            raft:
+  sources:
+    - repoURL: https://helm.releases.hashicorp.com
+      targetRevision: 0.25.0
+      chart: vault
+      helm:
+        values: |
+          server:
+            ha:
               enabled: true
-              setNodeId: true
-          extraSecretEnvironmentVars:
-            - envName: MONGODB_CONNECTION_STRING
-              secretName: vault-mongodb-credentials
-              secretKey: connection-string
-            - envName: MONGODB_DATABASE
-              secretName: vault-mongodb-credentials
-              secretKey: database
-          config: |
-                ui = true
-                listener "tcp" {
-                  tls_disable = 1
-                  address = "[::]:8200"
-                  cluster_address = "[::]:8201"
-                }
-                storage "mongodb" {
-                  connection_url = "${MONGODB_CONNECTION_STRING}"
-                  database = "${MONGODB_DATABASE}"
-                  collection = "vault-data"
-                }
-                service_registration "kubernetes" {}
-          dataStorage:
+              replicas: 3
+              raft:
+                enabled: true
+                setNodeId: true
+            extraSecretEnvironmentVars:
+              - envName: MONGODB_CONNECTION_STRING
+                secretName: vault-mongodb-credentials
+                secretKey: connection-string
+              - envName: MONGODB_DATABASE
+                secretName: vault-mongodb-credentials
+                secretKey: database
+            config: |
+                  ui = true
+                  listener "tcp" {
+                    tls_disable = 1
+                    address = "[::]:8200"
+                    cluster_address = "[::]:8201"
+                  }
+                  storage "mongodb" {
+                    connection_url = "${MONGODB_CONNECTION_STRING}"
+                    database = "${MONGODB_DATABASE}"
+                    collection = "vault-data"
+                  }
+                  service_registration "kubernetes" {}
+            dataStorage:
+              enabled: true
+              size: 10Gi
+              storageClass: longhorn
+            resources:
+              requests:
+                memory: 256Mi
+                cpu: 250m
+              limits:
+                memory: 512Mi
+                cpu: 500m
+          ui:
             enabled: true
-            size: 10Gi
-            storageClass: longhorn
-          resources:
-            requests:
-              memory: 256Mi
-              cpu: 250m
-            limits:
-              memory: 512Mi
-              cpu: 500m
-        ui:
-          enabled: true
-          serviceType: ClusterIP
+            serviceType: ClusterIP
+    - repoURL: https://github.com/theycallmeloki/MiladyOS.git
+      targetRevision: HEAD
+      path: deploy/vault
+      directory:
+        include: "vault-unsealer-config.yaml"
   destination:
     server: https://kubernetes.default.svc
     namespace: vault

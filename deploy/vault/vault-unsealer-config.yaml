@@ -1,0 +1,13 @@
+apiVersion: unsealer.amoyel.fr/v1alpha1
+kind: Unseal
+metadata:
+  name: vault-unsealer
+  namespace: vault
+spec:
+  vaultNodes:
+    - http://vault-0.vault-internal.vault.svc.cluster.local:8200
+    - http://vault-1.vault-internal.vault.svc.cluster.local:8200
+    - http://vault-2.vault-internal.vault.svc.cluster.local:8200
+  thresholdKeysSecret: vault-threshold-keys
+  tlsSkipVerify: true  # Set to true since your Vault uses HTTP not HTTPS
+  retryCount: 5
