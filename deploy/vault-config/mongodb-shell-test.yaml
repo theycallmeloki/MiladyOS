@@ -1,0 +1,142 @@
+# MongoDB Shell Test Pod with Vault Integration
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-sa
+  namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mongo-shell-test
+  namespace: default
+  annotations:
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "mongodb-app"
+    vault.hashicorp.com/agent-inject-secret-mongodb: "mongodb/data/atlas-connection"
+    vault.hashicorp.com/agent-inject-template-mongodb: |
+      {{- with secret "mongodb/data/atlas-connection" -}}
+      export MONGODB_URI="{{ .Data.data.uri }}"
+      export MONGODB_DATABASE="{{ .Data.data.database }}"
+      export MONGODB_USERNAME="{{ .Data.data.username }}"
+      export MONGODB_PASSWORD="{{ .Data.data.password }}"
+      echo "MongoDB URI loaded from Vault!"
+      echo "Database: {{ .Data.data.database }}"
+      echo "Username: {{ .Data.data.username }}"
+      {{- end }}
+spec:
+  serviceAccountName: mongodb-sa
+  containers:
+  - name: mongo-shell
+    image: mongo:7.0
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "Waiting for Vault secrets..."
+        while [ ! -f /vault/secrets/mongodb ]; do sleep 1; done
+        
+        echo "Loading MongoDB credentials from Vault..."
+        source /vault/secrets/mongodb
+        
+        echo ""
+        echo "==================================="
+        echo "MongoDB Atlas Connection Test"
+        echo "==================================="
+        echo ""
+        
+        # Test basic connection
+        echo "1. Testing connection to MongoDB Atlas..."
+        mongosh "$MONGODB_URI" --eval "db.adminCommand('ping')" && echo "✅ Connection successful!" || echo "❌ Connection failed!"
+        
+        echo ""
+        echo "2. Listing databases..."
+        mongosh "$MONGODB_URI" --eval "db.adminCommand('listDatabases').databases.forEach(db => print('  - ' + db.name))"
+        
+        echo ""
+        echo "3. Creating test document in miladyos-production database..."
+        mongosh "$MONGODB_URI/miladyos-production" --eval "
+          db.vault_test.insertOne({
+            message: 'Hello from Kubernetes + Vault!',
+            timestamp: new Date(),
+            pod: '$HOSTNAME',
+            method: 'vault-injector'
+          });
+          print('✅ Document inserted!');
+        "
+        
+        echo ""
+        echo "4. Reading back the test document..."
+        mongosh "$MONGODB_URI/miladyos-production" --eval "
+          const doc = db.vault_test.findOne({pod: '$HOSTNAME'});
+          printjson(doc);
+        "
+        
+        echo ""
+        echo "5. Interactive MongoDB Shell"
+        echo "==================================="
+        echo "You can now use MongoDB shell commands."
+        echo "Current database: miladyos-production"
+        echo "Type 'exit' to quit"
+        echo ""
+        
+        # Start interactive shell
+        mongosh "$MONGODB_URI/miladyos-production"
+    stdin: true
+    tty: true
+---
+# Alternative: Job that runs automated tests
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongo-test-job
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "mongodb-app"
+        vault.hashicorp.com/agent-inject-secret-mongodb: "mongodb/data/atlas-connection"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+    spec:
+      serviceAccountName: mongodb-sa
+      restartPolicy: Never
+      containers:
+      - name: mongo-test
+        image: mongo:7.0
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            # Load credentials
+            source /vault/secrets/mongodb
+            
+            # Run tests
+            echo "Running MongoDB Atlas tests..."
+            
+            # Create test data
+            mongosh "$MONGODB_URI/miladyos-production" --eval "
+              // Clean up old test data
+              db.performance_test.drop();
+              
+              // Insert test documents
+              const docs = [];
+              for(let i = 0; i < 100; i++) {
+                docs.push({
+                  index: i,
+                  timestamp: new Date(),
+                  data: 'Test data from Vault integration',
+                  random: Math.random()
+                });
+              }
+              db.performance_test.insertMany(docs);
+              
+              // Run aggregation
+              const result = db.performance_test.aggregate([
+                { \$group: { _id: null, avgRandom: { \$avg: '\$random' }, count: { \$sum: 1 } } }
+              ]).toArray();
+              
+              print('Test Results:');
+              print('- Documents inserted: ' + result[0].count);
+              print('- Average random value: ' + result[0].avgRandom);
+              print('✅ All tests passed!');
+            "

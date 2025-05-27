@@ -1,0 +1,62 @@
+# This configures Vault to allow pods to authenticate and read MongoDB secrets
+# Run these commands in Vault UI under "Access" -> "Kubernetes" -> "Configure"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-setup-commands
+  namespace: vault
+data:
+  setup.sh: |
+    #!/bin/bash
+    # Commands to run in Vault UI or via CLI
+    
+    # 1. Enable Kubernetes auth (if not already done)
+    vault auth enable kubernetes
+    
+    # 2. Configure Kubernetes auth to talk to the cluster
+    vault write auth/kubernetes/config \
+      kubernetes_host=https://kubernetes.default.svc:443 \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    
+    # 3. Create a policy for MongoDB access
+    vault policy write mongodb-reader - <<EOF
+    path "mongodb/data/atlas-connection" {
+      capabilities = ["read"]
+    }
+    EOF
+    
+    # 4. Create a role that service accounts can use
+    vault write auth/kubernetes/role/mongodb-app \
+      bound_service_account_names=mongodb-sa \
+      bound_service_account_namespaces=default \
+      policies=mongodb-reader \
+      ttl=1h
+---
+# ServiceAccount that pods will use
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-sa
+  namespace: default
+---
+# Example pod that uses Vault to get MongoDB credentials
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mongodb-test
+  namespace: default
+  annotations:
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "mongodb-app"
+    vault.hashicorp.com/agent-inject-secret-db-creds: "mongodb/data/atlas-connection"
+    vault.hashicorp.com/agent-inject-template-db-creds: |
+      {{- with secret "mongodb/data/atlas-connection" -}}
+      MONGODB_URI={{ .Data.data.uri }}
+      MONGODB_DATABASE={{ .Data.data.database }}
+      {{- end }}
+spec:
+  serviceAccountName: mongodb-sa
+  containers:
+  - name: app
+    image: busybox
+    command: ['sh', '-c', 'cat /vault/secrets/db-creds && sleep 3600']

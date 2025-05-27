@@ -1,0 +1,52 @@
+# ServiceAccount for Vault authentication
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-auth
+  namespace: vault
+---
+# ClusterRoleBinding for TokenReview API
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: vault-auth
+  namespace: vault
+---
+# ServiceAccount for MongoDB Atlas operator to use
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-atlas-vault
+  namespace: default
+---
+# Role to read secrets from Vault
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mongodb-atlas-vault-reader
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mongodb-atlas-vault-reader
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mongodb-atlas-vault-reader
+subjects:
+- kind: ServiceAccount
+  name: mongodb-atlas-vault
+  namespace: default
