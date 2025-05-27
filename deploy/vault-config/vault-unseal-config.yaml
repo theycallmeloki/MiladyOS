@@ -26,9 +26,9 @@ metadata:
   namespace: vault
 spec:
   vaultNodes:
-    - http://vault-0.vault-internal:8200
-    - http://vault-1.vault-internal:8200
-    - http://vault-2.vault-internal:8200
+    - http://vault-0.vault-internal.vault.svc.cluster.local:8200
+    - http://vault-1.vault-internal.vault.svc.cluster.local:8200
+    - http://vault-2.vault-internal.vault.svc.cluster.local:8200
   thresholdKeysSecret: vault-threshold-keys
   tlsSkipVerify: true  # Set to false if using proper TLS
   retryCount: 3
