@@ -1,5 +1,0 @@
-# Vault sensitive files
-vault-init-keys.json
-*.key
-*.pem
-*.crt
