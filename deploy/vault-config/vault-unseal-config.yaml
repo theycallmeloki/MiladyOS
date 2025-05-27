@@ -1,0 +1,34 @@
+# First, you need to initialize Vault and get the unseal keys
+# Then create a secret with those keys and seal it with kubeseal
+# 
+# Step 1: Wait for Vault pods to be ready
+# kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault -n vault --timeout=300s
+#
+# Step 2: Initialize Vault (only do this once!)
+# kubectl exec -n vault vault-0 -- vault operator init -key-shares=5 -key-threshold=3
+#
+# Step 3: Create a secret with the unseal keys (replace with your actual keys)
+# kubectl create secret generic vault-threshold-keys \
+#   --from-literal=key1=YOUR_UNSEAL_KEY_1 \
+#   --from-literal=key2=YOUR_UNSEAL_KEY_2 \
+#   --from-literal=key3=YOUR_UNSEAL_KEY_3 \
+#   --dry-run=client -o yaml -n vault > vault-keys-secret.yaml
+#
+# Step 4: Seal the secret
+# kubeseal --format yaml < vault-keys-secret.yaml > vault-keys-sealedsecret.yaml
+#
+# Step 5: Apply this Unseal CR after the SealedSecret is applied
+---
+apiVersion: unsealer.amoyel.fr/v1alpha1
+kind: Unseal
+metadata:
+  name: vault-unseal
+  namespace: vault
+spec:
+  vaultNodes:
+    - http://vault-0.vault-internal:8200
+    - http://vault-1.vault-internal:8200
+    - http://vault-2.vault-internal:8200
+  thresholdKeysSecret: vault-threshold-keys
+  tlsSkipVerify: true  # Set to false if using proper TLS
+  retryCount: 3
