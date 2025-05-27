@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    # Vault Helm Chart
+    - repoURL: https://helm.releases.hashicorp.com
+      chart: vault
+      targetRevision: 0.28.1
+      helm:
+        values: |
+          server:
+            ha:
+              enabled: true
+              replicas: 3
+              raft:
+                enabled: true
+                setNodeId: true
+                config: |
+                  ui = true
+                  listener "tcp" {
+                    tls_disable = 1
+                    address = "[::]:8200"
+                    cluster_address = "[::]:8201"
+                  }
+                  storage "raft" {
+                    path = "/vault/data"
+                  }
+                  service_registration "kubernetes" {}
+            dataStorage:
+              enabled: true
+              size: 10Gi
+              storageClass: longhorn
+            auditStorage:
+              enabled: true
+              size: 10Gi
+              storageClass: longhorn
+            ingress:
+              enabled: false  # We'll use cloudflare-ingress
+          ui:
+            enabled: true
+    # Vault Unsealer Operator
+    - repoURL: https://github.com/aamoyel/vault-unsealer-operator
+      targetRevision: main
+      path: deploy
+    # Vault configuration (unsealer config, sealed secrets, etc)
+    - repoURL: https://github.com/theycallmeloki/MiladyOS
+      targetRevision: main
+      path: deploy/vault-config
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
