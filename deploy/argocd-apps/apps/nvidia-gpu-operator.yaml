@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nvidia-gpu-operator
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://helm.ngc.nvidia.com/nvidia
+    targetRevision: v25.3.0
+    chart: gpu-operator
+    helm:
+      values: |
+        # Enable Node Feature Discovery for auto-discovery
+        nfd:
+          enabled: true
+        
+        # Let GPU Operator auto-bootstrap everything
+        operator:
+          defaultRuntime: containerd
+        
+        # Enable GPU Feature Discovery for auto-labeling
+        gfd:
+          enabled: true
+        
+        # Auto-configure device plugin
+        devicePlugin:
+          enabled: true
+        
+        # Enable toolkit for container runtime integration
+        toolkit:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gpu-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
