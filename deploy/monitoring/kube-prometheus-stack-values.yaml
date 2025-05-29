@@ -32,7 +32,7 @@ grafana:
 ## Prometheus configuration
 prometheus:
   prometheusSpec:
-    retention: 30d
+    retention: 365d
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -40,7 +40,7 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: 10Gi
+              storage: 150Gi
     # ServiceMonitor selector to find all monitors
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
