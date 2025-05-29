@@ -9,8 +9,6 @@ spec:
     repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: HEAD
     path: deploy/gotty-dev
-    directory:
-      include: gotty-dev-pod.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: gotty-dev
