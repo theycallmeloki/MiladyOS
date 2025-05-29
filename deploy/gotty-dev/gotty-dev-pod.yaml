@@ -1,0 +1,335 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gotty-dev
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gotty-dev-storage
+  namespace: gotty-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gotty-session-logs
+  namespace: gotty-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gotty-config
+  namespace: gotty-dev
+data:
+  .gotty: |
+    enable_tls = false
+    port = "8080"
+    permit_write = true
+    permit_arguments = true
+    title_format = "MiladyOS Dev Terminal"
+    enable_reconnect = true
+    reconnect_time = 10
+    max_connection = 0
+    once = false
+    timeout = 0
+    width = 120
+    height = 40
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logger-script
+  namespace: gotty-dev
+data:
+  logger.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Create log directory structure
+    LOG_DIR="/logs/sessions"
+    mkdir -p "$LOG_DIR"
+    
+    # Monitor gotty container for tty sessions
+    while true; do
+      # Get the gotty container PID
+      GOTTY_PID=$(pgrep -f "gotty" || true)
+      
+      if [ -n "$GOTTY_PID" ]; then
+        # Find all pts devices being used
+        for pts in /proc/$GOTTY_PID/fd/*; do
+          if readlink "$pts" 2>/dev/null | grep -q "pts"; then
+            PTS_NUM=$(readlink "$pts" | sed 's/.*pts\///')
+            SESSION_LOG="$LOG_DIR/session_$(date +%Y%m%d_%H%M%S)_pts${PTS_NUM}.log"
+            
+            # Start logging if not already logging this pts
+            if ! pgrep -f "script.*pts${PTS_NUM}" > /dev/null; then
+              echo "[$(date)] Starting logging for pts/$PTS_NUM to $SESSION_LOG"
+              script -f -q "$SESSION_LOG" -c "cat /dev/pts/$PTS_NUM" &
+            fi
+          fi
+        done
+      fi
+      
+      # Compress old logs
+      find "$LOG_DIR" -name "*.log" -mtime +1 -exec gzip {} \;
+      
+      sleep 5
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gotty-dev
+  namespace: gotty-dev
+  labels:
+    app: gotty-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gotty-dev
+  template:
+    metadata:
+      labels:
+        app: gotty-dev
+    spec:
+      shareProcessNamespace: true
+      volumes:
+      - name: dev-storage
+        persistentVolumeClaim:
+          claimName: gotty-dev-storage
+      - name: session-logs
+        persistentVolumeClaim:
+          claimName: gotty-session-logs
+      - name: gotty-config
+        configMap:
+          name: gotty-config
+      - name: logger-script
+        configMap:
+          name: logger-script
+          defaultMode: 0755
+      - name: shared-data
+        emptyDir: {}
+      
+      containers:
+      # Main gotty container with dev tools
+      - name: gotty
+        image: sorenisanerd/gotty:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # Install dev tools
+          apk add --no-cache \
+            bash \
+            tmux \
+            vim \
+            git \
+            curl \
+            wget \
+            htop \
+            ncurses \
+            openssh-client \
+            jq \
+            python3 \
+            py3-pip \
+            nodejs \
+            npm \
+            docker-cli \
+            kubectl \
+            helm \
+            make \
+            gcc \
+            musl-dev \
+            linux-headers
+          
+          # Set up tmux config
+          cat > /root/.tmux.conf << 'EOF'
+          set -g default-terminal "screen-256color"
+          set -g history-limit 10000
+          set -g mouse on
+          set -g base-index 1
+          setw -g pane-base-index 1
+          
+          # Status bar
+          set -g status-style bg=colour235,fg=colour136
+          set -g status-left '#[fg=colour235,bg=colour252,bold] #S #[fg=colour252,bg=colour235,nobold]'
+          set -g status-right '#[fg=colour235,bg=colour252,bold] %Y-%m-%d %H:%M '
+          
+          # Logging all panes
+          bind-key H pipe-pane -o "cat >> /shared/tmux-#W.log" \; display-message "Logging to /shared/tmux-#W.log"
+          bind-key h pipe-pane \; display-message "Stopped logging to /shared/tmux-#W.log"
+          EOF
+          
+          # Set up bash with session recording
+          cat > /root/.bashrc << 'EOF'
+          export PS1="\[\033[1;32m\][\u@gotty-dev \W]\$\[\033[0m\] "
+          export HISTFILE=/workspace/.bash_history
+          export HISTSIZE=10000
+          export HISTFILESIZE=20000
+          shopt -s histappend
+          
+          # Start tmux session with logging
+          if [ -z "$TMUX" ]; then
+            tmux new-session -d -s main 2>/dev/null || true
+            # Enable automatic logging for new panes
+            tmux send-keys -t main "tmux pipe-pane -o 'cat >> /shared/tmux-main.log'" C-m
+          fi
+          
+          alias ll='ls -la'
+          alias k='kubectl'
+          alias d='docker'
+          EOF
+          
+          # Copy config and start gotty
+          cp /config/.gotty /root/.gotty
+          cd /workspace
+          
+          # Install claude-code globally
+          npm install -g @anthropic-ai/claude-code || true
+          
+          # Start gotty with bash instead of tmux attach
+          exec /usr/bin/gotty --config /root/.gotty /bin/bash
+        
+        ports:
+        - containerPort: 8080
+          name: http
+        
+        volumeMounts:
+        - name: dev-storage
+          mountPath: /workspace
+        - name: gotty-config
+          mountPath: /config
+        - name: shared-data
+          mountPath: /shared
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+      
+      # Sidecar logger container
+      - name: session-logger
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # Install required tools
+          apk add --no-cache bash procps util-linux coreutils gzip
+          
+          # Copy and run logger script
+          cp /scripts/logger.sh /logger.sh
+          chmod +x /logger.sh
+          
+          # Alternative logging approach using shared volume
+          while true; do
+            # Monitor shared volume for tmux logs
+            if [ -d /shared ]; then
+              for logfile in /shared/tmux-*.log; do
+                if [ -f "$logfile" ]; then
+                  basename=$(basename "$logfile")
+                  dest="/logs/sessions/${basename%.log}_$(date +%Y%m%d_%H%M%S).log"
+                  
+                  # Rotate log if it gets too big (>10MB)
+                  if [ $(stat -c%s "$logfile" 2>/dev/null || echo 0) -gt 10485760 ]; then
+                    mv "$logfile" "$dest"
+                    gzip "$dest"
+                    touch "$logfile"
+                    echo "[$(date)] Rotated $logfile to $dest.gz"
+                  fi
+                fi
+              done
+            fi
+            
+            # Also capture any script/typescript files
+            find /shared -name "typescript*" -o -name "*.script" 2>/dev/null | while read scriptfile; do
+              if [ -f "$scriptfile" ]; then
+                dest="/logs/sessions/$(basename $scriptfile)_$(date +%Y%m%d_%H%M%S)"
+                cp "$scriptfile" "$dest"
+                echo "[$(date)] Captured session file: $dest"
+              fi
+            done
+            
+            # Compress old logs
+            find /logs/sessions -name "*.log" -mtime +1 -exec gzip {} \; 2>/dev/null || true
+            
+            # Log disk usage
+            echo "[$(date)] Log directory size: $(du -sh /logs/sessions 2>/dev/null | cut -f1)"
+            
+            sleep 30
+          done
+        
+        volumeMounts:
+        - name: session-logs
+          mountPath: /logs
+        - name: logger-script
+          mountPath: /scripts
+        - name: shared-data
+          mountPath: /shared
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gotty-dev
+  namespace: gotty-dev
+spec:
+  selector:
+    app: gotty-dev
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gotty-dev
+  namespace: gotty-dev
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "gotty-dev"
+    nginx.ingress.kubernetes.io/upstream-keepalive-connections: "50"
+    nginx.ingress.kubernetes.io/upstream-keepalive-requests: "10000"
+    nginx.ingress.kubernetes.io/upstream-keepalive-timeout: "60"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - dev.miladyos.net
+    secretName: gotty-dev-tls
+  rules:
+  - host: dev.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gotty-dev
+            port:
+              number: 8080
