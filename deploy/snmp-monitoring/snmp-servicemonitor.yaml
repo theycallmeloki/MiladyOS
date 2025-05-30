@@ -12,6 +12,7 @@ spec:
       app: snmp-exporter
   endpoints:
   - port: metrics
+    path: /snmp
     interval: 60s
     scrapeTimeout: 30s
     params:
