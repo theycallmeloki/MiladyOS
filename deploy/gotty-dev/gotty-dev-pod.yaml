@@ -130,6 +130,7 @@ spec:
         command: ["/bin/bash", "-c"]
         args:
         - |
+<<<<<<< Updated upstream
           # Update and install base packages
           apt-get update && apt-get install -y \
             curl \
@@ -147,6 +148,12 @@ spec:
           
           # Install dev tools
           apt-get install -y \
+=======
+          # Install gotty and dev tools
+          apt-get update && apt-get install -y \
+            curl \
+            wget \
+>>>>>>> Stashed changes
             bash \
             tmux \
             vim \
@@ -156,6 +163,7 @@ spec:
             jq \
             python3 \
             python3-pip \
+<<<<<<< Updated upstream
             make \
             gcc \
             g++ \
@@ -177,10 +185,21 @@ spec:
           # Install Node.js
           curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
           apt-get install -y nodejs
+=======
+            nodejs \
+            npm \
+            make \
+            gcc \
+            build-essential \
+            ca-certificates \
+            gnupg \
+            lsb-release
+>>>>>>> Stashed changes
           
           # Install Docker CLI
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+<<<<<<< Updated upstream
           apt-get update
           apt-get install -y docker-ce-cli
           
@@ -192,6 +211,22 @@ spec:
           
           # Install Helm
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+=======
+          apt-get update && apt-get install -y docker-ce-cli
+          
+          # Install kubectl
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && mv kubectl /usr/local/bin/
+          
+          # Install helm
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          
+          # Install gotty
+          wget https://github.com/sorenisanerd/gotty/releases/download/v1.5.0/gotty_v1.5.0_linux_amd64.tar.gz
+          tar -xzf gotty_v1.5.0_linux_amd64.tar.gz
+          mv gotty /usr/local/bin/
+          chmod +x /usr/local/bin/gotty
+>>>>>>> Stashed changes
           
           # Set up tmux config
           cat > /root/.tmux.conf << 'EOF'
@@ -240,11 +275,15 @@ spec:
           # Install claude-code globally
           npm install -g @anthropic-ai/claude-code || true
           
+<<<<<<< Updated upstream
           # Clean up apt cache
           apt-get clean
           rm -rf /var/lib/apt/lists/*
           
           # Start gotty with bash
+=======
+          # Start gotty with bash instead of tmux attach
+>>>>>>> Stashed changes
           exec /usr/local/bin/gotty --config /root/.gotty /bin/bash
         
         ports:
@@ -274,7 +313,11 @@ spec:
         args:
         - |
           # Install required tools
+<<<<<<< Updated upstream
           apt-get update && apt-get install -y bash procps coreutils gzip
+=======
+          apt-get update && apt-get install -y bash procps util-linux coreutils gzip
+>>>>>>> Stashed changes
           
           # Copy and run logger script
           cp /scripts/logger.sh /logger.sh

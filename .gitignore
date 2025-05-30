@@ -1,6 +1,7 @@
 # Logs
 deploy/hi/
 deploy/notrack/
+deploy/deploy-jury/
 templates/
 logs
 *.log
