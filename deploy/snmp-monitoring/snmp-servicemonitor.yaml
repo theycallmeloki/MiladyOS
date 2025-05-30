@@ -25,5 +25,5 @@ spec:
       replacement: snmp-exporter:9116
     metricRelabelings:
     - sourceLabels: [__name__]
-      regex: '(snmp_.*|sysUpTime|sysName|ifName|ifDescr|ifOperStatus|ifSpeed|ifHCInOctets|ifHCOutOctets|ifHCInUcastPkts|ifHCOutUcastPkts|ifInErrors|ifOutErrors|ifInDiscards|ifOutDiscards)'
+      regex: '(snmp_.*|sysUpTime|sysName|ifName|ifDescr|ifOperStatus|ifSpeed|ifHCInOctets|ifHCOutOctets|ifHCInUcastPkts|ifHCOutUcastPkts|ifInErrors|ifOutErrors|ifInDiscards|ifOutDiscards|ifIndex|ifAdminStatus|ifMtu|ifType|ifLastChange|ifInOctets|ifOutOctets|ifInUcastPkts|ifOutUcastPkts|ifInNUcastPkts|ifOutNUcastPkts|ifInMulticastPkts|ifInBroadcastPkts|ifOutMulticastPkts|ifOutBroadcastPkts|ifHighSpeed|ifAlias|ifCounterDiscontinuityTime|ifConnectorPresent|ifNumber)'
       action: keep
