@@ -5,7 +5,7 @@ metadata:
   namespace: monitoring
   labels:
     app: tuya-exporter
-    release: prometheus # This must match your Prometheus Operator release label
+    release: monitoring # This must match your Prometheus Operator release label
 spec:
   selector:
     matchLabels:
