@@ -20,6 +20,19 @@ spec:
           - "--config.file=/etc/snmp_exporter/snmp.yml"
           - "--web.listen-address=:9116"
           - "--log.level=info"
+        env:
+        - name: SNMP_TARGET
+          valueFrom:
+            configMapKeyRef:
+              name: snmp-exporter-config
+              key: target
+              optional: true
+        - name: SNMP_COMMUNITY
+          valueFrom:
+            secretKeyRef:
+              name: snmp-credentials
+              key: SNMP_COMMUNITY
+              optional: true
         ports:
         - containerPort: 9116
           name: metrics
