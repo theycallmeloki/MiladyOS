@@ -113,7 +113,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "snmp_scrape_duration_seconds{job=\"snmp-exporter\"} > 0",
@@ -173,7 +173,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "sysUpTime{instance=\"$instance\"} / 100",
@@ -233,7 +233,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "sysName{instance=\"$instance\"}",
@@ -295,7 +295,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "count(ifOperStatus{instance=\"$instance\"} == 1)",
@@ -411,7 +411,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifHCInOctets{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval]) * 8",
@@ -422,7 +422,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifHCOutOctets{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval]) * 8",
@@ -528,7 +528,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifHCInUcastPkts{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval])",
@@ -539,7 +539,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifHCOutUcastPkts{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval])",
@@ -705,7 +705,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "ifOperStatus{instance=\"$instance\"}",
@@ -716,7 +716,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "ifSpeed{instance=\"$instance\"}",
@@ -728,7 +728,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifHCInOctets{instance=\"$instance\"}[$__rate_interval]) * 8",
@@ -740,7 +740,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifHCOutOctets{instance=\"$instance\"}[$__rate_interval]) * 8",
@@ -877,7 +877,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifInErrors{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval])",
@@ -888,7 +888,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifOutErrors{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval])",
@@ -985,7 +985,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifInDiscards{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval])",
@@ -996,7 +996,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "editorMode": "code",
               "expr": "rate(ifOutDiscards{instance=\"$instance\", ifName=~\"$interface\"}[$__rate_interval])",
@@ -1045,7 +1045,7 @@ data:
             },
             "datasource": {
               "type": "prometheus",
-              "uid": "${datasource}"
+              "uid": "prometheus"
             },
             "definition": "label_values(sysUpTime{job=\"snmp-exporter\"}, instance)",
             "hide": 0,
@@ -1076,7 +1076,7 @@ data:
             },
             "datasource": {
               "type": "prometheus",
-              "uid": "${datasource}"
+              "uid": "prometheus"
             },
             "definition": "label_values(ifOperStatus{instance=\"$instance\"}, ifName)",
             "hide": 0,
