@@ -124,35 +124,74 @@ spec:
         emptyDir: {}
       
       containers:
-      # Main gotty container with dev tools
+      # Main gotty container with Ubuntu base and dev tools
       - name: gotty
-        image: sorenisanerd/gotty:latest
-        command: ["/bin/sh", "-c"]
+        image: ubuntu:22.04
+        command: ["/bin/bash", "-c"]
         args:
         - |
+          # Update and install base packages
+          apt-get update && apt-get install -y \
+            curl \
+            wget \
+            ca-certificates \
+            gnupg \
+            lsb-release \
+            software-properties-common
+          
+          # Install gotty
+          wget https://github.com/sorenisanerd/gotty/releases/download/v1.5.0/gotty_v1.5.0_linux_amd64.tar.gz
+          tar xzf gotty_v1.5.0_linux_amd64.tar.gz
+          mv gotty /usr/local/bin/
+          chmod +x /usr/local/bin/gotty
+          
           # Install dev tools
-          apk add --no-cache \
+          apt-get install -y \
             bash \
             tmux \
             vim \
             git \
-            curl \
-            wget \
             htop \
-            ncurses \
             openssh-client \
             jq \
             python3 \
-            py3-pip \
-            nodejs \
-            npm \
-            docker-cli \
-            kubectl \
-            helm \
+            python3-pip \
             make \
             gcc \
-            musl-dev \
-            linux-headers
+            g++ \
+            build-essential \
+            net-tools \
+            iputils-ping \
+            dnsutils \
+            telnet \
+            nano \
+            less \
+            man-db \
+            sudo \
+            locales
+          
+          # Set locale
+          locale-gen en_US.UTF-8
+          update-locale LANG=en_US.UTF-8
+          
+          # Install Node.js
+          curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+          apt-get install -y nodejs
+          
+          # Install Docker CLI
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+          apt-get update
+          apt-get install -y docker-ce-cli
+          
+          # Install kubectl
+          curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+          apt-get update
+          apt-get install -y kubectl
+          
+          # Install Helm
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           
           # Set up tmux config
           cat > /root/.tmux.conf << 'EOF'
@@ -178,6 +217,8 @@ spec:
           export HISTFILE=/workspace/.bash_history
           export HISTSIZE=10000
           export HISTFILESIZE=20000
+          export LANG=en_US.UTF-8
+          export LC_ALL=en_US.UTF-8
           shopt -s histappend
           
           # Start tmux session with logging
@@ -199,8 +240,12 @@ spec:
           # Install claude-code globally
           npm install -g @anthropic-ai/claude-code || true
           
-          # Start gotty with bash instead of tmux attach
-          exec /usr/bin/gotty --config /root/.gotty /bin/bash
+          # Clean up apt cache
+          apt-get clean
+          rm -rf /var/lib/apt/lists/*
+          
+          # Start gotty with bash
+          exec /usr/local/bin/gotty --config /root/.gotty /bin/bash
         
         ports:
         - containerPort: 8080
@@ -216,20 +261,20 @@ spec:
         
         resources:
           requests:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "500m"
           limits:
-            memory: "2Gi"
+            memory: "4Gi"
             cpu: "2000m"
       
       # Sidecar logger container
       - name: session-logger
-        image: alpine:latest
-        command: ["/bin/sh", "-c"]
+        image: ubuntu:22.04
+        command: ["/bin/bash", "-c"]
         args:
         - |
           # Install required tools
-          apk add --no-cache bash procps util-linux coreutils gzip
+          apt-get update && apt-get install -y bash procps coreutils gzip
           
           # Copy and run logger script
           cp /scripts/logger.sh /logger.sh
