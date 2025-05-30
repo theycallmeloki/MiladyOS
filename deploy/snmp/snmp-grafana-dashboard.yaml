@@ -116,7 +116,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "up{job=\"snmp-exporter\"}",
+              "expr": "snmp_scrape_duration_seconds{job=\"snmp-exporter\"} > 0",
               "refId": "A"
             }
           ],
@@ -298,7 +298,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "count(ifOperStatus{instance=\"$instance\", ifOperStatus=\"1\"})",
+              "expr": "count(ifOperStatus{instance=\"$instance\"} == 1)",
               "refId": "A"
             }
           ],
@@ -1047,7 +1047,7 @@ data:
               "type": "prometheus",
               "uid": "${datasource}"
             },
-            "definition": "label_values(up{job=\"snmp-exporter\"}, instance)",
+            "definition": "label_values(sysUpTime{job=\"snmp-exporter\"}, instance)",
             "hide": 0,
             "includeAll": false,
             "label": "Device",
@@ -1055,7 +1055,7 @@ data:
             "name": "instance",
             "options": [],
             "query": {
-              "query": "label_values(up{job=\"snmp-exporter\"}, instance)",
+              "query": "label_values(sysUpTime{job=\"snmp-exporter\"}, instance)",
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             },
             "refresh": 1,
