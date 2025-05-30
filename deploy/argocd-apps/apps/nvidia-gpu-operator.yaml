@@ -37,6 +37,15 @@ spec:
         # Enable toolkit for container runtime integration
         toolkit:
           enabled: true
+          env:
+            - name: CONTAINERD_CONFIG
+              value: /etc/containerd/config.toml
+            - name: CONTAINERD_SOCKET
+              value: /run/containerd/containerd.sock
+            - name: CONTAINERD_RUNTIME_CLASS
+              value: nvidia
+            - name: CONTAINERD_SET_AS_DEFAULT
+              value: "true"
           securityContext:
             privileged: true
         
@@ -46,11 +55,9 @@ spec:
           securityContext:
             privileged: true
         
-        # Driver daemonset security context
+        # Driver daemonset - disabled since Talos has pre-installed drivers
         driver:
-          enabled: true
-          securityContext:
-            privileged: true
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: gpu-operator
