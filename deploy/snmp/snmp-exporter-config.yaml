@@ -5,9 +5,7 @@ metadata:
   namespace: monitoring
 data:
   snmp.yml: |
-    # TP-Link Omada ER605 Router Configuration
     auths:
-      # SNMPv3 auth for TP-Link router
       tplink_v3:
         version: 3
         security_level: authPriv
@@ -16,27 +14,18 @@ data:
         auth_protocol: SHA
         priv_protocol: AES
         priv_password: SecureMiladyPassword
-      
-      # Fallback SNMPv2c
       public_v2:
         version: 2
         community: public
     
     modules:
-      # TP-Link router module
       tplink:
         walk:
-          - 1.3.6.1.2.1.1.1    # sysDescr
-          - 1.3.6.1.2.1.1.3    # sysUpTime
-          - 1.3.6.1.2.1.1.4    # sysContact
-          - 1.3.6.1.2.1.1.5    # sysName
-          - 1.3.6.1.2.1.1.6    # sysLocation
-          - 1.3.6.1.2.1.2      # interfaces
-          - 1.3.6.1.2.1.31.1.1 # ifXTable
-        
-      # Default interface module  
+          - 1.3.6.1.2.1.1
+          - 1.3.6.1.2.1.2
+          - 1.3.6.1.2.1.31.1.1
       if_mib:
         walk:
-          - 1.3.6.1.2.1.1      # system
-          - 1.3.6.1.2.1.2      # interfaces
-          - 1.3.6.1.2.1.31.1.1 # ifXTable
+          - 1.3.6.1.2.1.1
+          - 1.3.6.1.2.1.2
+          - 1.3.6.1.2.1.31.1.1
