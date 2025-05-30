@@ -1,0 +1,33 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: snmp-exporter
+  namespace: monitoring
+  labels:
+    app: snmp-exporter
+    release: prometheus  # Required for Prometheus discovery
+spec:
+  selector:
+    matchLabels:
+      app: snmp-exporter
+  endpoints:
+  - port: metrics
+    interval: 60s
+    scrapeTimeout: 30s
+    params:
+      module: [tplink]
+      auth: [tplink_v3]
+      target: [192.168.2.1]
+    relabelings:
+    - sourceLabels: [__param_target]
+      targetLabel: instance
+    - sourceLabels: [__param_target]
+      targetLabel: __address__
+      regex: (.*)
+      replacement: ${1}
+    - targetLabel: __address__
+      replacement: snmp-exporter:9116
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'snmp_.*'
+      action: keep
