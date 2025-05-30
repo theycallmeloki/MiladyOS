@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: HEAD
-    path: deploy/snmp
+    path: deploy/snmp-monitoring
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

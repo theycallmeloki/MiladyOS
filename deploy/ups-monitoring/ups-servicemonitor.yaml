@@ -5,7 +5,7 @@ metadata:
   namespace: monitoring
   labels:
     app: ups-exporter
-    release: prometheus # Must match your Prometheus Operator release label
+    release: monitoring # Must match your Prometheus Operator release label
 spec:
   selector:
     matchLabels:
