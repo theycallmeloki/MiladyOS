@@ -100,6 +100,60 @@ spec:
       - name: emacs-config
         configMap:
           name: emacs-mcp-config
+      - name: claude-config
+        emptyDir:
+          sizeLimit: 50Mi
+      
+      initContainers:
+      - name: claude-init
+        image: ubuntu:22.04
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          # Create Claude Code directory structure
+          mkdir -p /claude-config/.claude
+          mkdir -p /claude-config/workspace/.claude
+          
+          # Create minimal CLAUDE.md files
+          cat > /claude-config/.claude/CLAUDE.md << 'EOF'
+          # Claude Code Global Configuration
+          
+          ## Environment
+          - Container environment with Ubuntu 22.04
+          - Development tools pre-installed
+          - Session logging enabled
+          
+          ## Available Tools
+          - kubectl, docker, helm, node, npm, python, go
+          - tmux, vim, emacs with MCP integration
+          EOF
+          
+          cat > /claude-config/workspace/.claude/CLAUDE.md << 'EOF'
+          # Project Configuration
+          
+          This is the MiladyOS development environment.
+          EOF
+          
+          # Create minimal settings files
+          cat > /claude-config/.claude/settings.json << 'EOF'
+          {
+            "editor": "emacs",
+            "terminal": "bash",
+            "workspace": "/workspace"
+          }
+          EOF
+          
+          cat > /claude-config/workspace/.claude/settings.json << 'EOF'
+          {
+            "project": "miladyos-dev"
+          }
+          EOF
+          
+          # Set permissions
+          chmod -R 755 /claude-config
+        volumeMounts:
+        - name: claude-config
+          mountPath: /claude-config
       
       containers:
       # Main gotty container with Ubuntu base and dev tools
@@ -245,6 +299,10 @@ spec:
           # Copy Emacs MCP configuration from ConfigMap
           cp /emacs-config/.emacs /root/.emacs
           
+          # Set up Claude Code configuration directories
+          ln -sf /claude-config/.claude /root/.claude
+          ln -sf /claude-config/workspace/.claude /workspace/.claude
+          
           # Install computer binary
           wget https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v0.0.11/computer-linux-amd64
           chmod +x computer-linux-amd64
@@ -308,6 +366,8 @@ spec:
           mountPath: /config
         - name: emacs-config
           mountPath: /emacs-config
+        - name: claude-config
+          mountPath: /claude-config
         
         resources:
           requests:
