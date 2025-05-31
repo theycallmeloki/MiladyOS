@@ -48,8 +48,8 @@ data:
     max_connection = 0
     once = false
     timeout = 0
-    width = 120
-    height = 40
+    width = 0
+    height = 0
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -180,21 +180,18 @@ spec:
           # Set up bash configuration
           cat > /root/.bashrc << 'EOF'
           export PS1="\[\033[1;32m\][\u@gotty-dev \W]\$\[\033[0m\] "
-          export HISTFILE=/workspace/.bash_history
+          export HISTFILE=/logs/.bash_history
           export HISTSIZE=10000
           export HISTFILESIZE=20000
           export LANG=en_US.UTF-8
           export LC_ALL=en_US.UTF-8
           shopt -s histappend
           
-          # Show current session log file
-          echo "Session is being logged to: /workspace/logs/sessions/session_$(date +%Y%m%d)_*.log"
-          
           alias ll='ls -la'
           alias k='kubectl'
           alias d='docker'
-          alias logs='ls -la /workspace/logs/sessions/'
-          alias viewlog='tail -f /workspace/logs/sessions/session_*.log'
+          alias logs='ls -la /logs/sessions/'
+          alias viewlog='tail -f /logs/sessions/session_*.log'
           EOF
           
           # Copy config and start gotty
@@ -221,7 +218,7 @@ spec:
           cat > /usr/local/bin/logged-session.sh << 'EOF'
           #!/bin/bash
           SESSION_ID=$(date +%Y%m%d_%H%M%S)_$$
-          LOG_DIR="/workspace/logs/sessions"
+          LOG_DIR="/logs/sessions"
           mkdir -p "$LOG_DIR"
           
           # Start recording session with script
@@ -240,6 +237,8 @@ spec:
         volumeMounts:
         - name: dev-storage
           mountPath: /workspace
+        - name: session-logs
+          mountPath: /logs
         - name: gotty-config
           mountPath: /config
         
@@ -262,21 +261,16 @@ spec:
           
           # Simple log management loop
           while true; do
-            # Monitor and compress old session logs from workspace
-            if [ -d /workspace/logs/sessions ]; then
+            # Monitor and compress old session logs
+            if [ -d /logs/sessions ]; then
               # Compress logs older than 1 day
-              find /workspace/logs/sessions -name "*.log" -mtime +1 -exec gzip {} \; 2>/dev/null || true
-              
-              # Copy logs to persistent storage
-              mkdir -p /logs/sessions
-              rsync -av --ignore-existing /workspace/logs/sessions/ /logs/sessions/ 2>/dev/null || true
+              find /logs/sessions -name "*.log" -mtime +1 -exec gzip {} \; 2>/dev/null || true
               
               # Clean up very old compressed logs (>30 days)
               find /logs/sessions -name "*.log.gz" -mtime +30 -delete 2>/dev/null || true
               
               # Log disk usage
-              echo "[$(date)] Workspace logs: $(du -sh /workspace/logs/sessions 2>/dev/null | cut -f1 || echo 'N/A')"
-              echo "[$(date)] Persistent logs: $(du -sh /logs/sessions 2>/dev/null | cut -f1 || echo 'N/A')"
+              echo "[$(date)] Session logs: $(du -sh /logs/sessions 2>/dev/null | cut -f1 || echo 'N/A')"
             fi
             
             sleep 300  # Check every 5 minutes
