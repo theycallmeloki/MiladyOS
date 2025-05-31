@@ -50,6 +50,7 @@ data:
     timeout = 0
     width = 0
     height = 0
+    enable_basic_auth = true
     credential = "milady:miladymilady"
 ---
 apiVersion: ctl.enisoc.com/v1
