@@ -172,11 +172,10 @@ spec:
           apt-get update
           apt-get install -y docker-ce-cli
           
-          # Install kubectl
-          curl -fsSL https://pkgs.k8s.io/core%3A/stable%3A/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-          echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core%3A/stable%3A/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
-          apt-get update
-          apt-get install -y kubectl
+          # Install kubectl binary directly
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          mv kubectl /usr/local/bin/
           
           # Install Helm
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
