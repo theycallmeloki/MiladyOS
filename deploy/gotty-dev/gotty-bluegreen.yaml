@@ -101,8 +101,8 @@ spec:
         configMap:
           name: emacs-mcp-config
       - name: claude-config
-        emptyDir:
-          sizeLimit: 50Mi
+        persistentVolumeClaim:
+          claimName: claude-config-storage
       
       initContainers:
       - name: claude-init
@@ -110,12 +110,16 @@ spec:
         command: ["/bin/bash", "-c"]
         args:
         - |
-          # Create Claude Code directory structure
-          mkdir -p /claude-config/.claude
-          mkdir -p /claude-config/workspace/.claude
-          
-          # Create minimal CLAUDE.md files
-          cat > /claude-config/.claude/CLAUDE.md << 'EOF'
+          # Only initialize if config doesn't exist (frozen after first setup)
+          if [ ! -f /claude-config/.claude/CLAUDE.md ]; then
+            echo "Initializing Claude Code configuration (first time setup)..."
+            
+            # Create Claude Code directory structure
+            mkdir -p /claude-config/.claude
+            mkdir -p /claude-config/workspace/.claude
+            
+            # Create minimal CLAUDE.md files
+            cat > /claude-config/.claude/CLAUDE.md << 'EOF'
           # Claude Code Global Configuration
           
           ## Environment
@@ -127,30 +131,34 @@ spec:
           - kubectl, docker, helm, node, npm, python, go
           - tmux, vim, emacs with MCP integration
           EOF
-          
-          cat > /claude-config/workspace/.claude/CLAUDE.md << 'EOF'
+            
+            cat > /claude-config/workspace/.claude/CLAUDE.md << 'EOF'
           # Project Configuration
           
           This is the MiladyOS development environment.
           EOF
-          
-          # Create minimal settings files
-          cat > /claude-config/.claude/settings.json << 'EOF'
+            
+            # Create minimal settings files
+            cat > /claude-config/.claude/settings.json << 'EOF'
           {
             "editor": "emacs",
             "terminal": "bash",
             "workspace": "/workspace"
           }
           EOF
-          
-          cat > /claude-config/workspace/.claude/settings.json << 'EOF'
+            
+            cat > /claude-config/workspace/.claude/settings.json << 'EOF'
           {
             "project": "miladyos-dev"
           }
           EOF
-          
-          # Set permissions
-          chmod -R 755 /claude-config
+            
+            # Set permissions
+            chmod -R 755 /claude-config
+            echo "Claude Code configuration initialized successfully"
+          else
+            echo "Claude Code configuration already exists, skipping initialization"
+          fi
         volumeMounts:
         - name: claude-config
           mountPath: /claude-config
