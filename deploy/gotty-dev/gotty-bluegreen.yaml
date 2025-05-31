@@ -110,8 +110,16 @@ spec:
           privileged: true
         args:
         - |
+          # Set non-interactive environment
+          export DEBIAN_FRONTEND=noninteractive
+          export DEBCONF_NONINTERACTIVE_SEEN=true
+          export TZ=UTC
+          
+          # Configure timezone non-interactively
+          ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+          
           # Update and install base packages
-          apt-get update && apt-get install -y \
+          apt-get update && apt-get install -y --no-install-recommends \
             curl \
             wget \
             ca-certificates \
@@ -126,7 +134,7 @@ spec:
           chmod +x /usr/local/bin/gotty
           
           # Install dev tools
-          apt-get install -y \
+          apt-get install -y --no-install-recommends \
             bash \
             tmux \
             vim \
@@ -167,13 +175,13 @@ spec:
           
           # Install Node.js
           curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-          apt-get install -y nodejs
+          apt-get install -y --no-install-recommends nodejs
           
           # Install Docker CLI
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
           apt-get update
-          apt-get install -y docker-ce-cli
+          apt-get install -y --no-install-recommends docker-ce-cli
           
           # Install kubectl binary directly
           KUBECTL_VERSION="v1.28.0"
