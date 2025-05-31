@@ -97,6 +97,9 @@ spec:
         configMap:
           name: session-processor-script
           defaultMode: 0755
+      - name: emacs-config
+        configMap:
+          name: emacs-mcp-config
       
       containers:
       # Main gotty container with Ubuntu base and dev tools
@@ -225,35 +228,8 @@ spec:
           # Install claude-code globally
           npm install -g @anthropic-ai/claude-code || true
           
-          # Set up Emacs with MCP client for MiladyOS integration
-          cat > /root/.emacs << 'EOF'
-;; Minimal MiladyOS MCP client configuration
-(require 'package)
-(setq package-archives '(("melpa" . "https://melpa.org/packages/")
-                         ("gnu" . "https://elpa.gnu.org/packages/")))
-(package-initialize)
-
-;; Install required packages if not present
-(unless (package-installed-p 'use-package)
-  (package-refresh-contents)
-  (package-install 'use-package))
-(require 'use-package)
-
-;; Terminal optimizations
-(setq inhibit-startup-message t)
-(menu-bar-mode -1)
-
-;; MCP integration using built-in service URL
-(defvar miladyos-mcp-sse-url "http://miladyos.miladyos.svc.cluster.local:6000/sse")
-
-;; Simple function to test MCP connection
-(defun miladyos-mcp-status ()
-  "Check MiladyOS MCP server status."
-  (interactive)
-  (message "MiladyOS MCP SSE endpoint: %s" miladyos-mcp-sse-url))
-
-(global-set-key (kbd "C-c m") #'miladyos-mcp-status)
-EOF
+          # Copy Emacs MCP configuration from ConfigMap
+          cp /emacs-config/.emacs /root/.emacs
           
           # Install computer binary
           wget https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v0.0.11/computer-linux-amd64
@@ -316,6 +292,8 @@ EOF
           mountPath: /logs
         - name: gotty-config
           mountPath: /config
+        - name: emacs-config
+          mountPath: /emacs-config
         
         resources:
           requests:

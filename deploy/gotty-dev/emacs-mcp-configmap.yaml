@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emacs-mcp-config
+  namespace: gotty-dev
+data:
+  .emacs: |
+    ;; Minimal MiladyOS MCP client configuration
+    (require 'package)
+    (setq package-archives '(("melpa" . "https://melpa.org/packages/")
+                             ("gnu" . "https://elpa.gnu.org/packages/")))
+    (package-initialize)
+
+    ;; Install required packages if not present
+    (unless (package-installed-p 'use-package)
+      (package-refresh-contents)
+      (package-install 'use-package))
+    (require 'use-package)
+
+    ;; Terminal optimizations
+    (setq inhibit-startup-message t)
+    (menu-bar-mode -1)
+
+    ;; MCP integration using built-in service URL
+    (defvar miladyos-mcp-sse-url "http://miladyos.miladyos.svc.cluster.local:6000/sse")
+
+    ;; Simple function to test MCP connection
+    (defun miladyos-mcp-status ()
+      "Check MiladyOS MCP server status."
+      (interactive)
+      (message "MiladyOS MCP SSE endpoint: %s" miladyos-mcp-sse-url))
+
+    (global-set-key (kbd "C-c m") #'miladyos-mcp-status)
