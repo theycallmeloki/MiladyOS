@@ -93,6 +93,10 @@ spec:
       - name: gotty-config
         configMap:
           name: gotty-config
+      - name: session-processor-script
+        configMap:
+          name: session-processor-script
+          defaultMode: 0755
       
       containers:
       # Main gotty container with Ubuntu base and dev tools
@@ -313,6 +317,46 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+      
+      # Session processor sidecar for AGI training data
+      - name: session-processor
+        image: ubuntu:22.04
+        command: ["/bin/bash", "/scripts/session-processor.sh"]
+        args: []
+        
+        volumeMounts:
+        - name: session-logs
+          mountPath: /logs
+        - name: dev-storage
+          mountPath: /workspace
+        - name: session-processor-script
+          mountPath: /scripts
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        env:
+        - name: TZ
+          value: "UTC"
+        
+        # Install dependencies for the processor
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - |
+                apt-get update && apt-get install -y \
+                  python3 \
+                  gawk \
+                  inotify-tools \
+                  coreutils
   service:
     metadata:
       name: gotty-dev
