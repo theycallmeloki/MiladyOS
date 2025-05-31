@@ -242,8 +242,7 @@ spec:
           name: http
         
         readinessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 8080
           initialDelaySeconds: 300
           periodSeconds: 10
@@ -252,8 +251,7 @@ spec:
           failureThreshold: 5
         
         livenessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 8080
           initialDelaySeconds: 600
           periodSeconds: 30
