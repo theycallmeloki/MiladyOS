@@ -215,8 +215,8 @@ spec:
           echo "net.ipv6.conf.lo.disable_ipv6 = 1" >> /etc/sysctl.conf
           sysctl -p || true
           
-          # Also disable IPv6 in /etc/hosts
-          sed -i 's/::1.*localhost/# ::1 localhost/' /etc/hosts
+          # Also disable IPv6 in /etc/hosts (ignore failures on protected mounts)
+          sed -i 's/::1.*localhost/# ::1 localhost/' /etc/hosts || true
           
           # Clean up apt cache
           apt-get clean
