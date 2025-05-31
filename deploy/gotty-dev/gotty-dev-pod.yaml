@@ -105,6 +105,17 @@ spec:
       labels:
         app: gotty-dev
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - talos-0wj-0i3
+                - talos-pre-ei9
+                - talos-qn8-i3a
       shareProcessNamespace: true
       volumes:
       - name: dev-storage
