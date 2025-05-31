@@ -50,6 +50,7 @@ data:
     timeout = 0
     width = 0
     height = 0
+    credential = "milady:miladymilady"
 ---
 apiVersion: apps/v1
 kind: Deployment
