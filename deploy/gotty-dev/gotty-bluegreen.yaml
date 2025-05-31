@@ -7,6 +7,51 @@ metadata:
     pod-security.kubernetes.io/audit: privileged
     pod-security.kubernetes.io/warn: privileged
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gotty-dev-storage
+  namespace: gotty-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gotty-session-logs
+  namespace: gotty-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gotty-config
+  namespace: gotty-dev
+data:
+  .gotty: |
+    enable_tls = false
+    port = "8080"
+    permit_write = true
+    permit_arguments = true
+    title_format = "MiladyOS Dev Terminal"
+    enable_reconnect = true
+    reconnect_time = 10
+    max_connection = 0
+    once = false
+    timeout = 0
+    width = 0
+    height = 0
+    credential = "milady:miladymilady"
+---
 apiVersion: ctl.enisoc.com/v1
 kind: BlueGreenDeployment
 metadata:
@@ -278,3 +323,29 @@ spec:
         targetPort: 8080
         name: http
       type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gotty-dev
+  namespace: gotty-dev
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: dev.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gotty-dev
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - dev.miladyos.net
+    secretName: gotty-dev-tls
