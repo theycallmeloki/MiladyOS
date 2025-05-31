@@ -204,10 +204,10 @@ spec:
           # Install claude-code globally
           npm install -g @anthropic-ai/claude-code || true
           
-          # Install milady binary
-          wget https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v0.0.11/milady-linux-amd64
-          chmod +x milady-linux-amd64
-          mv milady-linux-amd64 /usr/local/bin/milady
+          # Install computer binary
+          wget https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v0.0.11/computer-linux-amd64
+          chmod +x computer-linux-amd64
+          mv computer-linux-amd64 /usr/local/bin/computer
           
           # Disable IPv6 to fix connectivity issues
           echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
