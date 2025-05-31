@@ -215,6 +215,7 @@ spec:
           alias logs='ls -la /logs/sessions/'
           alias viewlog='tail -f /logs/sessions/session_*.log'
           alias uv='/root/.local/bin/uv'
+          alias emacs='emacs -nw'
           EOF
           
           # Copy config and start gotty
