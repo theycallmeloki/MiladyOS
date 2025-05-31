@@ -235,9 +235,9 @@ spec:
           locale-gen en_US.UTF-8
           update-locale LANG=en_US.UTF-8
           
-          # Install Node.js and npm
-          curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-          apt-get install -y --no-install-recommends nodejs npm
+          # Install Node.js 22.x and npm
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+          apt-get install -y --no-install-recommends nodejs
           
           # Install Docker CLI
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
@@ -279,7 +279,7 @@ spec:
           export HISTFILESIZE=20000
           export LANG=en_US.UTF-8
           export LC_ALL=en_US.UTF-8
-          export PATH="/root/.local/bin:${PATH}"
+          export PATH="/root/.local/bin:/usr/local/lib/node_modules/.bin:${PATH}"
           shopt -s histappend
           
           alias ll='ls -la'
@@ -297,8 +297,12 @@ spec:
           
           # Install claude-code globally
           echo "Installing Claude Code..."
+          echo "Node.js version: $(node --version)"
+          echo "npm version: $(npm --version)"
           if npm install -g @anthropic-ai/claude-code; then
             echo "Claude Code installed successfully"
+            # Add npm global bin to PATH
+            export PATH="/usr/local/lib/node_modules/.bin:$PATH"
             claude-code --version || echo "Claude Code installed but version check failed"
           else
             echo "Failed to install Claude Code - continuing anyway"
@@ -311,10 +315,22 @@ spec:
           ln -sf /claude-config/.claude /root/.claude
           ln -sf /claude-config/workspace/.claude /workspace/.claude
           
-          # Install computer binary
-          wget https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v0.0.11/computer-linux-amd64
-          chmod +x computer-linux-amd64
-          mv computer-linux-amd64 /usr/local/bin/computer
+          # Install computer binary - get latest release
+          echo "Getting latest computer binary release..."
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/theycallmeloki/milady-llm-bridge/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          echo "Latest release: ${LATEST_RELEASE}"
+          if [ -n "$LATEST_RELEASE" ]; then
+            wget "https://github.com/theycallmeloki/milady-llm-bridge/releases/download/${LATEST_RELEASE}/computer-linux-amd64"
+            if [ -f computer-linux-amd64 ]; then
+              chmod +x computer-linux-amd64
+              mv computer-linux-amd64 /usr/local/bin/computer
+              echo "Computer binary installed successfully"
+            else
+              echo "Failed to download computer binary"
+            fi
+          else
+            echo "Could not determine latest release version"
+          fi
           
           # Disable IPv6 to fix connectivity issues
           echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
