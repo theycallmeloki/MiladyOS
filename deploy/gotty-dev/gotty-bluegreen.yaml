@@ -127,16 +127,27 @@ spec:
             bash \
             tmux \
             vim \
+            emacs \
             git \
             htop \
             openssh-client \
             jq \
             python3 \
             python3-pip \
+            python3-venv \
             make \
             gcc \
             g++ \
             build-essential \
+            cmake \
+            wget \
+            curl \
+            zip \
+            golang-go \
+            nodejs \
+            npm \
+            ansible \
+            sshpass \
             net-tools \
             iputils-ping \
             dnsutils \
@@ -170,6 +181,9 @@ spec:
           # Install Helm
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           
+          # Install uv package manager
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          
           # Set up tmux config (simplified, no logging)
           cat > /root/.tmux.conf << 'EOF'
           set -g default-terminal "screen-256color"
@@ -192,6 +206,7 @@ spec:
           export HISTFILESIZE=20000
           export LANG=en_US.UTF-8
           export LC_ALL=en_US.UTF-8
+          export PATH="/root/.local/bin:${PATH}"
           shopt -s histappend
           
           alias ll='ls -la'
@@ -199,6 +214,7 @@ spec:
           alias d='docker'
           alias logs='ls -la /logs/sessions/'
           alias viewlog='tail -f /logs/sessions/session_*.log'
+          alias uv='/root/.local/bin/uv'
           EOF
           
           # Copy config and start gotty
