@@ -14,7 +14,7 @@ metadata:
   namespace: gotty-dev
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi
@@ -26,7 +26,7 @@ metadata:
   namespace: gotty-dev
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 5Gi
@@ -80,8 +80,6 @@ spec:
                 operator: In
                 values:
                 - talos-0wj-0i3
-                - talos-pre-ei9
-                - talos-qn8-i3a
       shareProcessNamespace: true
       volumes:
       - name: dev-storage
