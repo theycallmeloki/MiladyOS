@@ -5,29 +5,132 @@ metadata:
   namespace: gotty-dev
 data:
   .emacs: |
-    ;; Minimal MiladyOS MCP client configuration
-    (require 'package)
-    (setq package-archives '(("melpa" . "https://melpa.org/packages/")
-                             ("gnu" . "https://elpa.gnu.org/packages/")))
-    (package-initialize)
+    ;;; init.el --- Full MiladyOS MCP-enabled terminal Emacs configuration
 
-    ;; Install required packages if not present
-    (unless (package-installed-p 'use-package)
-      (package-refresh-contents)
-      (package-install 'use-package))
-    (require 'use-package)
+    ;; Bootstrap straight.el package manager
+    (defvar bootstrap-version)
+    (let ((bootstrap-file
+           (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+          (bootstrap-version 6))
+      (unless (file-exists-p bootstrap-file)
+        (with-current-buffer
+            (url-retrieve-synchronously
+             "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+             'silent 'inhibit-cookies)
+          (goto-char (point-max))
+          (eval-print-last-sexp)))
+      (load bootstrap-file nil 'nomessage))
 
-    ;; Terminal optimizations
-    (setq inhibit-startup-message t)
+    (straight-use-package 'use-package)
+
+    ;; Performance optimizations for terminal
+    (setq gc-cons-threshold (* 50 1024 1024)  ; 50MB during startup
+          read-process-output-max (* 1024 1024) ; 1MB chunks
+          inhibit-startup-message t)
+
+    ;; Disable GUI elements for terminal mode
     (menu-bar-mode -1)
+    (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
+    (when (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
 
-    ;; MCP integration using built-in service URL
-    (defvar miladyos-mcp-sse-url "http://miladyos.miladyos.svc.cluster.local:6000/sse")
+    ;; AI Integration with gptel
+    (use-package gptel
+      :straight t
+      :init
+      (setq gptel-api-key #'gptel-api-key-from-auth-source)
+      :config
+      ;; Configure Claude backend (matching MiladyOS capabilities)
+      (gptel-make-anthropic "Claude"
+                            :stream t
+                            :key gptel-api-key)
+      
+      ;; Terminal-friendly settings
+      (setq gptel-default-mode 'text-mode
+            gptel-use-header-line nil
+            gptel-model 'claude-3-sonnet-20240229
+            gptel-backend (gptel-get-backend "Claude"))
+      
+      :bind
+      (("C-c g" . gptel-send)
+       ("C-c G" . gptel)
+       ("C-c C-g" . gptel-menu)))
 
-    ;; Simple function to test MCP connection
+    ;; MCP Client - mirrors MiladyOS .mcp.json configuration
+    (use-package mcp
+      :straight (mcp :type git :host github :repo "lizqwerscott/mcp.el")
+      :after gptel
+      :config
+      ;; Mirror the MiladyOS MCP server configuration
+      (setq mcp-hub-servers
+            '(("miladyos" . (:url "http://miladyos.miladyos.svc.cluster.local:6000/sse"
+                            :type "sse"
+                            :env nil))))
+      
+      ;; Auto-start MCP connections
+      (add-hook 'after-init-hook #'mcp-hub-start-all-server)
+      
+      ;; Integration with gptel for tool calling
+      (when (featurep 'gptel)
+        (require 'gptel-integrations nil t))
+      
+      :bind
+      (("C-c m s" . mcp-hub-start-server)
+       ("C-c m r" . mcp-hub-restart-server)
+       ("C-c m l" . mcp-hub-list-servers)
+       ("C-c m t" . mcp-call-tool)))
+
+    ;; Terminal clipboard integration
+    (use-package clipetty
+      :straight t
+      :hook (after-init . global-clipetty-mode))
+
+    ;; Essential terminal improvements
+    (use-package which-key
+      :straight t
+      :init (which-key-mode)
+      :config (setq which-key-idle-delay 0.3))
+
+    ;; Better completion
+    (use-package vertico
+      :straight t
+      :init (vertico-mode))
+
+    (use-package marginalia
+      :straight t
+      :init (marginalia-mode))
+
+    ;; Custom MiladyOS integration functions
     (defun miladyos-mcp-status ()
-      "Check MiladyOS MCP server status."
+      "Check the status of MiladyOS MCP connection."
       (interactive)
-      (message "MiladyOS MCP SSE endpoint: %s" miladyos-mcp-sse-url))
+      (if (and (boundp 'mcp-hub-servers) mcp-hub-servers)
+          (message "MiladyOS MCP servers: %s" 
+                   (mapcar #'car mcp-hub-servers))
+        (message "No MCP servers configured")))
 
-    (global-set-key (kbd "C-c m") #'miladyos-mcp-status)
+    (defun miladyos-mcp-reconnect ()
+      "Reconnect to MiladyOS MCP server."
+      (interactive)
+      (when (fboundp 'mcp-hub-restart-server)
+        (mcp-hub-restart-server "miladyos")
+        (message "Reconnecting to MiladyOS MCP server...")))
+
+    ;; Key bindings for MiladyOS workflow
+    (global-set-key (kbd "C-c M-s") #'miladyos-mcp-status)
+    (global-set-key (kbd "C-c M-r") #'miladyos-mcp-reconnect)
+
+    ;; Reset GC threshold after startup
+    (add-hook 'emacs-startup-hook
+              (lambda () 
+                (setq gc-cons-threshold (* 2 1024 1024))
+                (message "MiladyOS MCP client ready")))
+
+    ;; Terminal-specific optimizations
+    (when (not (display-graphic-p))
+      ;; Better colors for terminal
+      (setq frame-background-mode 'dark)
+      ;; Optimize for SSH/remote use
+      (setq tramp-terminal-type "dumb"
+            tramp-copy-size-limit nil))
+
+    ;;; .emacs ends here
