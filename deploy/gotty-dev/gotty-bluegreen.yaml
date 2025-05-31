@@ -279,18 +279,18 @@ spec:
         readinessProbe:
           tcpSocket:
             port: 8080
-          initialDelaySeconds: 300
+          initialDelaySeconds: 420
           periodSeconds: 10
-          timeoutSeconds: 10
+          timeoutSeconds: 30
           successThreshold: 1
           failureThreshold: 5
         
         livenessProbe:
           tcpSocket:
             port: 8080
-          initialDelaySeconds: 600
+          initialDelaySeconds: 720
           periodSeconds: 30
-          timeoutSeconds: 10
+          timeoutSeconds: 30
           failureThreshold: 3
         
         volumeMounts:
