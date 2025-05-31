@@ -1,0 +1,199 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nft-auth
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nft-auth-app
+  namespace: nft-auth
+data:
+  app.py: |
+    from flask import Flask, request, jsonify, make_response
+    from web3 import Web3
+    import jwt
+    import os
+    from datetime import datetime, timedelta
+    
+    app = Flask(__name__)
+    
+    NFT_CONTRACT = "0xf01B34d9418874258B35b0507AB53ED971CBB8D3"  # High Integrity Milady
+    JWT_SECRET = os.getenv('JWT_SECRET', 'milady-secret-key')
+    w3 = Web3(Web3.HTTPProvider(os.getenv('RPC_URL', 'https://eth.llamarpc.com')))
+    
+    NFT_ABI = [{"inputs":[{"name":"owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"type":"function"}]
+    contract = w3.eth.contract(address=NFT_CONTRACT, abi=NFT_ABI)
+    
+    @app.route('/')
+    def auth_page():
+        # Check if already authenticated
+        token = request.cookies.get('milady-auth')
+        if token:
+            try:
+                jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+                # Redirect to original destination or default
+                return f'<script>window.location.href = "{request.args.get("redirect", "https://gateway.miladyos.net")}"</script>'
+            except:
+                pass
+        
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Milady Access</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; color: #fff; font-family: monospace; }
+                .auth { text-align: center; }
+                button { background: #ff69b4; color: #000; border: none; padding: 1rem 2rem; font-size: 1.2rem; cursor: pointer; font-family: monospace; }
+                button:hover { background: #ff1493; }
+                .error { color: #ff0000; margin-top: 1rem; }
+                h1 { font-size: 2rem; margin-bottom: 2rem; }
+            </style>
+        </head>
+        <body>
+            <div class="auth">
+                <h1>✨ High Integrity Milady ✨</h1>
+                <p>Connect wallet to verify NFT ownership</p>
+                <button onclick="connect()">Connect MetaMask</button>
+                <div id="status"></div>
+            </div>
+            <script>
+                async function connect() {
+                    if (!window.ethereum) {
+                        document.getElementById('status').innerHTML = '<p class="error">Install MetaMask first</p>';
+                        return;
+                    }
+                    
+                    try {
+                        const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+                        const response = await fetch('/verify', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ wallet: accounts[0] })
+                        });
+                        
+                        const data = await response.json();
+                        if (data.success) {
+                            window.location.href = ''' + f'"{request.args.get("redirect", "https://gateway.miladyos.net")}"' + ''';
+                        } else {
+                            document.getElementById('status').innerHTML = '<p class="error">No High Integrity Milady NFT found<br><a href="https://www.scatter.art/collection/high-integrity-miladys" style="color:#ff69b4">Get one here</a></p>';
+                        }
+                    } catch (error) {
+                        document.getElementById('status').innerHTML = '<p class="error">Connection failed</p>';
+                    }
+                }
+            </script>
+        </body>
+        </html>
+        '''
+    
+    @app.route('/verify', methods=['POST'])
+    def verify():
+        data = request.get_json()
+        wallet = Web3.to_checksum_address(data['wallet'])
+        
+        balance = contract.functions.balanceOf(wallet).call()
+        
+        if balance > 0:
+            token = jwt.encode({
+                'wallet': wallet.lower(),
+                'exp': datetime.utcnow() + timedelta(days=7)
+            }, JWT_SECRET)
+            
+            response = make_response(jsonify({'success': True}))
+            response.set_cookie('milady-auth', token, max_age=604800, httponly=True, secure=True, samesite='Lax', domain='.miladyos.net')
+            return response
+        
+        return jsonify({'success': False}), 403
+    
+    @app.route('/check')
+    def check():
+        token = request.cookies.get('milady-auth')
+        if token:
+            try:
+                jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+                return '', 200
+            except:
+                pass
+        return '', 401
+    
+    if __name__ == '__main__':
+        app.run(host='0.0.0.0', port=8000)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nft-auth
+  namespace: nft-auth
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nft-auth
+  template:
+    metadata:
+      labels:
+        app: nft-auth
+    spec:
+      containers:
+      - name: nft-auth
+        image: python:3.11-slim
+        command: ["sh", "-c", "pip install flask web3 pyjwt gunicorn && gunicorn -w 4 -b 0.0.0.0:8000 app:app"]
+        ports:
+        - containerPort: 8000
+        env:
+        - name: JWT_SECRET
+          value: "milady-high-integrity-secret-key-change-in-prod"
+        - name: RPC_URL
+          value: "https://eth.llamarpc.com"
+        volumeMounts:
+        - name: app
+          mountPath: /app.py
+          subPath: app.py
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: app
+        configMap:
+          name: nft-auth-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nft-auth
+  namespace: nft-auth
+spec:
+  selector:
+    app: nft-auth
+  ports:
+  - port: 80
+    targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nft-auth
+  namespace: nft-auth
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: auth.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nft-auth
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - auth.miladyos.net
+    secretName: nft-auth-tls
