@@ -44,8 +44,8 @@ data:
     permit_arguments = true
     title_format = "MiladyOS Dev Terminal"
     enable_reconnect = true
-    reconnect_time = 10
-    max_connection = 0
+    reconnect_time = 5
+    max_connection = 10
     once = false
     timeout = 0
     width = 0
@@ -349,6 +349,12 @@ spec:
           LOG_DIR="/logs/sessions"
           mkdir -p "$LOG_DIR"
           
+          # Ensure log file is created even if session fails
+          touch "$LOG_DIR/session_${SESSION_ID}.log"
+          
+          # Handle signals gracefully to ensure log completion
+          trap 'echo "Session ended: $(date)" >> "$LOG_DIR/session_${SESSION_ID}.log"' EXIT TERM INT
+          
           # Start recording session with script
           exec script -f -q "$LOG_DIR/session_${SESSION_ID}.log" -c /bin/bash
           EOF
@@ -360,23 +366,71 @@ spec:
         
         ports:
         - containerPort: 8080
+          name: gotty-port
+      
+      # Websocket persistence proxy
+      - name: websocket-proxy
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
           name: http
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          cat > /etc/nginx/nginx.conf << 'EOF'
+          events { worker_connections 1024; }
+          http {
+            upstream gotty {
+              server localhost:8080;
+            }
+            
+            map $http_upgrade $connection_upgrade {
+              default upgrade;
+              '' close;
+            }
+            
+            server {
+              listen 80;
+              
+              # Websocket proxy with persistence
+              location / {
+                proxy_pass http://gotty;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # Increase timeouts for websocket persistence
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 300s;
+                proxy_read_timeout 300s;
+                
+                # Buffer settings for websocket persistence
+                proxy_buffering off;
+                proxy_cache off;
+              }
+            }
+          }
+          EOF
+          nginx -g 'daemon off;'
         
         readinessProbe:
           tcpSocket:
-            port: 8080
-          initialDelaySeconds: 420
-          periodSeconds: 10
-          timeoutSeconds: 30
-          successThreshold: 1
-          failureThreshold: 5
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
         
         livenessProbe:
           tcpSocket:
-            port: 8080
-          initialDelaySeconds: 720
-          periodSeconds: 30
-          timeoutSeconds: 30
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
           failureThreshold: 3
         
         volumeMounts:
@@ -488,7 +542,7 @@ spec:
         app: gotty-dev
       ports:
       - port: 8080
-        targetPort: 8080
+        targetPort: 80
         name: http
       type: ClusterIP
 ---
