@@ -365,6 +365,18 @@ spec:
         ports:
         - containerPort: 8080
           name: gotty-port
+        
+        volumeMounts:
+        - name: dev-storage
+          mountPath: /workspace
+        - name: session-logs
+          mountPath: /logs
+        - name: gotty-config
+          mountPath: /config
+        - name: emacs-config
+          mountPath: /emacs-config
+        - name: claude-config
+          mountPath: /claude-config
       
       # Websocket persistence proxy
       - name: websocket-proxy
