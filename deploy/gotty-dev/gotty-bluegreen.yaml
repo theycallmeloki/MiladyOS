@@ -234,7 +234,13 @@ spec:
           cd /workspace
           
           # Install claude-code globally
-          npm install -g @anthropic-ai/claude-code || true
+          echo "Installing Claude Code..."
+          if npm install -g @anthropic-ai/claude-code; then
+            echo "Claude Code installed successfully"
+            claude-code --version || echo "Claude Code installed but version check failed"
+          else
+            echo "Failed to install Claude Code - continuing anyway"
+          fi
           
           # Copy Emacs MCP configuration from ConfigMap
           cp /emacs-config/.emacs /root/.emacs
