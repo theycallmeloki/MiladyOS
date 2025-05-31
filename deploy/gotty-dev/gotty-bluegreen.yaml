@@ -228,7 +228,7 @@ spec:
           # Create session logging script
           cat > /usr/local/bin/logged-session.sh << 'EOF'
           #!/bin/bash
-          SESSION_ID=$(date +%Y%m%d_%H%M%S)_$$
+          SESSION_ID=$(date +%Y%m%d_%H%M%S)_$(shuf -i 1000-9999 -n 1)
           LOG_DIR="/logs/sessions"
           mkdir -p "$LOG_DIR"
           
