@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claude-config-storage
+  namespace: gotty-dev
+  labels:
+    app: gotty-dev
+    component: claude-config
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: longhorn

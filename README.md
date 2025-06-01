@@ -56,3 +56,5 @@ ADD kubeconfig.yaml /root/.kube/config
 # Add Pachctl config to the container
 COPY config.json /root/.pachyderm/config.json
 ```
+
+[![Star History Chart](https://api.star-history.com/svg?repos=theycallmeloki/MiladyOS&type=Date)](https://star-history.com/#theycallmeloki/MiladyOS&Date)
