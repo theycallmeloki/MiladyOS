@@ -93,6 +93,9 @@ spec:
       - name: gotty-config
         configMap:
           name: gotty-config
+      - name: emacs-mcp-config
+        configMap:
+          name: emacs-mcp-config
       
       containers:
       # Main gotty container with Ubuntu base and dev tools
@@ -204,10 +207,24 @@ spec:
           # Install claude-code globally
           npm install -g @anthropic-ai/claude-code || true
           
+          # Install Emacs and MCP packages
+          apt-get install -y emacs-nox
+          
+          # Install Node.js MCP packages
+          npm install -g @modelcontextprotocol/server-filesystem
+          npm install -g @modelcontextprotocol/server-fetch
+          
           # Install milady binary
           wget https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v0.0.11/milady-linux-amd64
           chmod +x milady-linux-amd64
           mv milady-linux-amd64 /usr/local/bin/milady
+          
+          # Install browser control tools
+          npm install -g playwright puppeteer
+          npx playwright install chromium --with-deps
+          
+          # Install image processing tools for ASCII conversion
+          apt-get install -y imagemagick jp2a
           
           # Disable IPv6 to fix connectivity issues
           echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
@@ -265,6 +282,8 @@ spec:
           mountPath: /logs
         - name: gotty-config
           mountPath: /config
+        - name: emacs-mcp-config
+          mountPath: /emacs-config
         
         resources:
           requests:
