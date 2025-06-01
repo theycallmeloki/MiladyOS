@@ -14,6 +14,14 @@ data:
       #   model_info:
       #     description: "DeepCoder 14B - A code optimization and generation model"
 
+      - model_name: "deepseek-r1:1.5b" # How clients refer to this model via LiteLLM
+        litellm_params:
+          model: "ollama/deepseek-r1:1.5b" # Use ollama/ prefix for LiteLLM Ollama integration
+          api_base: "http://miladyos.default.svc.cluster.local:11434/v1" # MiladyOS service with Ollama port
+          api_key: "not-needed" # Ollama doesn't require API key
+        model_info:
+          description: "DeepSeek-R1 1.5B - A lightweight reasoning model"
+
       - model_name: "Qwen/QwQ-32B-AWQ" # How clients refer to this model via LiteLLM
         litellm_params:
           model: "openai/Qwen/QwQ-32B-AWQ" # Add openai/ prefix to make LiteLLM recognize the provider  

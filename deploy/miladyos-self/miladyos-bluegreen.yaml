@@ -67,6 +67,8 @@ spec:
           name: agent
         - containerPort: 6000
           name: mcp
+        - containerPort: 11434
+          name: ollama
         env:
         - name: JENKINS_ADMIN_ID
           value: "admin"
@@ -143,6 +145,9 @@ spec:
       - name: mcp
         port: 6000
         targetPort: 6000
+      - name: ollama
+        port: 11434
+        targetPort: 11434
       - name: redka
         port: 6379
         targetPort: 6379
