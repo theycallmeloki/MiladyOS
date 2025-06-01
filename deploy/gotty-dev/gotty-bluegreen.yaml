@@ -44,8 +44,8 @@ data:
     permit_arguments = true
     title_format = "MiladyOS Dev Terminal"
     enable_reconnect = true
-    reconnect_time = 10
-    max_connection = 0
+    reconnect_time = 5
+    max_connection = 10
     once = false
     timeout = 0
     width = 0
@@ -80,8 +80,6 @@ spec:
                 operator: In
                 values:
                 - talos-0wj-0i3
-                - talos-pre-ei9
-                - talos-qn8-i3a
       shareProcessNamespace: true
       volumes:
       - name: dev-storage
@@ -93,21 +91,95 @@ spec:
       - name: gotty-config
         configMap:
           name: gotty-config
-      - name: emacs-mcp-config
+      - name: session-processor-script
+        configMap:
+          name: session-processor-script
+          defaultMode: 0755
+      - name: emacs-config
         configMap:
           name: emacs-mcp-config
+      - name: claude-config
+        persistentVolumeClaim:
+          claimName: claude-config-storage
+      
+      initContainers:
+      - name: claude-init
+        image: ubuntu:24.04
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          # Only initialize if config doesn't exist (frozen after first setup)
+          if [ ! -f /claude-config/.claude/CLAUDE.md ]; then
+            echo "Initializing Claude Code configuration (first time setup)..."
+            
+            # Create Claude Code directory structure
+            mkdir -p /claude-config/.claude
+            mkdir -p /claude-config/workspace/.claude
+            
+            # Create minimal CLAUDE.md files
+            cat > /claude-config/.claude/CLAUDE.md << 'EOF'
+          # Claude Code Global Configuration
+          
+          ## Environment
+          - Container environment with Ubuntu 24.04
+          - Development tools pre-installed
+          - Session logging enabled
+          
+          ## Available Tools
+          - kubectl, docker, helm, node, npm, python, go
+          - tmux, vim, emacs with MCP integration
+          EOF
+            
+            cat > /claude-config/workspace/.claude/CLAUDE.md << 'EOF'
+          # Project Configuration
+          
+          This is the MiladyOS development environment.
+          EOF
+            
+            # Create minimal settings files
+            cat > /claude-config/.claude/settings.json << 'EOF'
+          {
+            "editor": "emacs",
+            "terminal": "bash",
+            "workspace": "/workspace"
+          }
+          EOF
+            
+            cat > /claude-config/workspace/.claude/settings.json << 'EOF'
+          {
+            "project": "miladyos-dev"
+          }
+          EOF
+            
+            # Set permissions
+            chmod -R 755 /claude-config
+            echo "Claude Code configuration initialized successfully"
+          else
+            echo "Claude Code configuration already exists, skipping initialization"
+          fi
+        volumeMounts:
+        - name: claude-config
+          mountPath: /claude-config
       
       containers:
       # Main gotty container with Ubuntu base and dev tools
       - name: gotty
-        image: ubuntu:22.04
+        image: ubuntu:24.04
         command: ["/bin/bash", "-c"]
         securityContext:
           privileged: true
         args:
         - |
+          # Set non-interactive environment
+          export DEBIAN_FRONTEND=noninteractive
+          export DEBCONF_NONINTERACTIVE_SEEN=true
+          export TZ=UTC
+          
+          # Configure timezone non-interactively
+          ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+          
           # Update and install base packages
-          apt-get update && apt-get install -y \
+          apt-get update && apt-get install -y --no-install-recommends \
             curl \
             wget \
             ca-certificates \
@@ -122,20 +194,29 @@ spec:
           chmod +x /usr/local/bin/gotty
           
           # Install dev tools
-          apt-get install -y \
+          apt-get install -y --no-install-recommends \
             bash \
             tmux \
             vim \
+            emacs \
             git \
             htop \
             openssh-client \
             jq \
             python3 \
             python3-pip \
+            python3-venv \
             make \
             gcc \
             g++ \
             build-essential \
+            cmake \
+            wget \
+            curl \
+            zip \
+            golang-go \
+            ansible \
+            sshpass \
             net-tools \
             iputils-ping \
             dnsutils \
@@ -150,24 +231,27 @@ spec:
           locale-gen en_US.UTF-8
           update-locale LANG=en_US.UTF-8
           
-          # Install Node.js
-          curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-          apt-get install -y nodejs
+          # Install Node.js 22.x and npm
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+          apt-get install -y --no-install-recommends nodejs
           
           # Install Docker CLI
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
           apt-get update
-          apt-get install -y docker-ce-cli
+          apt-get install -y --no-install-recommends docker-ce-cli
           
-          # Install kubectl
-          curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-          echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
-          apt-get update
-          apt-get install -y kubectl
+          # Install kubectl binary directly
+          KUBECTL_VERSION="v1.28.0"
+          curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          mv kubectl /usr/local/bin/
           
           # Install Helm
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          
+          # Install uv package manager
+          curl -LsSf https://astral.sh/uv/install.sh | sh
           
           # Set up tmux config (simplified, no logging)
           cat > /root/.tmux.conf << 'EOF'
@@ -191,6 +275,7 @@ spec:
           export HISTFILESIZE=20000
           export LANG=en_US.UTF-8
           export LC_ALL=en_US.UTF-8
+          export PATH="/root/.local/bin:/usr/local/lib/node_modules/.bin:${PATH}"
           shopt -s histappend
           
           alias ll='ls -la'
@@ -198,6 +283,8 @@ spec:
           alias d='docker'
           alias logs='ls -la /logs/sessions/'
           alias viewlog='tail -f /logs/sessions/session_*.log'
+          alias uv='/root/.local/bin/uv'
+          alias emacs='emacs -nw'
           EOF
           
           # Copy config and start gotty
@@ -205,19 +292,41 @@ spec:
           cd /workspace
           
           # Install claude-code globally
-          npm install -g @anthropic-ai/claude-code || true
+          echo "Installing Claude Code..."
+          echo "Node.js version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          if npm install -g @anthropic-ai/claude-code; then
+            echo "Claude Code installed successfully"
+            # Add npm global bin to PATH
+            export PATH="/usr/local/lib/node_modules/.bin:$PATH"
+            claude-code --version || echo "Claude Code installed but version check failed"
+          else
+            echo "Failed to install Claude Code - continuing anyway"
+          fi
           
-          # Install Emacs and MCP packages
-          apt-get install -y emacs-nox
+          # Copy Emacs MCP configuration from ConfigMap
+          cp /emacs-config/.emacs /root/.emacs
           
-          # Install Node.js MCP packages
-          npm install -g @modelcontextprotocol/server-filesystem
-          npm install -g @modelcontextprotocol/server-fetch
+          # Set up Claude Code configuration directories
+          ln -sf /claude-config/.claude /root/.claude
+          ln -sf /claude-config/workspace/.claude /workspace/.claude
           
-          # Install milady binary
-          wget https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v0.0.11/milady-linux-amd64
-          chmod +x milady-linux-amd64
-          mv milady-linux-amd64 /usr/local/bin/milady
+          # Install computer binary - get latest release
+          echo "Getting latest computer binary release..."
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/theycallmeloki/milady-llm-bridge/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+          echo "Latest release: ${LATEST_RELEASE}"
+          if [ -n "$LATEST_RELEASE" ]; then
+            wget "https://github.com/theycallmeloki/milady-llm-bridge/releases/download/${LATEST_RELEASE}/computer-linux-amd64"
+            if [ -f computer-linux-amd64 ]; then
+              chmod +x computer-linux-amd64
+              mv computer-linux-amd64 /usr/local/bin/computer
+              echo "Computer binary installed successfully"
+            else
+              echo "Failed to download computer binary"
+            fi
+          else
+            echo "Could not determine latest release version"
+          fi
           
           # Install browser control tools
           npm install -g playwright puppeteer
@@ -241,9 +350,15 @@ spec:
           # Create session logging script
           cat > /usr/local/bin/logged-session.sh << 'EOF'
           #!/bin/bash
-          SESSION_ID=$(date +%Y%m%d_%H%M%S)_$$
+          SESSION_ID=$(date +%Y%m%d_%H%M%S)_$(shuf -i 1000-9999 -n 1)
           LOG_DIR="/logs/sessions"
           mkdir -p "$LOG_DIR"
+          
+          # Ensure log file is created even if session fails
+          touch "$LOG_DIR/session_${SESSION_ID}.log"
+          
+          # Handle signals gracefully to ensure log completion
+          trap 'echo "Session ended: $(date)" >> "$LOG_DIR/session_${SESSION_ID}.log"' EXIT TERM INT
           
           # Start recording session with script
           exec script -f -q "$LOG_DIR/session_${SESSION_ID}.log" -c /bin/bash
@@ -256,23 +371,83 @@ spec:
         
         ports:
         - containerPort: 8080
+          name: gotty-port
+        
+        volumeMounts:
+        - name: dev-storage
+          mountPath: /workspace
+        - name: session-logs
+          mountPath: /logs
+        - name: gotty-config
+          mountPath: /config
+        - name: emacs-config
+          mountPath: /emacs-config
+        - name: claude-config
+          mountPath: /claude-config
+      
+      # Websocket persistence proxy
+      - name: websocket-proxy
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
           name: http
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          cat > /etc/nginx/nginx.conf << 'EOF'
+          events { worker_connections 1024; }
+          http {
+            upstream gotty {
+              server localhost:8080;
+            }
+            
+            map $http_upgrade $connection_upgrade {
+              default upgrade;
+              '' close;
+            }
+            
+            server {
+              listen 80;
+              
+              # Websocket proxy with persistence
+              location / {
+                proxy_pass http://gotty;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # Increase timeouts for websocket persistence
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 300s;
+                proxy_read_timeout 300s;
+                
+                # Buffer settings for websocket persistence
+                proxy_buffering off;
+                proxy_cache off;
+              }
+            }
+          }
+          EOF
+          nginx -g 'daemon off;'
         
         readinessProbe:
           tcpSocket:
-            port: 8080
-          initialDelaySeconds: 300
-          periodSeconds: 10
-          timeoutSeconds: 10
-          successThreshold: 1
-          failureThreshold: 5
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
         
         livenessProbe:
           tcpSocket:
-            port: 8080
-          initialDelaySeconds: 600
-          periodSeconds: 30
-          timeoutSeconds: 10
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
           failureThreshold: 3
         
         volumeMounts:
@@ -282,8 +457,10 @@ spec:
           mountPath: /logs
         - name: gotty-config
           mountPath: /config
-        - name: emacs-mcp-config
+        - name: emacs-config
           mountPath: /emacs-config
+        - name: claude-config
+          mountPath: /claude-config
         
         resources:
           requests:
@@ -295,7 +472,7 @@ spec:
       
       # Sidecar logger container for log management
       - name: session-logger
-        image: ubuntu:22.04
+        image: ubuntu:24.04
         command: ["/bin/bash", "-c"]
         args:
         - |
@@ -332,6 +509,46 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+      
+      # Session processor sidecar for AGI training data
+      - name: session-processor
+        image: ubuntu:24.04
+        command: ["/bin/bash", "/scripts/session-processor.sh"]
+        args: []
+        
+        volumeMounts:
+        - name: session-logs
+          mountPath: /logs
+        - name: dev-storage
+          mountPath: /workspace
+        - name: session-processor-script
+          mountPath: /scripts
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        env:
+        - name: TZ
+          value: "UTC"
+        
+        # Install dependencies for the processor
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - |
+                apt-get update && apt-get install -y \
+                  python3 \
+                  gawk \
+                  inotify-tools \
+                  coreutils
   service:
     metadata:
       name: gotty-dev
@@ -342,7 +559,7 @@ spec:
         app: gotty-dev
       ports:
       - port: 8080
-        targetPort: 8080
+        targetPort: 80
         name: http
       type: ClusterIP
 ---
