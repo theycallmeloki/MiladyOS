@@ -304,6 +304,13 @@ spec:
             echo "Failed to install Claude Code - continuing anyway"
           fi
           
+          # Install Emacs and MCP packages
+          apt-get install -y emacs-nox
+          
+          # Install Node.js MCP packages
+          npm install -g @modelcontextprotocol/server-filesystem
+          npm install -g @modelcontextprotocol/server-fetch
+          
           # Copy Emacs MCP configuration from ConfigMap
           cp /emacs-config/.emacs /root/.emacs
           
