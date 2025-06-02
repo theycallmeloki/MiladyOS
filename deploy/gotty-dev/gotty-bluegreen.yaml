@@ -32,6 +32,18 @@ spec:
       storage: 5Gi
 ---
 apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claude-trace-logs
+  namespace: gotty-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: gotty-config
