@@ -180,3 +180,60 @@ spec:
   - hosts:
     - vault.miladyos.net
     secretName: vault-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nft-auth-service-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: nft-auth.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nft-auth-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - nft-auth.miladyos.net
+    secretName: nft-auth-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-nft-app-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # High Integrity Milady NFT Authentication
+    nginx.ingress.kubernetes.io/auth-url: "https://nft-auth.miladyos.net/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://nft-auth.miladyos.net/login?rd=$scheme://$best_http_host$request_uri"
+    nginx.ingress.kubernetes.io/auth-signin-redirect-param: "rd"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-User,X-Auth-NFT"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: test-nft.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: test-nginx-app
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - test-nft.miladyos.net
+    secretName: test-nft-tls
