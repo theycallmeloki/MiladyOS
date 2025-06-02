@@ -56,6 +56,21 @@ class NFTAuthService:
             print(f"NFT ownership check failed: {e}")
             return False
 
+    def update_holder_list_async(self):
+        """Update holder list if cache is expired (non-blocking)"""
+        try:
+            # Check if cache exists and is still fresh (within 30 minutes)
+            ttl = self.redis_client.ttl("holder_list")
+            if ttl > 1800:  # More than 30 minutes left
+                return  # Skip update, cache is still fresh
+            
+            print("Cache expired or missing, triggering holder list update...")
+            # Clear expired cache and generate new list
+            self.redis_client.delete("holder_list")
+            self.generate_holder_list()
+        except Exception as e:
+            print(f"Async holder list update failed: {e}")
+
     def generate_holder_list(self) -> list:
         """Generate complete list of current NFT holders"""
         try:
@@ -390,6 +405,13 @@ def authenticate():
         # Check NFT ownership
         if not nft_auth.check_nft_ownership(wallet_address):
             return jsonify({"success": False, "error": "High Integrity Milady NFT required"}), 403
+        
+        # Trigger holder list update in background (fire and forget)
+        try:
+            nft_auth.update_holder_list_async()
+        except Exception as e:
+            print(f"Background holder list update failed: {e}")
+            # Don't fail authentication if background update fails
         
         # Create session token
         session_data = {
