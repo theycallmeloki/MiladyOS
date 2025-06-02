@@ -28,6 +28,9 @@ CACHE_TTL = int(os.getenv("CACHE_TTL", "600"))
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8080"))
 
+# Admin controls
+ACCESS_ENABLED = os.getenv("ACCESS_ENABLED", "false").lower() == "true"  # Block access by default
+
 class NFTAuthService:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(ETHEREUM_RPC_URL))
@@ -379,14 +382,101 @@ Nonce: ${nonce}`;
 </html>
 """
 
+MAINTENANCE_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Authentication Maintenance</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+            background: #0a0a0a; 
+            color: #ffffff; 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 20px; 
+        }
+        .container { 
+            max-width: 500px; 
+            width: 100%; 
+            background: rgba(255, 255, 255, 0.02); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-radius: 20px; 
+            padding: 40px; 
+            backdrop-filter: blur(20px); 
+            text-align: center; 
+        }
+        .milady-logo { 
+            font-size: 64px; 
+            margin-bottom: 16px; 
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3)); 
+        }
+        .title { 
+            font-size: 28px; 
+            font-weight: 600; 
+            margin-bottom: 8px; 
+            background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+            background-clip: text; 
+        }
+        .subtitle { 
+            color: rgba(255, 255, 255, 0.7); 
+            font-size: 16px; 
+            margin-bottom: 30px; 
+        }
+        .maintenance-message {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid #ffc107;
+            color: #ffc107;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        .info-text {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="milady-logo">🔧</div>
+        <h1 class="title">Authentication Maintenance</h1>
+        <p class="subtitle">High Integrity Milady NFT Service</p>
+        
+        <div class="maintenance-message">
+            <h3>⚠️ Access Temporarily Disabled</h3>
+            <p>Authentication is currently disabled while we update the holder verification system.</p>
+        </div>
+        
+        <div class="info-text">
+            <p>We're preparing the latest High Integrity Milady holder list to ensure accurate verification.</p>
+            <p>Please check back soon!</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 @app.route('/login')
 def login():
     """Login page with Web3 authentication"""
+    if not ACCESS_ENABLED:
+        return render_template_string(MAINTENANCE_TEMPLATE), 503
     return render_template_string(LOGIN_TEMPLATE, contract_address=HIGH_INTEGRITY_MILADY_CONTRACT)
 
 @app.route('/authenticate', methods=['POST'])
 def authenticate():
     """Handle wallet signature authentication"""
+    if not ACCESS_ENABLED:
+        return jsonify({"success": False, "error": "Authentication temporarily disabled"}), 503
+        
     try:
         data = request.get_json()
         wallet_address = data.get('walletAddress')  # Note: using walletAddress to match frontend
@@ -451,6 +541,9 @@ def authenticate():
 @app.route('/auth')
 def auth_check():
     """Authentication check endpoint for ingress-nginx"""
+    if not ACCESS_ENABLED:
+        return '', 503
+        
     try:
         # Check for authentication token
         token = request.cookies.get('nft_auth_token') or request.headers.get('Authorization', '').replace('Bearer ', '')
@@ -509,10 +602,49 @@ def logout():
     response.set_cookie('nft_auth_token', '', expires=0)
     return response
 
+@app.route('/admin/enable', methods=['POST'])
+def admin_enable():
+    """Admin endpoint to enable access"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    global ACCESS_ENABLED
+    ACCESS_ENABLED = True
+    return jsonify({"status": "Access enabled", "access_enabled": ACCESS_ENABLED})
+
+@app.route('/admin/disable', methods=['POST'])
+def admin_disable():
+    """Admin endpoint to disable access"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    global ACCESS_ENABLED
+    ACCESS_ENABLED = False
+    return jsonify({"status": "Access disabled", "access_enabled": ACCESS_ENABLED})
+
+@app.route('/admin/status')
+def admin_status():
+    """Admin endpoint to check access status"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    return jsonify({
+        "access_enabled": ACCESS_ENABLED,
+        "contract": HIGH_INTEGRITY_MILADY_CONTRACT,
+        "service": "nft-auth"
+    })
+
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "service": "nft-auth"})
+    return jsonify({
+        "status": "healthy", 
+        "service": "nft-auth",
+        "access_enabled": ACCESS_ENABLED
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=SERVICE_PORT, debug=False)
