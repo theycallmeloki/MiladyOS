@@ -186,7 +186,8 @@ data:
         try:
             service_endpoints = [
                 {"service": "web", "url": "http://miladyos:8080/login", "port": 8080},
-                {"service": "registry", "url": "http://miladyos:5000/v2/", "port": 5000}
+                {"service": "registry", "url": "http://miladyos:5000/v2/", "port": 5000},
+                {"service": "nft-auth", "url": "http://nft-auth-service:80/health", "port": 80}
             ]
             
             for endpoint in service_endpoints:
