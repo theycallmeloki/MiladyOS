@@ -80,6 +80,79 @@ class NFTAuthService:
             print(f"RPC ownership check failed: {e}")
             return False
 
+    def generate_holder_list(self) -> list:
+        """Generate complete list of current NFT holders"""
+        try:
+            print("Starting holder list generation...")
+            
+            # Check if we have a cached holder list
+            cached_holders = self.redis_client.get("holder_list")
+            if cached_holders:
+                print("Returning cached holder list")
+                return json.loads(cached_holders)
+            
+            # Get total supply
+            total_supply_signature = "0x18160ddd"  # totalSupply()
+            result = self.w3.eth.call({
+                "to": self.contract_address,
+                "data": total_supply_signature
+            })
+            total_supply = int(result.hex(), 16)
+            print(f"Total supply: {total_supply}")
+            
+            holders = set()
+            
+            # For each token ID, get the owner
+            for token_id in range(total_supply):
+                try:
+                    # ownerOf(tokenId) function signature
+                    owner_of_signature = "0x6352211e"  # ownerOf(uint256)
+                    token_id_padded = hex(token_id)[2:].zfill(64)
+                    data = owner_of_signature + token_id_padded
+                    
+                    result = self.w3.eth.call({
+                        "to": self.contract_address,
+                        "data": data
+                    })
+                    
+                    # Extract address from result (last 20 bytes)
+                    owner_address = "0x" + result.hex()[-40:]
+                    holders.add(owner_address.lower())
+                    
+                    if token_id % 100 == 0:
+                        print(f"Processed {token_id}/{total_supply} tokens...")
+                        
+                except Exception as e:
+                    print(f"Error getting owner of token {token_id}: {e}")
+                    continue
+            
+            holder_list = list(holders)
+            print(f"Found {len(holder_list)} unique holders")
+            
+            # Cache for 1 hour
+            self.redis_client.setex("holder_list", 3600, json.dumps(holder_list))
+            
+            return holder_list
+            
+        except Exception as e:
+            print(f"Holder list generation failed: {e}")
+            return []
+
+    def is_holder_from_list(self, wallet_address: str) -> bool:
+        """Check if wallet is in the cached holder list"""
+        try:
+            cached_holders = self.redis_client.get("holder_list")
+            if not cached_holders:
+                # If no cached list, fall back to real-time check
+                return self.check_nft_ownership_rpc(wallet_address)
+            
+            holder_list = json.loads(cached_holders)
+            return wallet_address.lower() in holder_list
+            
+        except Exception as e:
+            print(f"Holder list check failed: {e}")
+            return self.check_nft_ownership_rpc(wallet_address)
+
 # Initialize service
 nft_auth = NFTAuthService()
 
@@ -510,8 +583,8 @@ def authenticate():
             print(f"Signature verification failed: {e}")
             return jsonify({"success": False, "error": "Signature verification failed"}), 401
         
-        # Check NFT ownership
-        if not nft_auth.check_nft_ownership_rpc(wallet_address):
+        # Check NFT ownership (prefer holder list if available)
+        if not nft_auth.is_holder_from_list(wallet_address):
             return jsonify({"success": False, "error": "High Integrity Milady NFT required"}), 403
         
         # Create session token
@@ -586,8 +659,8 @@ def api_auth():
         if not wallet_address:
             return jsonify({"authorized": False, "error": "Missing wallet address"}), 400
         
-        # Check NFT ownership
-        owns_nft = nft_auth.check_nft_ownership_rpc(wallet_address)
+        # Check NFT ownership (prefer holder list if available)
+        owns_nft = nft_auth.is_holder_from_list(wallet_address)
         
         return jsonify({"authorized": owns_nft})
         
@@ -633,16 +706,65 @@ def admin_status():
     
     return jsonify({
         "access_enabled": ACCESS_ENABLED,
-        "contract": HIGH_INTEGRITY_MILADY_CONTRACT,
-        "service": "nft-auth"
+        "contract": HIGH_INTEGRITY_MILADY_CONTRACT
     })
+
+@app.route('/admin/generate-holders', methods=['POST'])
+def admin_generate_holders():
+    """Admin endpoint to trigger holder list generation"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        print("Admin triggering holder list generation...")
+        holder_list = nft_auth.generate_holder_list()
+        return jsonify({
+            "status": "Holder list generated",
+            "total_holders": len(holder_list),
+            "sample_holders": holder_list[:5] if holder_list else []
+        })
+    except Exception as e:
+        print(f"Holder list generation failed: {e}")
+        return jsonify({"error": "Holder list generation failed"}), 500
+
+@app.route('/admin/holders')
+def admin_view_holders():
+    """Admin endpoint to view current holder list and stats"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        cached_holders = nft_auth.redis_client.get("holder_list")
+        if not cached_holders:
+            return jsonify({
+                "status": "No holder list cached",
+                "total_holders": 0,
+                "cache_status": "empty"
+            })
+        
+        holder_list = json.loads(cached_holders)
+        # Get cache TTL
+        ttl = nft_auth.redis_client.ttl("holder_list")
+        
+        return jsonify({
+            "status": "Holder list available",
+            "total_holders": len(holder_list),
+            "cache_ttl_seconds": ttl,
+            "sample_holders": holder_list[:10] if holder_list else [],
+            "cache_status": "active"
+        })
+        
+    except Exception as e:
+        print(f"Error retrieving holder list: {e}")
+        return jsonify({"error": "Failed to retrieve holder list"}), 500
 
 @app.route('/health')
 def health():
     """Health check endpoint"""
     return jsonify({
-        "status": "healthy", 
-        "service": "nft-auth",
+        "status": "healthy",
         "access_enabled": ACCESS_ENABLED
     })
 
