@@ -11,6 +11,8 @@ namespace: default
 resources:
 # Standalone NFT authentication service
 - nft-auth-deployment.yaml
+# Test app to verify NFT authentication works
+- test-nginx-app.yaml
 
 labels:
 - pairs:

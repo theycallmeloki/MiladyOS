@@ -1,0 +1,228 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-nginx-app
+  namespace: default
+  labels:
+    app: test-nginx-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-nginx-app
+  template:
+    metadata:
+      labels:
+        app: test-nginx-app
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /usr/share/nginx/html/index.html
+          subPath: index.html
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: test-nginx-content
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-nginx-app
+  namespace: default
+  labels:
+    app: test-nginx-app
+spec:
+  selector:
+    app: test-nginx-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-nginx-content
+  namespace: default
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>High Integrity Milady Protected App</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 50px auto;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                text-align: center;
+            }
+            .container {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 40px;
+                border-radius: 15px;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            }
+            .milady-logo {
+                font-size: 120px;
+                margin-bottom: 20px;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            }
+            h1 {
+                margin-bottom: 30px;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            }
+            .success-message {
+                background: rgba(76, 175, 80, 0.3);
+                padding: 20px;
+                border-radius: 10px;
+                margin: 20px 0;
+                border: 2px solid #4CAF50;
+            }
+            .auth-info {
+                background: rgba(33, 150, 243, 0.3);
+                padding: 15px;
+                border-radius: 8px;
+                margin: 15px 0;
+                border-left: 4px solid #2196F3;
+                text-align: left;
+            }
+            .feature-list {
+                text-align: left;
+                margin: 20px 0;
+            }
+            .feature-list li {
+                margin: 10px 0;
+                padding-left: 10px;
+            }
+            code {
+                background: rgba(0, 0, 0, 0.3);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: 'Courier New', monospace;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="milady-logo">✨</div>
+            <h1>🎉 SUCCESS! 🎉</h1>
+            
+            <div class="success-message">
+                <h2>High Integrity Milady NFT Authentication Works!</h2>
+                <p>If you can see this page, you successfully:</p>
+                <ul class="feature-list">
+                    <li>✅ Connected your MetaMask wallet</li>
+                    <li>✅ Proved ownership of High Integrity Milady NFT</li>
+                    <li>✅ Passed cryptographic signature verification</li>
+                    <li>✅ Gained access to this protected application</li>
+                </ul>
+            </div>
+
+            <div class="auth-info">
+                <h3>🔐 How This Works</h3>
+                <p>This test app is protected by the NFT authentication service using ingress annotations:</p>
+                <ul class="feature-list">
+                    <li><code>auth-url</code>: Checks authentication status</li>
+                    <li><code>auth-signin</code>: Redirects to login page</li>
+                    <li><code>auth-response-headers</code>: Passes wallet info</li>
+                </ul>
+            </div>
+
+            <div class="auth-info">
+                <h3>💎 High Integrity Milady Contract</h3>
+                <p>Contract: <code>0xf01B34d9418874258B35b0507AB53ED971CBB8D3</code></p>
+                <p>This service only grants access to holders of High Integrity Milady NFTs.</p>
+            </div>
+
+            <div class="auth-info">
+                <h3>🚀 Next Steps</h3>
+                <p>You can now apply the same ingress annotations to protect any Kubernetes application!</p>
+                <ul class="feature-list">
+                    <li>MiladyOS Jenkins interface</li>
+                    <li>Monitoring dashboards</li>
+                    <li>Internal admin tools</li>
+                    <li>Any other sensitive services</li>
+                </ul>
+            </div>
+
+            <p style="margin-top: 40px; opacity: 0.8;">
+                <em>Powered by High Integrity Milady NFT Authentication Service</em>
+            </p>
+        </div>
+
+        <script>
+            // Show auth headers if available (passed from ingress)
+            const authUser = document.querySelector('meta[name="x-auth-user"]');
+            const authNft = document.querySelector('meta[name="x-auth-nft"]');
+            
+            if (authUser || authNft) {
+                const authInfo = document.createElement('div');
+                authInfo.className = 'auth-info';
+                authInfo.innerHTML = `
+                    <h3>🎯 Authentication Details</h3>
+                    <p>Wallet: <code>${authUser ? authUser.content : 'Available in headers'}</code></p>
+                    <p>NFT Type: <code>${authNft ? authNft.content : 'high-integrity-milady'}</code></p>
+                `;
+                document.querySelector('.container').appendChild(authInfo);
+            }
+        </script>
+    </body>
+    </html>
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-nginx-app-protected
+  namespace: default
+  annotations:
+    # High Integrity Milady NFT Authentication
+    nginx.ingress.kubernetes.io/auth-url: "http://nft-auth-service.default.svc.cluster.local/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "http://nft-auth-service.default.svc.cluster.local/login?rd=$scheme://$best_http_host$request_uri"
+    nginx.ingress.kubernetes.io/auth-signin-redirect-param: "rd"
+    
+    # Pass authentication info to the app
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-User,X-Auth-NFT"
+    
+    # Optional: SSL configuration (uncomment if you have cert-manager)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  # Uncomment for SSL
+  # tls:
+  # - hosts:
+  #   - test-nft-auth.your-domain.com
+  #   secretName: test-nft-auth-tls
+  rules:
+  - host: test-nft-auth.localhost  # Change this to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: test-nginx-app
+            port:
+              number: 80
