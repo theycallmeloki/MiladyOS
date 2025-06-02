@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nft-auth-service
+  namespace: default
+  labels:
+    app: nft-auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nft-auth-service
+  template:
+    metadata:
+      labels:
+        app: nft-auth-service
+    spec:
+      containers:
+      - name: nft-auth
+        image: python:3.11-slim
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: HIGH_INTEGRITY_MILADY_CONTRACT
+          value: "0xf01B34d9418874258B35b0507AB53ED971CBB8D3"
+        - name: ETHEREUM_RPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: nft-auth-config
+              key: ethereum-rpc-url
+        - name: ETHERSCAN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nft-auth-config
+              key: etherscan-api-key
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nft-auth-config
+              key: secret-key
+        - name: SERVICE_PORT
+          value: "8080"
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          pip install flask web3 redis requests eth-account &&
+          python /app/nft-auth-service.py
+        volumeMounts:
+        - name: nft-auth-service
+          mountPath: /app/nft-auth-service.py
+          subPath: nft-auth-service.py
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      - name: redis
+        image: redis:6.2-alpine
+        ports:
+        - containerPort: 6379
+        command: ["redis-server", "--appendonly", "yes"]
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: nft-auth-service
+        configMap:
+          name: nft-auth-service
+          defaultMode: 0755
+      - name: redis-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nft-auth-service
+  namespace: default
+  labels:
+    app: nft-auth-service
+spec:
+  selector:
+    app: nft-auth-service
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nft-auth-config
+  namespace: default
+type: Opaque
+stringData:
+  ethereum-rpc-url: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+  etherscan-api-key: "YOUR_ETHERSCAN_API_KEY"
+  secret-key: "your-secret-key-change-this-in-production"

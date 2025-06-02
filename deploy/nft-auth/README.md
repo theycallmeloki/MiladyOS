@@ -1,113 +1,105 @@
-# NFT Authentication Integration for MiladyOS
+# NFT Authentication Service for MiladyOS
 
-Simple and direct High Integrity Milady NFT authentication middleware for the existing MiladyOS infrastructure.
+Standalone High Integrity Milady NFT authentication service similar to TinyAuth, designed to protect any Kubernetes application without modifying the applications themselves.
 
 ## Architecture Overview
 
 ```
-Web3 Wallet → MetaMask → NFT Auth Middleware → Existing MiladyOS MCP Server
-                ↓
-         Direct integration with running MiladyOS services
+User → Ingress Controller → NFT Auth Service → Protected Application
+       (auth-url check)     (login/verify)     (if authenticated)
 ```
+
+## How It Works
+
+Just like TinyAuth, this service acts as an authentication gateway:
+
+1. **Ingress Integration**: Uses `nginx.ingress.kubernetes.io/auth-url` annotations
+2. **Standalone Service**: Runs as separate deployment, doesn't modify your apps
+3. **Web3 Authentication**: Browser-based MetaMask integration with NFT verification
+4. **Session Management**: Secure cookie-based sessions
 
 ## Features
 
 - **High Integrity Milady NFT Only**: Single contract authentication (0xf01B34d9418874258B35b0507AB53ED971CBB8D3)
-- **Direct Integration**: Works with existing MiladyOS deployment without complex setup
-- **Redis Caching**: Uses existing Redis instance for performance
-- **Web3 Client**: Browser-based MetaMask integration
-- **Middleware Approach**: Simple Python decorator for existing endpoints
+- **TinyAuth-Style Integration**: Protect any service via ingress annotations
+- **Web3 Authentication**: MetaMask wallet connection and signature verification
+- **Redis Caching**: Fast NFT ownership verification with caching
+- **Session Cookies**: Secure HTTP-only session management
 
-## Supported Network
+## Quick Start
 
-- Ethereum Mainnet only (High Integrity Milady contract)
-
-## Access Control
-
-- **NFT Requirement**: High Integrity Milady (0xf01B34d9418874258B35b0507AB53ED971CBB8D3)
-- **Access Level**: Protects sensitive MCP endpoints
-- **Minimum Tokens**: 1 High Integrity Milady NFT
-
-## Integration with Existing MiladyOS
-
-This approach integrates directly with your running MiladyOS deployment:
+### 1. Deploy the Service
 
 ```bash
-# 1. Update secrets with your API keys
-kubectl create secret generic nft-auth-config \
-  --from-literal=ethereum-rpc-url="https://mainnet.infura.io/v3/YOUR_KEY" \
-  --from-literal=etherscan-api-key="YOUR_ETHERSCAN_KEY"
+# Update the secret with your API keys
+kubectl patch secret nft-auth-config -p '{"stringData":{"ethereum-rpc-url":"https://mainnet.infura.io/v3/YOUR_KEY","etherscan-api-key":"YOUR_ETHERSCAN_KEY"}}'
 
-# 2. Apply the integration patch
+# Deploy the authentication service
 kubectl apply -k deploy/nft-auth/
-
-# 3. The middleware will be automatically mounted into the existing MiladyOS pod
 ```
 
-## Usage
+### 2. Protect Any Application
 
-### Web Interface
-1. Load the Web3 auth client in your browser
-2. Connect MetaMask wallet
-3. System automatically verifies High Integrity Milady ownership
-4. Authenticated requests include Bearer token
+Add these annotations to any ingress to require NFT authentication:
 
-### API Integration
-```python
-# In your MCP server code, protect endpoints:
-from nft_auth_middleware import require_nft_auth
-
-@app.route('/execute_command', methods=['POST'])
-@require_nft_auth
-def execute_command():
-    wallet = request.nft_wallet  # Available after auth
-    # Your existing command execution logic
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: your-protected-app
+  annotations:
+    # NFT Authentication
+    nginx.ingress.kubernetes.io/auth-url: "http://nft-auth-service.default.svc.cluster.local/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "http://nft-auth-service.default.svc.cluster.local/login?rd=$scheme://$best_http_host$request_uri"
+    nginx.ingress.kubernetes.io/auth-signin-redirect-param: "rd"
+    # Optional: Pass wallet info to your app
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-User,X-Auth-NFT"
+spec:
+  # ... your existing ingress config
 ```
+
+## Authentication Flow
+
+1. **User visits protected URL** → Ingress checks auth with `/auth` endpoint
+2. **Not authenticated** → Redirected to `/login` page
+3. **Connect MetaMask** → Wallet connection and NFT ownership verification
+4. **Sign message** → Cryptographic proof of wallet ownership
+5. **Session created** → Secure cookie set, user redirected back
+6. **Access granted** → Future requests pass through automatically
 
 ## Configuration
 
-Minimal configuration required:
+The service uses these environment variables:
 
 ```yaml
+HIGH_INTEGRITY_MILADY_CONTRACT: "0xf01B34d9418874258B35b0507AB53ED971CBB8D3"
 ETHEREUM_RPC_URL: "https://mainnet.infura.io/v3/YOUR_KEY"
 ETHERSCAN_API_KEY: "YOUR_ETHERSCAN_KEY"
-HIGH_INTEGRITY_MILADY_CONTRACT: "0xf01B34d9418874258B35b0507AB53ED971CBB8D3"
+SECRET_KEY: "your-session-secret"
 ```
-
-## Benefits of This Approach
-
-- **No Service Disruption**: Works with existing MiladyOS without downtime
-- **Simple Integration**: Just mount middleware files and add decorators
-- **Uses Existing Infrastructure**: Leverages current Redis and network setup
-- **Minimal Attack Surface**: No new services or complex authentication flows
-- **High Integrity Milady Focus**: Single contract, simple ownership verification
 
 ## Security Features
 
-- **Wallet Signature Verification**: Cryptographic proof of wallet ownership
-- **NFT Ownership Verification**: Real-time blockchain verification
-- **Caching**: Reduces blockchain API calls while maintaining security
-- **Rate Limiting**: Built-in protection against API abuse
-
-## Development
-
-```bash
-# Test NFT ownership locally
-python3 nft-auth-middleware.py
-
-# Test Web3 integration
-# Open index.html with the JavaScript client in a browser
-```
+- **Cryptographic Verification**: Wallet signature proves ownership
+- **Real-time NFT Check**: Verifies current NFT ownership on-chain
+- **Session Security**: HTTP-only, secure cookies with expiration
+- **Caching**: Redis caching prevents blockchain spam
+- **Rate Limiting**: Built-in protection against abuse
 
 ## File Structure
 
 ```
 deploy/nft-auth/
-├── README.md                    # This file
-├── nft-auth-middleware.py       # Python middleware for MCP server
-├── nft-web3-auth.js            # JavaScript Web3 client
-├── integration-patch.yaml      # Kubernetes integration patch
-├── kustomization.yaml          # Kustomize configuration
-├── scripts/kubectl-nft-auth    # kubectl plugin (optional)
-└── rbac/nft-auth-rbac.yaml     # Basic RBAC (if needed)
+├── README.md                      # This file
+├── nft-auth-service.py           # Main authentication service
+├── nft-auth-deployment.yaml     # Kubernetes deployment
+├── example-protected-ingress.yaml # Example usage
+└── kustomization.yaml           # Kustomize configuration
 ```
+
+## Benefits
+
+- **Zero App Changes**: Protect any existing app without code changes
+- **Kubernetes Native**: Uses standard ingress annotations
+- **High Integrity Milady Focus**: Single NFT contract, simple verification
+- **Production Ready**: Proper health checks, resource limits, caching

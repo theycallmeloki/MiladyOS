@@ -1,0 +1,64 @@
+# Example: How to protect MiladyOS with NFT authentication
+# This shows how to add NFT auth to any existing ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: miladyos-protected
+  namespace: default
+  annotations:
+    # NFT Authentication annotations (similar to TinyAuth pattern)
+    nginx.ingress.kubernetes.io/auth-url: "http://nft-auth-service.default.svc.cluster.local/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "http://nft-auth-service.default.svc.cluster.local/login?rd=$scheme://$best_http_host$request_uri"
+    nginx.ingress.kubernetes.io/auth-signin-redirect-param: "rd"
+    
+    # Optional: Pass user info to backend
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-User,X-Auth-NFT"
+    
+    # SSL and other ingress settings
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - miladyos.example.com
+    secretName: miladyos-tls
+  rules:
+  - host: miladyos.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: miladyos-service  # Your existing MiladyOS service
+            port:
+              number: 8080
+
+---
+# Ingress for the NFT auth service itself (public, no auth)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nft-auth-service
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - auth.miladyos.example.com
+    secretName: nft-auth-tls
+  rules:
+  - host: auth.miladyos.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nft-auth-service
+            port:
+              number: 80
