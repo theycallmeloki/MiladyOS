@@ -15,11 +15,12 @@ resources:
 # RBAC for service account (if needed)
 - rbac/nft-auth-rbac.yaml
 
-commonLabels:
-  app.kubernetes.io/name: nft-auth-integration
-  app.kubernetes.io/part-of: miladyos
-  app.kubernetes.io/version: "1.0.0"
-  app.kubernetes.io/managed-by: kustomize
+labels:
+- pairs:
+    app.kubernetes.io/name: nft-auth-integration
+    app.kubernetes.io/part-of: miladyos
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kustomize
 
 # Generate ConfigMaps from local files
 configMapGenerator:

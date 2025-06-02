@@ -155,27 +155,6 @@ spec:
           name: nft-auth-web
           defaultMode: 0644
 
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nft-auth-middleware
-  namespace: default
-data:
-  nft-auth-middleware.py: |
-    # Content from nft-auth-middleware.py file
-    # (This would be populated by kustomize or manually)
-
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nft-auth-web
-  namespace: default
-data:
-  nft-web3-auth.js: |
-    # Content from nft-web3-auth.js file
-    # (This would be populated by kustomize or manually)
 
 ---
 apiVersion: v1
