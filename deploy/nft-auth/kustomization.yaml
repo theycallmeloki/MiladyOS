@@ -15,8 +15,6 @@ resources:
 - nft-auth-ingress.yaml
 # Test app to verify NFT authentication works
 - test-nginx-app.yaml
-# Daily holder list generation cron job
-- holder-list-cronjob.yaml
 
 labels:
 - pairs:
