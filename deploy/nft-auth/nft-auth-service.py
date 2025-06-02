@@ -548,32 +548,6 @@ def admin_view_holders():
         print(f"Error retrieving holder list: {e}")
         return jsonify({"error": "Failed to retrieve holder list"}), 500
 
-@app.route('/admin/auth-logs')
-def admin_view_auth_logs():
-    """Admin endpoint to view recent authentication logs"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    try:
-        # Get recent auth logs (last 24 hours)
-        auth_keys = nft_auth.redis_client.keys("auth_log:*")
-        auth_logs = []
-        
-        for key in sorted(auth_keys, reverse=True)[:50]:  # Latest 50 events
-            log_data = nft_auth.redis_client.get(key)
-            if log_data:
-                auth_logs.append(json.loads(log_data))
-        
-        return jsonify({
-            "status": "Authentication logs retrieved",
-            "total_events": len(auth_logs),
-            "recent_events": auth_logs
-        })
-        
-    except Exception as e:
-        print(f"Error retrieving auth logs: {e}")
-        return jsonify({"error": "Failed to retrieve auth logs"}), 500
 
 @app.route('/health')
 def health():
