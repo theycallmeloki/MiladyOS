@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nft-auth-service
+  namespace: monitoring
+  labels:
+    app: nft-auth-service
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nft-auth-service
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+  namespaceSelector:
+    matchNames:
+    - default

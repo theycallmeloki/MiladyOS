@@ -21,6 +21,8 @@ spec:
         ports:
         - containerPort: 8080
           name: http
+        - containerPort: 8080
+          name: metrics
         env:
         - name: HIGH_INTEGRITY_MILADY_CONTRACT
           value: "0xf01B34d9418874258B35b0507AB53ED971CBB8D3"
@@ -40,7 +42,7 @@ spec:
         command: ["/bin/bash", "-c"]
         args:
         - |
-          pip install flask web3 redis requests eth-account &&
+          pip install flask web3 redis requests eth-account prometheus-client &&
           python /app/nft-auth-service.py
         volumeMounts:
         - name: nft-auth-service
@@ -85,6 +87,10 @@ spec:
   ports:
   - name: http
     port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 8080
     targetPort: 8080
     protocol: TCP
   type: ClusterIP
