@@ -1,0 +1,325 @@
+# Claude Trace Integration for MiladyOS GoTTY
+# Patches the existing gotty-dev deployment to include claude-trace functionality
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-trace-config
+  namespace: gotty-dev
+data:
+  claude-trace-wrapper.sh: |
+    #!/bin/bash
+    
+    # Claude Trace Integration for MiladyOS GoTTY
+    # This script wraps claude-code with traffic logging and HTML generation
+    
+    TRACE_DIR="/logs/claude-trace"
+    WORKSPACE="/workspace"
+    
+    # Create directories
+    mkdir -p "$TRACE_DIR" "$WORKSPACE/.claude-trace"
+    
+    # Set environment for claude-trace
+    export CLAUDE_TRACE_INCLUDE_ALL_REQUESTS=${CLAUDE_TRACE_INCLUDE_ALL:-"false"}
+    export NODE_ENV=${NODE_ENV:-"production"}
+    
+    # Function to check if claude-code is available
+    check_claude_code() {
+        if ! command -v claude-code >/dev/null 2>&1; then
+            echo "❌ Claude Code not available, installing..."
+            npm install -g @anthropic-ai/claude-code || {
+                echo "❌ Failed to install Claude Code"
+                return 1
+            }
+        fi
+        echo "✅ Claude Code available: $(claude-code --version 2>/dev/null || echo 'version unknown')"
+        return 0
+    }
+    
+    # Function to install claude-trace  
+    install_claude_trace() {
+        echo "🐙 Installing Claude Trace - checking for lemmy repo..."
+        
+        # Check if lemmy repo exists first - fail if not found
+        if [ ! -d "$WORKSPACE/lemmy" ]; then
+            echo "📥 Lemmy repository not found, attempting to clone..."
+            cd "$WORKSPACE"
+            if ! git clone https://github.com/badlogic/lemmy.git; then
+                echo "❌ CRITICAL: Failed to clone lemmy repository"
+                echo "🚫 Cannot install claude-trace without source"
+                echo "💡 Check network connectivity to GitHub"
+                return 1
+            fi
+        fi
+        
+        # Verify claude-trace source exists in lemmy repo
+        if [ -d "$WORKSPACE/lemmy/apps/claude-trace" ]; then
+            echo "🔨 Building claude-trace from lemmy source..."
+            cd "$WORKSPACE/lemmy/apps/claude-trace"
+            
+            # Install dependencies and build
+            if ! npm install; then
+                echo "❌ CRITICAL: Failed to install claude-trace dependencies"
+                echo "🚫 Cannot proceed without proper installation"
+                return 1
+            fi
+            
+            if ! npm run build; then
+                echo "❌ CRITICAL: Failed to build claude-trace"
+                echo "🚫 Cannot proceed without proper build"
+                return 1
+            fi
+            
+            # Create symlink to make globally available
+            if [ -f "dist/cli.js" ]; then
+                ln -sf "$(pwd)/dist/cli.js" /usr/local/bin/claude-trace
+                chmod +x /usr/local/bin/claude-trace
+                echo "✅ Claude Trace built and linked successfully"
+                return 0
+            else
+                echo "❌ CRITICAL: Built claude-trace binary not found"
+                echo "🚫 Build completed but dist/cli.js missing"
+                return 1
+            fi
+        else
+            echo "❌ CRITICAL: Claude Trace source not found in lemmy repository"
+            echo "🚫 Expected: $WORKSPACE/lemmy/apps/claude-trace"
+            echo "💡 Repository may be corrupted or outdated"
+            return 1
+        fi
+    }
+    
+    # Function to start claude-trace
+    start_claude_trace() {
+        local args="$*"
+        
+        echo "🌸 Starting Claude Code with trace logging..."
+        echo "📁 Trace logs: $TRACE_DIR"
+        echo "⚙️  Arguments: $args"
+        
+        cd "$WORKSPACE"
+        
+        # Set up trace logging directory
+        export CLAUDE_TRACE_LOG_DIR="$TRACE_DIR"
+        
+        # Start claude-trace with arguments
+        if [ -z "$args" ]; then
+            # No arguments - start interactive mode
+            claude-trace
+        else
+            # Pass arguments to claude-code via claude-trace
+            claude-trace --run-with $args
+        fi
+    }
+    
+    # Function to generate HTML reports
+    generate_reports() {
+        echo "📊 Generating HTML reports from trace logs..."
+        
+        # Find all .jsonl files and generate HTML reports
+        find "$TRACE_DIR" -name "*.jsonl" -type f | while read -r jsonl_file; do
+            if [ -s "$jsonl_file" ]; then  # Only process non-empty files
+                html_file="${jsonl_file%.jsonl}.html"
+                echo "🔄 Processing: $(basename "$jsonl_file")"
+                
+                if claude-trace --generate-html "$jsonl_file" "$html_file" --no-open; then
+                    echo "✅ Generated: $(basename "$html_file")"
+                else
+                    echo "❌ Failed to generate HTML for: $(basename "$jsonl_file")"
+                fi
+            fi
+        done
+        
+        # Generate conversation index
+        if command -v claude-trace >/dev/null 2>&1; then
+            echo "📚 Generating conversation index..."
+            cd "$TRACE_DIR"
+            claude-trace --index || echo "⚠️  Failed to generate conversation index"
+        fi
+    }
+    
+    # Function to show trace status
+    show_status() {
+        echo "🐙 Claude Trace Status:"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📁 Trace Directory: $TRACE_DIR"
+        echo "🏠 Workspace: $WORKSPACE"
+        echo "🔧 Claude Code: $(command -v claude-code || echo 'not found')"
+        echo "🐙 Claude Trace: $(command -v claude-trace || echo 'not found')"
+        echo ""
+        
+        if [ -d "$TRACE_DIR" ]; then
+            echo "📊 Trace Files:"
+            ls -la "$TRACE_DIR" 2>/dev/null || echo "  (empty)"
+        else
+            echo "📁 Trace directory not created yet"
+        fi
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    }
+    
+    # Function to extract token
+    extract_token() {
+        echo "🔑 Extracting Claude Code OAuth token..."
+        if command -v claude-trace >/dev/null 2>&1; then
+            claude-trace --extract-token
+        else
+            echo "❌ Claude Trace not available"
+            return 1
+        fi
+    }
+    
+    # Main command handling
+    case "${1:-}" in
+        "install")
+            check_claude_code && install_claude_trace
+            ;;
+        "start")
+            shift
+            start_claude_trace "$@"
+            ;;
+        "generate")
+            generate_reports
+            ;;
+        "status")
+            show_status
+            ;;
+        "token")
+            extract_token
+            ;;
+        "help"|"--help"|"-h")
+            echo "🐙 Claude Trace Wrapper for MiladyOS"
+            echo ""
+            echo "Usage: claude-trace-wrapper [command] [args...]"
+            echo ""
+            echo "Commands:"
+            echo "  install                Install Claude Code and Claude Trace"
+            echo "  start [args...]        Start Claude Code with trace logging"
+            echo "  generate              Generate HTML reports from trace logs"
+            echo "  status                Show current status and trace files"
+            echo "  token                 Extract OAuth token"
+            echo "  help                  Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  claude-trace-wrapper install"
+            echo "  claude-trace-wrapper start"
+            echo "  claude-trace-wrapper start chat --model sonnet-3.5"
+            echo "  claude-trace-wrapper generate"
+            echo "  claude-trace-wrapper status"
+            ;;
+        *)
+            echo "🌸 Claude Trace Wrapper - Starting interactive mode..."
+            check_claude_code && install_claude_trace && start_claude_trace "$@"
+            ;;
+    esac
+
+  post-session-processor.sh: |
+    #!/bin/bash
+    
+    # Post-session processor to generate claude-trace HTML reports
+    # Runs after each session to create browsable trace logs
+    
+    TRACE_DIR="/logs/claude-trace"
+    SESSION_LOGS="/logs/sessions"
+    
+    # Function to process trace logs after session ends
+    process_trace_logs() {
+        local session_id="${1:-unknown}"
+        
+        echo "[$(date)] Processing Claude Trace logs for session: $session_id"
+        
+        if [ -d "$TRACE_DIR" ] && [ "$(ls -A $TRACE_DIR 2>/dev/null)" ]; then
+            echo "[$(date)] Found trace files, generating HTML reports..."
+            
+            # Generate HTML reports for all JSONL files
+            find "$TRACE_DIR" -name "*.jsonl" -type f -mmin -60 | while read -r jsonl_file; do
+                if [ -s "$jsonl_file" ]; then
+                    html_file="${jsonl_file%.jsonl}.html"
+                    echo "[$(date)] Generating HTML for: $(basename "$jsonl_file")"
+                    
+                    # Use claude-trace to generate HTML
+                    if command -v claude-trace >/dev/null 2>&1; then
+                        claude-trace --generate-html "$jsonl_file" "$html_file" --no-open 2>/dev/null || \
+                        echo "[$(date)] Warning: Failed to generate HTML for $(basename "$jsonl_file")"
+                    else
+                        echo "[$(date)] Warning: claude-trace not available for HTML generation"
+                    fi
+                fi
+            done
+            
+            # Generate conversation index
+            if command -v claude-trace >/dev/null 2>&1; then
+                echo "[$(date)] Generating conversation index..."
+                cd "$TRACE_DIR" && claude-trace --index 2>/dev/null || \
+                echo "[$(date)] Warning: Failed to generate conversation index"
+            fi
+            
+            echo "[$(date)] Claude Trace processing completed"
+        else
+            echo "[$(date)] No trace files found for processing"
+        fi
+    }
+    
+    # Monitor for session completion and process traces
+    monitor_sessions() {
+        echo "[$(date)] Starting Claude Trace post-session processor"
+        
+        while true; do
+            # Look for recently completed session logs
+            if [ -d "$SESSION_LOGS" ]; then
+                find "$SESSION_LOGS" -name "session_*.log" -mmin -5 | while read -r session_log; do
+                    if [ -f "$session_log" ]; then
+                        session_id=$(basename "$session_log" .log)
+                        
+                        # Check if this session used Claude Code (look for claude patterns)
+                        if grep -q "claude\|Claude\|anthropic" "$session_log" 2>/dev/null; then
+                            echo "[$(date)] Detected Claude usage in session: $session_id"
+                            process_trace_logs "$session_id"
+                        fi
+                    fi
+                done
+            fi
+            
+            sleep 30  # Check every 30 seconds
+        done
+    }
+    
+    # Start monitoring
+    monitor_sessions
+
+---
+# Patch the existing gotty-bluegreen.yaml to add claude-trace integration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gotty-config-with-trace
+  namespace: gotty-dev
+data:
+  .gotty: |
+    enable_tls = false
+    port = "8080"
+    permit_write = true
+    permit_arguments = true
+    title_format = "MiladyOS Dev Terminal • Claude Trace Enabled"
+    enable_reconnect = true
+    reconnect_time = 5
+    max_connection = 10
+    once = false
+    timeout = 0
+    width = 0
+    height = 0
+    enable_basic_auth = true
+    credential = "milady:miladymilady"
+
+---
+# PVC for claude-trace logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claude-trace-logs
+  namespace: gotty-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi

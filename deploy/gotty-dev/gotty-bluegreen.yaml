@@ -101,6 +101,13 @@ spec:
       - name: claude-config
         persistentVolumeClaim:
           claimName: claude-config-storage
+      - name: claude-trace-logs
+        persistentVolumeClaim:
+          claimName: claude-trace-logs
+      - name: claude-trace-config
+        configMap:
+          name: claude-trace-config
+          defaultMode: 0755
       
       initContainers:
       - name: claude-init
@@ -285,10 +292,50 @@ spec:
           alias viewlog='tail -f /logs/sessions/session_*.log'
           alias uv='/root/.local/bin/uv'
           alias emacs='emacs -nw'
+          
+          # Claude Trace environment setup
+          export CLAUDE_TRACE_LOG_DIR='/logs/claude-trace'
+          export CLAUDE_TRACE_INCLUDE_ALL_REQUESTS='false'
+          
+          # Self-contained claude-trace wrapper that auto-installs
+          claude() {
+            local trace_wrapper="/usr/local/bin/claude-trace-wrapper.sh"
+            
+            # Auto-install claude-trace on first use
+            if [ ! -f "/usr/local/bin/claude-trace" ]; then
+              echo "🐙 First-time Claude usage detected - installing claude-trace..."
+              if ! "$trace_wrapper" install; then
+                echo "❌ CRITICAL: claude-trace installation failed!"
+                echo "🚫 Blocking claude command to prevent untraced API token usage"
+                echo "💡 Fix: Manually install claude-trace or check network connectivity"
+                return 1
+              fi
+            fi
+            
+            # Verify claude-trace is working before proceeding
+            if ! command -v claude-trace >/dev/null 2>&1; then
+              echo "❌ CRITICAL: claude-trace not available!"
+              echo "🚫 Blocking claude command to prevent untraced API token usage"
+              echo "💡 Run: claude-trace-wrapper.sh install"
+              return 1
+            fi
+            
+            # Always use claude-trace for claude commands
+            echo "🐙 Starting Claude Code with trace logging..."
+            "$trace_wrapper" start "$@"
+          }
+          
+          # Export the function
+          export -f claude
           EOF
           
           # Copy config and start gotty
           cp /config/.gotty /root/.gotty
+          
+          # Install claude-trace wrapper script
+          cp /claude-trace-config/claude-trace-wrapper.sh /usr/local/bin/
+          chmod +x /usr/local/bin/claude-trace-wrapper.sh
+          
           cd /workspace
           
           # Install claude-code globally
@@ -391,6 +438,10 @@ spec:
           mountPath: /emacs-config
         - name: claude-config
           mountPath: /claude-config
+        - name: claude-trace-logs
+          mountPath: /logs/claude-trace
+        - name: claude-trace-config
+          mountPath: /claude-trace-config
       
       # Websocket persistence proxy
       - name: websocket-proxy
@@ -468,6 +519,10 @@ spec:
           mountPath: /emacs-config
         - name: claude-config
           mountPath: /claude-config
+        - name: claude-trace-logs
+          mountPath: /logs/claude-trace
+        - name: claude-trace-config
+          mountPath: /claude-trace-config
         
         resources:
           requests:
