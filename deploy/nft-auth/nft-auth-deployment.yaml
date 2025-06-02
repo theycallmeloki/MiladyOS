@@ -27,7 +27,7 @@ spec:
         - name: ETHEREUM_RPC_URL
           value: "https://ethereum-rpc.publicnode.com"
         - name: REDIS_HOST
-          value: "miladyos.miladyos.svc.cluster.local"
+          value: "miladyos"
         - name: REDIS_PORT
           value: "6379"
         - name: SECRET_KEY
