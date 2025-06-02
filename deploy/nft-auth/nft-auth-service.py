@@ -20,8 +20,7 @@ app = Flask(__name__)
 
 # Configuration from environment
 HIGH_INTEGRITY_MILADY_CONTRACT = os.getenv("HIGH_INTEGRITY_MILADY_CONTRACT", "0xf01B34d9418874258B35b0507AB53ED971CBB8D3")
-ETHEREUM_RPC_URL = os.getenv("ETHEREUM_RPC_URL", "https://mainnet.infura.io/v3/YOUR_PROJECT_ID")
-ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "YOUR_ETHERSCAN_API_KEY")
+ETHEREUM_RPC_URL = os.getenv("ETHEREUM_RPC_URL", "https://cloudflare-eth.com")
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 CACHE_TTL = int(os.getenv("CACHE_TTL", "600"))

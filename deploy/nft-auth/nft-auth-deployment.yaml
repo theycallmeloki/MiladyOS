@@ -25,15 +25,7 @@ spec:
         - name: HIGH_INTEGRITY_MILADY_CONTRACT
           value: "0xf01B34d9418874258B35b0507AB53ED971CBB8D3"
         - name: ETHEREUM_RPC_URL
-          valueFrom:
-            secretKeyRef:
-              name: nft-auth-config
-              key: ethereum-rpc-url
-        - name: ETHERSCAN_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: nft-auth-config
-              key: etherscan-api-key
+          value: "https://cloudflare-eth.com"
         - name: REDIS_HOST
           value: "miladyos.miladyos.svc.cluster.local"
         - name: REDIS_PORT
@@ -105,6 +97,4 @@ metadata:
   namespace: default
 type: Opaque
 stringData:
-  ethereum-rpc-url: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
-  etherscan-api-key: "YOUR_ETHERSCAN_API_KEY"
   secret-key: "your-secret-key-change-this-in-production"
