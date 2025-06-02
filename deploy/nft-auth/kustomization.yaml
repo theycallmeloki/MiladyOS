@@ -9,24 +9,18 @@ metadata:
 namespace: default
 
 resources:
-# Simple integration patch for existing MiladyOS
-- integration-patch.yaml
-
-# RBAC for service account (if needed)
-- rbac/nft-auth-rbac.yaml
+# Standalone NFT authentication service
+- nft-auth-deployment.yaml
 
 labels:
 - pairs:
-    app.kubernetes.io/name: nft-auth-integration
+    app.kubernetes.io/name: nft-auth-service
     app.kubernetes.io/part-of: miladyos
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: kustomize
 
 # Generate ConfigMaps from local files
 configMapGenerator:
-- name: nft-auth-middleware
+- name: nft-auth-service
   files:
-  - nft-auth-middleware.py
-- name: nft-auth-web
-  files:
-  - nft-web3-auth.js
+  - nft-auth-service.py

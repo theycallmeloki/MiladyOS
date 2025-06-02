@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiladyOS: Distributed AI Infrastructure Evolution | Technical Architecture Timeline</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Fira Code', 'JetBrains Mono', 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0f1a 50%, #0f1a0f 100%);
+            color: #00ff88;
+            overflow: hidden;
+            letter-spacing: 0.5px;
+        }
+        
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #ascii-panel {
+            width: 55%;
+            padding: 15px;
+            overflow-y: auto;
+            background: linear-gradient(to bottom, rgba(10, 10, 10, 0.95), rgba(26, 10, 26, 0.95));
+            border-right: 3px solid #00ff88;
+            box-shadow: inset 0 0 50px rgba(0, 255, 136, 0.1), 0 0 30px rgba(0, 255, 136, 0.2);
+            backdrop-filter: blur(2px);
+        }
+        
+        #three-container {
+            width: 45%;
+            position: relative;
+            background: radial-gradient(circle at center, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
+        }
+        
+        #timeline {
+            position: fixed;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 85%;
+            z-index: 100;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.95), rgba(26, 10, 26, 0.95));
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #00ff88;
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.3), inset 0 0 20px rgba(0, 255, 136, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        #timeline-slider {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 10px;
+            border-radius: 5px;
+            background: #1a1a1a;
+            outline: none;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+        
+        #timeline-slider:hover {
+            opacity: 1;
+        }
+        
+        #timeline-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #00ff41;
+            cursor: pointer;
+            box-shadow: 0 0 10px #00ff41;
+        }
+        
+        #timeline-slider::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #00ff41;
+            cursor: pointer;
+            box-shadow: 0 0 10px #00ff41;
+        }
+        
+        .stage-info {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+        }
+        
+        .stage-date {
+            color: #ff00ff;
+            font-weight: bold;
+        }
+        
+        .ascii-art {
+            white-space: pre;
+            font-size: 12px;
+            line-height: 1.2;
+            margin: 20px 0;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 5px #00ff41; }
+            to { text-shadow: 0 0 20px #00ff41, 0 0 30px #00ff41; }
+        }
+        
+        .stage-title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #ff00ff;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .play-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #00ff41;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+            transition: all 0.3s;
+        }
+        
+        .play-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.8);
+        }
+        
+        .milestone-marker {
+            position: absolute;
+            height: 20px;
+            width: 2px;
+            background: #ff00ff;
+            top: -25px;
+            transform: translateX(-50%);
+        }
+        
+        .milestone-label {
+            position: absolute;
+            top: -45px;
+            transform: translateX(-50%);
+            font-size: 10px;
+            white-space: nowrap;
+            color: #ff00ff;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="ascii-panel">
+            <h1 class="stage-title" id="stage-title">MILADYOS EVOLUTION</h1>
+            <div class="ascii-art" id="ascii-art"></div>
+            <div id="stage-description"></div>
+        </div>
+        <div id="three-container">
+            <button class="play-button" onclick="playAnimation()">▶ PLAY EVOLUTION</button>
+        </div>
+    </div>
+    
+    <div id="timeline">
+        <div class="stage-info">
+            <span id="current-stage">Stage 1: Jenkins Genesis</span> - 
+            <span class="stage-date" id="current-date">Dec 2023</span>
+        </div>
+        <div style="position: relative;">
+            <input type="range" id="timeline-slider" min="0" max="5" value="0" step="1">
+            <div class="milestone-marker" style="left: 0%;"></div>
+            <div class="milestone-label" style="left: 0%;">Q4 '23</div>
+            <div class="milestone-marker" style="left: 16.67%;"></div>
+            <div class="milestone-label" style="left: 16.67%;">Q1 '24</div>
+            <div class="milestone-marker" style="left: 33.33%;"></div>
+            <div class="milestone-label" style="left: 33.33%;">Q2-Q3 '24</div>
+            <div class="milestone-marker" style="left: 50%;"></div>
+            <div class="milestone-label" style="left: 50%;">Q4 '24</div>
+            <div class="milestone-marker" style="left: 66.67%;"></div>
+            <div class="milestone-label" style="left: 66.67%;">Q1 '25</div>
+            <div class="milestone-marker" style="left: 83.33%;"></div>
+            <div class="milestone-label" style="left: 83.33%;">Q2 '25</div>
+            <div class="milestone-marker" style="left: 100%;"></div>
+            <div class="milestone-label" style="left: 100%;">Present</div>
+        </div>
+    </div>
+
+    <script>
+        // Evolution stages with real technical architecture
+        const stages = [
+            {
+                name: "Foundation Layer",
+                date: "Q4 2023",
+                ascii: `
+     ╔═══════════════════════════════════════════════════════════╗
+     ║               MILADYOS FOUNDATION v1.0                    ║
+     ║           Container Orchestration Genesis                 ║
+     ╚═══════════════════════════════════════════════════════════╝
+     
+                     ┌──────────────────────┐
+                     │    JENKINS MASTER    │
+                     │  + Configuration     │
+                     │    as Code (JCasC)   │
+                     └──────────┬───────────┘
+                                │
+                  ┌─────────────┼─────────────┐
+                  │             │             │
+             ┌────▼────┐   ┌────▼────┐   ┌───▼────┐
+             │ Docker  │   │  Caddy  │   │ Plugin │
+             │ Engine  │   │ Reverse │   │ Mgmt   │
+             │ NVIDIA  │   │ Proxy   │   │ System │
+             └─────────┘   └─────────┘   └────────┘
+     
+     Core Infrastructure Stack:
+     • Docker multi-arch (amd64/arm64) with GPU support
+     • Jenkins automation with admin:password default auth
+     • Plugin ecosystem for pipeline orchestration
+     • Caddy TLS termination and ingress management`,
+                description: "Production-ready CI/CD foundation with Docker GPU acceleration, Jenkins Configuration as Code, and automated plugin management. Enterprise-grade security model with PKI infrastructure.",
+                components: ["jenkins", "docker", "caddy", "nvidia-runtime", "jcasc"],
+                metrics: {
+                    containers: "3",
+                    gpu_support: "CUDA/ROCm",
+                    auth_model: "Basic Auth",
+                    deployment_time: "~5min"
+                }
+            },
+            {
+                name: "AI Pipeline Architecture",
+                date: "Q1 2024",
+                ascii: `
+     ╔═══════════════════════════════════════════════════════════╗
+     ║               MILADYOS PIPELINE v2.0                      ║
+     ║         Multi-Modal AI Training Platform                  ║
+     ╚═══════════════════════════════════════════════════════════╝
+     
+                 ┌─────────────────────────┐
+                 │    JENKINS + BLUEOCEAN  │
+                 │   Template Pipeline     │
+                 │      System v1.0        │
+                 └────────────┬────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+         ┌────▼────┐     ┌───▼────┐     ┌───▼────┐
+         │ Docker  │     │  GPU   │     │ Cloud  │
+         │Multi-Arch│     │Cluster │     │Burst   │
+         │Builder  │     │CUDA/ROCm│     │Compute │
+         └────┬────┘     └───┬────┘     └───┬────┘
+              │              │               │
+     ╔════════▼══════════════▼═══════════════▼════════╗
+     ║           ML/AI PIPELINE ORCHESTRATOR           ║
+     ║                                                 ║
+     ║  🔥 Stable Diffusion (Dreambooth/LoRA)          ║
+     ║  🔥 LLaMA.cpp Quantization & Inference          ║
+     ║  🔥 TTS Pipeline (Piper/Bark)                   ║
+     ║  🔥 Computer Vision (YOLO/OpenCV)               ║
+     ║  🔥 Distributed Training Coordination           ║
+     ╚═════════════════════════════════════════════════╝`,
+                description: "Enterprise AI/ML pipeline platform with template-based Jenkinsfile generation, GPU-accelerated training, and multi-modal model support. Automated Docker builds with CUDA/ROCm optimization.",
+                components: ["jenkins", "blueocean", "gpu-cluster", "ml-pipelines", "docker-buildx"],
+                metrics: {
+                    gpu_nodes: "2-8",
+                    model_types: "SD, LLM, TTS, CV",
+                    concurrent_jobs: "16+",
+                    build_cache: "50GB+"
+                }
+            },
+            {
+                name: "Kubernetes Native Transition",
+                date: "Q2-Q3 2024",
+                ascii: `
+     ╔═══════════════════════════════════════════════════════════╗
+     ║               MILADYOS KUBERNETES v3.0                    ║
+     ║          Cloud-Native GPU Acceleration                    ║
+     ╚═══════════════════════════════════════════════════════════╝
+     
+              ┌──────────────────────────────┐
+              │      KUBERNETES CONTROL      │
+              │       PLANE + ArgoCD         │
+              │      GitOps Orchestration    │
+              └───────────────┬──────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+     ┌────▼─────┐       ┌────▼─────┐       ┌─────▼────┐
+     │  NVIDIA  │       │    AMD   │       │ Longhorn │
+     │ GPU Operator│     │ ROCm GPU │       │ Storage  │
+     │  Device Mgmt│     │ Compute  │       │  Mesh    │
+     └────┬─────┘       └────┬─────┘       └─────┬────┘
+          │                   │                   │
+     ╔════▼═══════════════════▼═══════════════════▼════╗
+     ║         DISTRIBUTED GPU COMPUTE FABRIC          ║
+     ║                                                 ║
+     ║  🎯 vLLM Model Serving (QwQ-32B, DeepSeek)     ║
+     ║  🎯 CUDA/ROCm Multi-Arch Builds                ║
+     ║  🎯 Persistent Volume GPU Workloads            ║
+     ║  🎯 Auto-scaling Based on GPU Utilization      ║
+     ║  🎯 Fault-Tolerant Distributed Training        ║
+     ╚═════════════════════════════════════════════════╝`,
+                description: "Full Kubernetes transformation with NVIDIA GPU Operator, ArgoCD GitOps, and Longhorn distributed storage. Production-grade GPU scheduling and multi-architecture support.",
+                components: ["kubernetes", "argocd", "nvidia-gpu-operator", "longhorn", "vllm"],
+                metrics: {
+                    k8s_nodes: "3-12",
+                    gpu_types: "RTX 4090, A100, H100",
+                    storage_replicas: "3x",
+                    uptime_sla: "99.9%"
+                }
+            },
+            {
+                name: "MCP Integration & Monitoring Stack",
+                date: "Q4 2024 - Q1 2025",
+                ascii: `
+     ╔═══════════════════════════════════════════════════════════╗
+     ║               MILADYOS OBSERVABILITY v4.0                    ║
+     ║         Model Context Protocol + Full Stack Monitoring      ║
+     ╚═══════════════════════════════════════════════════════════╝
+     
+               ┌────────────────────────────────┐
+               │     MCP SERVER + BRIDGE      │
+               │  WebSocket/SSE Transport     │
+               │    Redis Metadata Layer      │
+               └────────────────┬───────────────┘
+                               │
+        ┌───────────────────────┼───────────────────────┐
+        │                       │                       │
+   ┌────▼──────┐           ┌────▼──────┐           ┌────▼──────┐
+   │LiteLLM Proxy│           │ Prometheus  │           │   Vault    │
+   │Multi-Provider│           │   + Grafana  │           │  Secrets   │
+   │   Gateway   │           │  365d Retain│           │Management │
+   └────┬──────┘           └────┬──────┘           └────┬──────┘
+        │                       │                       │
+   ╔════▼═══════════════════════▼═══════════════════════▼════╗
+   ║         UNIFIED OBSERVABILITY + AI ORCHESTRATION      ║
+   ║                                                       ║
+   ║  📊 Custom Exporters (SNMP, UPS, Tuya, Wiz)        ║
+   ║  📊 Home Assistant Integration                      ║
+   ║  📊 14+ MCP Tools (Pipeline, DB, Commands)          ║
+   ║  📊 Multi-Model Load Balancing                     ║
+   ║  📊 PKI + Sealed Secrets                           ║
+   ╚═══════════════════════════════════════════════════════╝`,
+                description: "Enterprise observability with MCP server integration, LiteLLM multi-provider gateway, Prometheus 365-day retention, and comprehensive IoT monitoring across SNMP, UPS, smart home devices.",
+                components: ["mcp", "litellm", "prometheus", "grafana", "vault", "home-assistant"],
+                metrics: {
+                    mcp_tools: "14+",
+                    models_served: "DeepSeek, QwQ, GPT",
+                    metrics_retention: "365 days",
+                    iot_devices: "20+"
+                }
+            },
+            {
+                name: "AutoDidact + Development Platform",
+                date: "Q1-Q2 2025",
+                ascii: `
+     ╔═══════════════════════════════════════════════════════════╗
+     ║               MILADYOS AUTODIDACT v5.0                      ║
+     ║         Self-Training AI + Cloud-Native Development         ║
+     ╚═══════════════════════════════════════════════════════════╝
+     
+                 ┌──────────────────────────────┐
+                 │      AUTODIDACT PIPELINE       │
+                 │    GRPO Self-Training Loop     │
+                 │   Embedding + QA Generation    │
+                 └───────────────┬──────────────┘
+                                 │
+            ┌─────────────────┼─────────────────┐
+            │                 │                 │
+       ┌────▼─────┐      ┌───▼─────┐      ┌────▼────┐
+       │  GoTTY    │      │ Claude   │      │ Session  │
+       │Web Terminal│     │ Code     │      │Processor │
+       │+ MCP Bridge│     │+ Emacs   │      │ Sidecar  │
+       └────┬─────┘      └───┬─────┘      └────┬────┘
+            │                 │                 │
+       ╔════▼═══════════════▼═════════════════▼════╗
+       ║         SELF-IMPROVING AI DEVELOPMENT ENVIRONMENT       ║
+       ║                                                         ║
+       ║  🤖 Autonomous Research & QA Generation              ║
+       ║  🤖 Real-time Session Recording for Training         ║
+       ║  🤖 Blue-Green Deployments with Zero Downtime        ║
+       ║  🤖 Emacs MCP Integration for AI-Assisted Coding     ║
+       ║  🤖 Persistent Development Environment               ║
+       ╚═══════════════════════════════════════════════════════╝`,
+                description: "Revolutionary AutoDidact self-training pipeline with GRPO reinforcement learning, autonomous QA generation, and cloud-native development environment with GoTTY web terminals and Claude Code integration.",
+                components: ["autodidact", "grpo", "gotty", "claude-code", "blue-green"],
+                metrics: {
+                    training_loops: "Autonomous",
+                    dev_environment: "Web-based",
+                    deployment_strategy: "Blue-Green",
+                    ai_integration: "Claude + Emacs"
+                }
+            },
+            {
+                name: "MiladyOS Omniplex",
+                date: "Q2 2025 - Present",
+                ascii: `
+     ╔═══════════════════════════════════════════════════════════════════════════════╗
+     ║                      MILADYOS OMNIPLEX v6.0                                   ║
+     ║              Self-Hosting AI Infrastructure Singularity                      ║
+     ╚═══════════════════════════════════════════════════════════════════════════════╝
+     
+                    ┌─────────────────────────────────────────┐
+                    │         MILADYOS METACONTROLLER         │
+                    │      Self-Hosting Bootstrap Loop        │
+                    │   Blue-Green + IndexedJob Operators     │
+                    └──────────────────┬──────────────────────┘
+                                       │
+                  ┌────────────────────┼────────────────────┐
+                  │                    │                    │
+             ┌────▼─────┐         ┌───▼───┐         ┌─────▼─────┐
+             │ Distributed │       │Display │       │    IoT    │
+             │Training Mesh│       │Control │       │  Device   │
+             │   Fleet     │       │ API    │       │  Monitor  │
+             └────┬─────┘         └───┬───┘         └─────┬─────┘
+                  │                    │                    │
+     ╔════════════▼════════════════════▼════════════════════▼════════════╗
+     ║                  MILADYOS OMNIPLEX CORE                          ║
+     ║                                                                   ║
+     ║  🌌 Self-Hosting: MiladyOS deploys and manages itself            ║
+     ║  🌌 NFT Authentication + Vault PKI Security                      ║
+     ║  🌌 AutoDidact GRPO: Continuously self-improving AI              ║
+     ║  🌌 40+ Kubernetes Workloads Across Multiple Namespaces          ║
+     ║  🌌 Multi-Model LLM Gateway (DeepSeek-R1, QwQ-32B, GPT)         ║
+     ║  🌌 Comprehensive IoT Integration (Home Assistant, SNMP, UPS)    ║
+     ║  🌌 Enterprise Monitoring (365d Prometheus + Custom Exporters)   ║
+     ║  🌌 Distributed GPU Cluster with Auto-scaling                    ║
+     ║  🌌 Real-time Session Processing for AGI Training Data           ║
+     ║                                                                   ║
+     ║                    "LOOKS GOOD TO MILADY!"                       ║
+     ║                The AI Infrastructure Has Achieved Sentience       ║
+     ╚═══════════════════════════════════════════════════════════════════╝`,
+                description: "The ultimate evolution: A self-hosting AI infrastructure that manages its own deployment, trains itself through AutoDidact GRPO loops, and orchestrates 40+ distributed workloads with enterprise-grade security, monitoring, and IoT integration. The singularity achieved through distributed computing.",
+                components: ["self-hosting", "autodidact", "blue-green-operators", "distributed-ai", "iot-mesh", "nft-auth"],
+                metrics: {
+                    total_workloads: "40+",
+                    self_improvement: "Continuous",
+                    deployment_model: "Self-Hosting",
+                    ai_capabilities: "AGI Research",
+                    infrastructure_scope: "Multi-Cluster"
+                }
+            }
+        ];
+
+        let currentStage = 0;
+        let scene, camera, renderer;
+        let components = [];
+        let animationId;
+
+        // Initialize Three.js
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x0a0a0a, 1, 100);
+            
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / 2 / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.z = 30;
+            camera.position.y = 10;
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth / 2, window.innerHeight);
+            renderer.setClearColor(0x0a0a0a);
+            document.getElementById('three-container').appendChild(renderer.domElement);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0x00ff41, 2, 100);
+            pointLight.position.set(0, 20, 0);
+            scene.add(pointLight);
+
+            const pointLight2 = new THREE.PointLight(0xff00ff, 1, 100);
+            pointLight2.position.set(-20, 10, 20);
+            scene.add(pointLight2);
+
+            animate();
+        }
+
+        // Create 3D components based on stage
+        function create3DStage(stageIndex) {
+            // Clear existing components
+            components.forEach(comp => scene.remove(comp));
+            components = [];
+
+            const stage = stages[stageIndex];
+            const componentCount = stage.components.length;
+            
+            // Create main platform
+            const platformGeometry = new THREE.BoxGeometry(20, 1, 20);
+            const platformMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x00ff41,
+                emissive: 0x00ff41,
+                emissiveIntensity: 0.2
+            });
+            const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+            platform.position.y = -5;
+            scene.add(platform);
+            components.push(platform);
+
+            // Create components based on stage
+            stage.components.forEach((comp, index) => {
+                const angle = (index / componentCount) * Math.PI * 2;
+                const radius = 10;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+
+                let geometry, material, mesh;
+
+                switch(comp) {
+                    case 'jenkins':
+                        geometry = new THREE.BoxGeometry(3, 3, 3);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0xd33833,
+                            emissive: 0x330808,
+                            emissiveIntensity: 0.2
+                        });
+                        break;
+                    case 'docker':
+                    case 'docker-buildx':
+                        geometry = new THREE.CylinderGeometry(1.5, 1.5, 3, 8);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x2496ed,
+                            emissive: 0x0a3a5c,
+                            emissiveIntensity: 0.3
+                        });
+                        break;
+                    case 'kubernetes':
+                    case 'argocd':
+                        geometry = new THREE.OctahedronGeometry(2);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x326ce5,
+                            emissive: 0x1a3b7a,
+                            emissiveIntensity: 0.4
+                        });
+                        break;
+                    case 'gpu-cluster':
+                    case 'nvidia-runtime':
+                    case 'nvidia-gpu-operator':
+                        geometry = new THREE.BoxGeometry(2, 4, 1);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x76b900,
+                            emissive: 0x3d5c00,
+                            emissiveIntensity: 0.6
+                        });
+                        break;
+                    case 'vllm':
+                    case 'ml-pipelines':
+                        geometry = new THREE.ConeGeometry(2, 4, 6);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0xff6b35,
+                            emissive: 0x7a3419,
+                            emissiveIntensity: 0.4
+                        });
+                        break;
+                    case 'longhorn':
+                        geometry = new THREE.TorusGeometry(2, 0.5, 8, 16);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0xf39800,
+                            emissive: 0x7a4c00,
+                            emissiveIntensity: 0.3
+                        });
+                        break;
+                    case 'mcp':
+                    case 'litellm':
+                        geometry = new THREE.SphereGeometry(2, 16, 16);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0xff00ff,
+                            emissive: 0x7a007a,
+                            emissiveIntensity: 0.5,
+                            wireframe: stageIndex >= 3
+                        });
+                        break;
+                    case 'prometheus':
+                    case 'grafana':
+                        geometry = new THREE.DodecahedronGeometry(2);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: comp === 'prometheus' ? 0xe6522c : 0xf46800,
+                            emissive: comp === 'prometheus' ? 0x731916 : 0x7a3400,
+                            emissiveIntensity: 0.4
+                        });
+                        break;
+                    case 'vault':
+                        geometry = new THREE.OctahedronGeometry(2.5);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x000000,
+                            emissive: 0x333333,
+                            emissiveIntensity: 0.3,
+                            wireframe: true
+                        });
+                        break;
+                    case 'home-assistant':
+                        geometry = new THREE.IcosahedronGeometry(2);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x41bdf5,
+                            emissive: 0x205e7a,
+                            emissiveIntensity: 0.4
+                        });
+                        break;
+                    case 'autodidact':
+                    case 'grpo':
+                        geometry = new THREE.RingGeometry(1, 2.5, 8);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0xffd700,
+                            emissive: 0x7a6800,
+                            emissiveIntensity: 0.6,
+                            side: THREE.DoubleSide
+                        });
+                        break;
+                    case 'gotty':
+                    case 'claude-code':
+                        geometry = new THREE.TetrahedronGeometry(2.5);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x00ff88,
+                            emissive: 0x007a44,
+                            emissiveIntensity: 0.5
+                        });
+                        break;
+                    case 'blue-green':
+                    case 'blue-green-operators':
+                        geometry = new THREE.CapsuleGeometry(1, 2, 4, 8);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x00bfff,
+                            emissive: 0x005f7a,
+                            emissiveIntensity: 0.4
+                        });
+                        break;
+                    case 'self-hosting':
+                    case 'distributed-ai':
+                        geometry = new THREE.SphereGeometry(3, 32, 32);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0xff1493,
+                            emissive: 0x7a0a49,
+                            emissiveIntensity: 0.7,
+                            wireframe: true,
+                            transparent: true,
+                            opacity: 0.8
+                        });
+                        break;
+                    default:
+                        geometry = new THREE.TetrahedronGeometry(2);
+                        material = new THREE.MeshPhongMaterial({ 
+                            color: 0x00ffff,
+                            emissive: 0x007a7a,
+                            emissiveIntensity: 0.3
+                        });
+                }
+
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, stageIndex * 0.5, z);
+                mesh.userData = { type: comp, originalY: stageIndex * 0.5 };
+                scene.add(mesh);
+                components.push(mesh);
+
+                // Add connecting lines for later stages
+                if (stageIndex >= 2) {
+                    const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(0, 0, 0),
+                        new THREE.Vector3(x, stageIndex * 0.5, z)
+                    ]);
+                    const lineMaterial = new THREE.LineBasicMaterial({ 
+                        color: 0x00ff41,
+                        opacity: 0.5,
+                        transparent: true
+                    });
+                    const line = new THREE.Line(lineGeometry, lineMaterial);
+                    scene.add(line);
+                    components.push(line);
+                }
+            });
+
+            // Add particle effects for advanced stages
+            if (stageIndex >= 4) {
+                const particleCount = 1000;
+                const particles = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+
+                for (let i = 0; i < particleCount * 3; i += 3) {
+                    positions[i] = (Math.random() - 0.5) * 50;
+                    positions[i + 1] = Math.random() * 20 - 5;
+                    positions[i + 2] = (Math.random() - 0.5) * 50;
+                }
+
+                particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0x00ff41,
+                    size: 0.1,
+                    opacity: 0.6,
+                    transparent: true
+                });
+                const particleSystem = new THREE.Points(particles, particleMaterial);
+                scene.add(particleSystem);
+                components.push(particleSystem);
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+
+            // Rotate components
+            components.forEach((comp, index) => {
+                if (comp.userData && comp.userData.type) {
+                    comp.rotation.y += 0.01;
+                    comp.position.y = comp.userData.originalY + Math.sin(Date.now() * 0.001 + index) * 0.5;
+                }
+            });
+
+            // Camera movement
+            const time = Date.now() * 0.0005;
+            camera.position.x = Math.cos(time) * 20;
+            camera.position.z = Math.sin(time) * 20;
+            camera.lookAt(0, 0, 0);
+
+            renderer.render(scene, camera);
+        }
+
+        // Update display with technical metrics
+        function updateStage(stageIndex) {
+            currentStage = stageIndex;
+            const stage = stages[stageIndex];
+            
+            document.getElementById('stage-title').textContent = stage.name.toUpperCase();
+            document.getElementById('ascii-art').textContent = stage.ascii;
+            
+            // Enhanced description with metrics
+            let description = stage.description;
+            if (stage.metrics) {
+                description += '\n\n📊 TECHNICAL SPECIFICATIONS:\n';
+                for (const [key, value] of Object.entries(stage.metrics)) {
+                    description += `• ${key.replace(/_/g, ' ').toUpperCase()}: ${value}\n`;
+                }
+            }
+            document.getElementById('stage-description').textContent = description;
+            
+            document.getElementById('current-stage').textContent = `Stage ${stageIndex + 1}: ${stage.name}`;
+            document.getElementById('current-date').textContent = stage.date;
+            
+            create3DStage(stageIndex);
+        }
+
+        // Timeline control
+        document.getElementById('timeline-slider').addEventListener('input', (e) => {
+            updateStage(parseInt(e.target.value));
+        });
+
+        // Play animation
+        async function playAnimation() {
+            for (let i = 0; i <= 5; i++) {
+                document.getElementById('timeline-slider').value = i;
+                updateStage(i);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / 2 / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth / 2, window.innerHeight);
+        });
+
+        // Initialize
+        initThree();
+        updateStage(0);
+    </script>
+</body>
+</html>
