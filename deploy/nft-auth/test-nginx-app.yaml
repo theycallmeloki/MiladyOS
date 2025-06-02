@@ -250,6 +250,13 @@ data:
             .logout-button:hover {
                 background: rgba(244, 67, 54, 0.3);
             }
+
+            code {
+                background: rgba(0, 0, 0, 0.3);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: 'Courier New', monospace;
+            }
         </style>
     </head>
     <body>
@@ -262,21 +269,27 @@ data:
                 </div>
 
                 <div class="auth-section">
-                    <div v-if="!connected">
-                        <button @click="connectWallet" :disabled="loading" class="connect-button">
+                    <!-- Not authenticated view -->
+                    <div v-if="!authenticated">
+                        <button @click="signInWithEthereum" :disabled="loading" class="connect-button">
                             <span v-if="loading" class="loading"></span>
                             <span v-else>🦊</span>
                             {{ loading ? 'Connecting...' : 'Sign in with Ethereum' }}
                         </button>
+                        <p style="text-align: center; margin-top: 12px; font-size: 14px; color: rgba(255,255,255,0.6);">
+                            This will redirect to the authentication service
+                        </p>
                     </div>
 
+                    <!-- Authenticated view -->
                     <div v-else>
                         <div class="status-card status-success">
                             <h3>✅ Successfully Authenticated</h3>
                             <p>Welcome, High Integrity Milady holder!</p>
+                            <p style="margin-top: 8px; font-size: 14px;">You're now accessing a protected application.</p>
                         </div>
 
-                        <div class="wallet-info">
+                        <div class="wallet-info" v-if="walletAddress">
                             <span>🔗</span>
                             <div>
                                 <div style="font-weight: 500;">Connected Wallet</div>
@@ -284,17 +297,27 @@ data:
                             </div>
                         </div>
 
-                        <button @click="logout" class="logout-button">Logout</button>
+                        <div v-if="Object.keys(authHeaders).length > 0" class="status-card status-info">
+                            <h4>🎯 Authentication Headers (from Ingress)</h4>
+                            <div v-for="(value, key) in authHeaders" :key="key" style="margin: 8px 0;">
+                                <strong>{{ key }}:</strong> <code>{{ value }}</code>
+                            </div>
+                        </div>
+
+                        <div v-if="nftBalance !== null" class="status-card status-info">
+                            <h4>💎 NFT Balance</h4>
+                            <p>High Integrity Milady NFTs: {{ nftBalance }}</p>
+                        </div>
+
+                        <button @click="logout" class="logout-button" style="margin-top: 20px;">
+                            Sign Out
+                        </button>
                     </div>
 
+                    <!-- Error display -->
                     <div v-if="error" class="status-card status-error">
                         <h4>❌ Authentication Failed</h4>
                         <p>{{ error }}</p>
-                    </div>
-
-                    <div v-if="nftBalance !== null" class="status-card status-info">
-                        <h4>💎 NFT Balance</h4>
-                        <p>High Integrity Milady NFTs: {{ nftBalance }}</p>
                     </div>
                 </div>
 
@@ -311,82 +334,112 @@ data:
 
             createApp({
                 setup() {
-                    const connected = ref(false);
+                    const authenticated = ref(false);
                     const loading = ref(false);
                     const walletAddress = ref('');
                     const nftBalance = ref(null);
                     const error = ref('');
+                    const authHeaders = ref({});
                     
                     const CONTRACT_ADDRESS = "0xf01B34d9418874258B35b0507AB53ED971CBB8D3";
+                    const AUTH_SERVICE_URL = "https://nft-auth.miladyos.net";
 
-                    const connectWallet = async () => {
-                        if (!window.ethereum) {
-                            error.value = "MetaMask not found. Please install MetaMask to continue.";
-                            return;
-                        }
+                    const signInWithEthereum = async () => {
+                        // Redirect to the auth service login page
+                        const currentUrl = window.location.href;
+                        const loginUrl = `${AUTH_SERVICE_URL}/login?rd=${encodeURIComponent(currentUrl)}`;
+                        window.location.href = loginUrl;
+                    };
 
-                        loading.value = true;
-                        error.value = '';
-
+                    const checkAuthStatus = async () => {
                         try {
-                            // Request account access
-                            await window.ethereum.request({ method: 'eth_requestAccounts' });
+                            // This request will be intercepted by the ingress auth-url annotation
+                            // If we can make this request successfully, we're authenticated
+                            const response = await fetch(window.location.href, {
+                                method: 'HEAD',
+                                credentials: 'include'
+                            });
                             
-                            const provider = new ethers.providers.Web3Provider(window.ethereum);
-                            const signer = provider.getSigner();
-                            const address = await signer.getAddress();
-                            
-                            walletAddress.value = address;
-
-                            // Check network
-                            const network = await provider.getNetwork();
-                            if (network.chainId !== 1) {
-                                await window.ethereum.request({
-                                    method: 'wallet_switchEthereumChain',
-                                    params: [{ chainId: '0x1' }],
-                                });
+                            if (response.ok) {
+                                authenticated.value = true;
+                                
+                                // Try to get auth headers (these would be set by the ingress)
+                                // In a real scenario, these would be passed through the ingress
+                                // For demo purposes, we'll show what they would look like
+                                
+                                // Check if we have wallet info in URL params (from successful auth redirect)
+                                const urlParams = new URLSearchParams(window.location.search);
+                                const wallet = urlParams.get('wallet');
+                                if (wallet) {
+                                    walletAddress.value = wallet;
+                                    // Clean up URL
+                                    window.history.replaceState({}, document.title, window.location.pathname);
+                                }
+                                
+                                // Simulate auth headers that would be passed by ingress
+                                if (walletAddress.value) {
+                                    authHeaders.value = {
+                                        'X-Auth-User': walletAddress.value,
+                                        'X-Auth-NFT': 'high-integrity-milady'
+                                    };
+                                }
+                                
+                                // If we have a wallet, check NFT balance
+                                if (walletAddress.value && window.ethereum) {
+                                    try {
+                                        const provider = new ethers.providers.Web3Provider(window.ethereum);
+                                        const abi = ["function balanceOf(address owner) view returns (uint256)"];
+                                        const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, provider);
+                                        const balance = await contract.balanceOf(walletAddress.value);
+                                        nftBalance.value = balance.toString();
+                                    } catch (err) {
+                                        console.log('Could not check NFT balance:', err);
+                                    }
+                                }
                             }
-
-                            // Check NFT balance
-                            const abi = ["function balanceOf(address owner) view returns (uint256)"];
-                            const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, provider);
-                            const balance = await contract.balanceOf(address);
-                            nftBalance.value = balance.toString();
-
-                            if (!balance.gt(0)) {
-                                throw new Error("High Integrity Milady NFT required for access");
-                            }
-
-                            connected.value = true;
-                            
                         } catch (err) {
-                            error.value = err.message;
-                        } finally {
-                            loading.value = false;
+                            console.log('Auth check failed:', err);
+                            authenticated.value = false;
                         }
                     };
 
-                    const logout = () => {
-                        connected.value = false;
-                        walletAddress.value = '';
-                        nftBalance.value = null;
-                        error.value = '';
+                    const logout = async () => {
+                        try {
+                            // Redirect to logout endpoint
+                            window.location.href = `${AUTH_SERVICE_URL}/logout`;
+                        } catch (err) {
+                            console.error('Logout error:', err);
+                            // Reset local state anyway
+                            authenticated.value = false;
+                            walletAddress.value = '';
+                            nftBalance.value = null;
+                            error.value = '';
+                            authHeaders.value = {};
+                        }
                     };
 
-                    onMounted(() => {
-                        // Check if wallet is already connected
-                        if (window.ethereum && window.ethereum.selectedAddress) {
-                            connectWallet();
+                    onMounted(async () => {
+                        // Check if we're already authenticated
+                        await checkAuthStatus();
+                        
+                        // Look for success/error messages in URL
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const errorMsg = urlParams.get('error');
+                        if (errorMsg) {
+                            error.value = decodeURIComponent(errorMsg);
+                            // Clean up URL
+                            window.history.replaceState({}, document.title, window.location.pathname);
                         }
                     });
 
                     return {
-                        connected,
+                        authenticated,
                         loading,
                         walletAddress,
                         nftBalance,
                         error,
-                        connectWallet,
+                        authHeaders,
+                        signInWithEthereum,
                         logout
                     };
                 }
@@ -409,17 +462,8 @@ metadata:
     
     # Pass authentication info to the app
     nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-User,X-Auth-NFT"
-    
-    # Optional: SSL configuration (uncomment if you have cert-manager)
-    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx
-  # Uncomment for SSL
-  # tls:
-  # - hosts:
-  #   - test-nft-auth.your-domain.com
-  #   secretName: test-nft-auth-tls
   rules:
   - host: test.miladyos.net
     http:
