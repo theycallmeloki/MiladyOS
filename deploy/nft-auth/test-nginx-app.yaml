@@ -198,8 +198,8 @@ metadata:
   namespace: default
   annotations:
     # High Integrity Milady NFT Authentication
-    nginx.ingress.kubernetes.io/auth-url: "http://nft-auth-service.default.svc.cluster.local/auth"
-    nginx.ingress.kubernetes.io/auth-signin: "http://nft-auth-service.default.svc.cluster.local/login?rd=$scheme://$best_http_host$request_uri"
+    nginx.ingress.kubernetes.io/auth-url: "https://nft-auth.miladyos.net/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://nft-auth.miladyos.net/login?rd=$scheme://$best_http_host$request_uri"
     nginx.ingress.kubernetes.io/auth-signin-redirect-param: "rd"
     
     # Pass authentication info to the app
@@ -216,7 +216,7 @@ spec:
   #   - test-nft-auth.your-domain.com
   #   secretName: test-nft-auth-tls
   rules:
-  - host: test-nft-auth.localhost  # Change this to your domain
+  - host: test-nft.miladyos.net
     http:
       paths:
       - path: /
