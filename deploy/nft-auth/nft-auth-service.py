@@ -386,6 +386,14 @@ def authenticate():
         if abs(current_time - timestamp) > 300:
             return jsonify({"success": False, "error": "Authentication expired"}), 400
         
+        # Check nonce to prevent replay attacks
+        nonce_key = f"nonce:{nonce}:{wallet_address.lower()}"
+        if nft_auth.redis_client.exists(nonce_key):
+            return jsonify({"success": False, "error": "Nonce already used"}), 400
+        
+        # Store nonce for 10 minutes to prevent reuse
+        nft_auth.redis_client.setex(nonce_key, 600, "used")
+        
         # Verify message format
         if wallet_address.lower() not in message.lower():
             return jsonify({"success": False, "error": "Wallet address mismatch"}), 400
