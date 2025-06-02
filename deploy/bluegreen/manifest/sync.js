@@ -37,6 +37,20 @@ var deepCopy = function (obj) {
   return obj ? JSON.parse(JSON.stringify(obj)) : null;
 };
 
+var hasReadWriteOnceVolumes = function (bgd) {
+  if (!bgd.spec.template.spec.volumes) return false;
+  
+  return bgd.spec.template.spec.volumes.some(volume => {
+    return volume.persistentVolumeClaim !== undefined;
+  });
+};
+
+var isReplicaSetFullyTerminated = function (rs) {
+  return rs && rs.spec.replicas === 0 && 
+         rs.status && rs.status.replicas === 0 && 
+         rs.status.readyReplicas === 0;
+};
+
 var podTemplateEqual = function (bgd, rs) {
   return rs && deepEqual(bgd.spec.template, JSON.parse(rs.metadata.annotations[podTemplateAnnotation]));
 };
@@ -105,26 +119,76 @@ module.exports = async function (context) {
     let inactiveReplicas = inactiveRS ? inactiveRS.spec.replicas : 0;
     let inactiveTemplate = inactiveRS ? JSON.parse(inactiveRS.metadata.annotations[podTemplateAnnotation]) : bgd.spec.template;
 
+    // Check if we need volume-aware deployment (ReadWriteOnce volumes require special handling)
+    let hasVolumeConstraints = hasReadWriteOnceVolumes(bgd);
+    
+    if (hasVolumeConstraints) {
+      console.log('Volume constraints detected - using staged blue-green deployment');
+    }
+
     // Is the active ReplicaSet based on the most up-to-date Pod template?
     if (podTemplateEqual(bgd, activeRS)) {
       // No rollout necessary. Scale down inactive.
       inactiveReplicas = 0;
     } else if (podTemplateEqual(bgd, inactiveRS)) {
-      // The inactive RS already matches. Scale it up.
-      inactiveReplicas = bgd.spec.replicas;
-      // Is it ready to swap?
-      if (inactiveRS.status && inactiveRS.status.availableReplicas === bgd.spec.replicas) {
-        // Swap active/inactive RS.
-        activeColor = inactiveRS.metadata.labels.color;
-        [activeReplicas, inactiveReplicas] = [inactiveReplicas, activeReplicas];
-        [activeTemplate, inactiveTemplate] = [inactiveTemplate, activeTemplate];
+      // The inactive RS already matches. Handle volume-aware rollout.
+      if (hasVolumeConstraints) {
+        // Volume-aware rollout: staged approach with proper termination waiting
+        if (inactiveRS.status && inactiveRS.status.availableReplicas === bgd.spec.replicas) {
+          // Stage 1: Inactive is ready, scale down active first to release volumes
+          if (activeRS && activeRS.spec.replicas > 0) {
+            console.log('Volume-aware stage 1: Scaling down active RS to release volumes');
+            activeReplicas = 0;
+            inactiveReplicas = bgd.spec.replicas;
+          } else if (isReplicaSetFullyTerminated(activeRS)) {
+            // Stage 2: Active is fully terminated (pods gone), safe to swap
+            console.log('Volume-aware stage 2: Active RS fully terminated, swapping colors');
+            activeColor = inactiveRS.metadata.labels.color;
+            [activeReplicas, inactiveReplicas] = [bgd.spec.replicas, 0];
+            [activeTemplate, inactiveTemplate] = [inactiveTemplate, activeTemplate];
+          } else {
+            // Still waiting for active pods to fully terminate
+            console.log('Volume-aware: Waiting for active pods to fully terminate and release volumes');
+            activeReplicas = 0;
+            inactiveReplicas = bgd.spec.replicas;
+          }
+        } else {
+          // Still scaling up inactive, don't touch active yet
+          console.log('Volume-aware: Waiting for inactive RS to be ready before proceeding');
+          inactiveReplicas = bgd.spec.replicas;
+        }
+      } else {
+        // No volume constraints, use standard blue-green logic
+        inactiveReplicas = bgd.spec.replicas;
+        // Is it ready to swap?
+        if (inactiveRS.status && inactiveRS.status.availableReplicas === bgd.spec.replicas) {
+          // Swap active/inactive RS.
+          activeColor = inactiveRS.metadata.labels.color;
+          [activeReplicas, inactiveReplicas] = [inactiveReplicas, activeReplicas];
+          [activeTemplate, inactiveTemplate] = [inactiveTemplate, activeTemplate];
+        }
       }
     } else {
       // Neither RS matches.
       if (inactiveRS && inactiveRS.spec.replicas === 0 && inactiveRS.status && inactiveRS.status.replicas === 0) {
         // Start a new rollout.
-        inactiveReplicas = bgd.spec.replicas;
-        inactiveTemplate = bgd.spec.template;
+        if (hasVolumeConstraints) {
+          // For volume-constrained deployments, scale down active first
+          if (activeRS && activeRS.spec.replicas > 0) {
+            console.log('Volume-aware new rollout: Scaling down active RS first');
+            activeReplicas = 0;
+            inactiveReplicas = 0;
+          } else if (!activeRS || isReplicaSetFullyTerminated(activeRS)) {
+            // Active is fully terminated, safe to start inactive
+            console.log('Volume-aware new rollout: Starting inactive RS');
+            inactiveReplicas = bgd.spec.replicas;
+            inactiveTemplate = bgd.spec.template;
+          }
+        } else {
+          // No volume constraints, start rollout normally
+          inactiveReplicas = bgd.spec.replicas;
+          inactiveTemplate = bgd.spec.template;
+        }
       } else {
         // Some other rollout was in progress. We need to cancel it and wait.
         inactiveReplicas = 0;

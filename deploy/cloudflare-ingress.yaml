@@ -265,3 +265,33 @@ spec:
   - hosts:
     - test.miladyos.net
     secretName: test-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: templeos-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # TempleOS - Gods Operating System - Divine Computing Access
+    nginx.ingress.kubernetes.io/websocket-services: "miladyos"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: templeos.miladyos.net
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: miladyos
+            port:
+              number: 6080
+  tls:
+  - hosts:
+    - templeos.miladyos.net
+    secretName: templeos-tls

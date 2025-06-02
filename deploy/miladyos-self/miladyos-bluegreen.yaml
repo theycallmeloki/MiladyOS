@@ -69,6 +69,8 @@ spec:
           name: mcp
         - containerPort: 11434
           name: ollama
+        - containerPort: 6080
+          name: templeos
         env:
         - name: JENKINS_ADMIN_ID
           value: "admin"
@@ -154,3 +156,6 @@ spec:
       - name: registry
         port: 5000
         targetPort: 5000
+      - name: templeos
+        port: 6080
+        targetPort: 6080
