@@ -86,6 +86,7 @@ LOGIN_TEMPLATE = """
 <html>
 <head>
     <title>High Integrity Milady Authentication</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -197,6 +198,10 @@ LOGIN_TEMPLATE = """
             🦊 Sign in with Ethereum
         </button>
         
+        <button onclick="testMetaMask()" style="margin-top: 10px; padding: 8px 16px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer;">
+            🧪 Test MetaMask
+        </button>
+        
         <div id="status" style="display: none;"></div>
         <div id="error" style="display: none;"></div>
     </div>
@@ -224,11 +229,19 @@ LOGIN_TEMPLATE = """
                 if (!window.ethereum) {
                     throw new Error("MetaMask not found. Please install MetaMask to continue.");
                 }
+                
+                // Handle multiple wallet extensions
+                let ethereum = window.ethereum;
+                if (window.ethereum.providers?.length) {
+                    console.log('Multiple wallets detected, looking for MetaMask...');
+                    ethereum = window.ethereum.providers.find(provider => provider.isMetaMask) || window.ethereum;
+                }
+                
                 console.log('✅ MetaMask detected!');
                 
                 // Request account access
                 console.log('Requesting accounts...');
-                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
                 const walletAddress = accounts[0];
                 console.log('✅ Wallet connected:', walletAddress);
                 
@@ -238,9 +251,9 @@ LOGIN_TEMPLATE = """
                 
                 // Check network (optional - simplified)
                 try {
-                    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                    const chainId = await ethereum.request({ method: 'eth_chainId' });
                     if (chainId !== '0x1') {
-                        await window.ethereum.request({
+                        await ethereum.request({
                             method: 'wallet_switchEthereumChain',
                             params: [{ chainId: '0x1' }],
                         });
@@ -265,7 +278,7 @@ Nonce: ${nonce}`;
                 console.log('About to call personal_sign...');
                 
                 // Sign the message using personal_sign - this should trigger MetaMask popup
-                const signature = await window.ethereum.request({
+                const signature = await ethereum.request({
                     method: 'personal_sign',
                     params: [message, walletAddress]
                 });
@@ -331,6 +344,25 @@ Nonce: ${nonce}`;
                 console.log('MetaMask not found on page load');
             }
         });
+        
+        // Simple test function
+        async function testMetaMask() {
+            console.log('🧪 Testing MetaMask...');
+            try {
+                if (window.ethereum) {
+                    console.log('✅ window.ethereum exists');
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    console.log('✅ Accounts:', accounts);
+                    alert('MetaMask works! Accounts: ' + accounts);
+                } else {
+                    console.log('❌ window.ethereum not found');
+                    alert('MetaMask not found');
+                }
+            } catch (error) {
+                console.error('❌ Test failed:', error);
+                alert('Error: ' + error.message);
+            }
+        }
         
         // Add click event listener as backup
         document.addEventListener('DOMContentLoaded', () => {
