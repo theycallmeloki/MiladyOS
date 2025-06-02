@@ -223,7 +223,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: test-nft.miladyos.net
+  - host: test.miladyos.net
     http:
       paths:
       - path: /
@@ -235,5 +235,5 @@ spec:
               number: 80
   tls:
   - hosts:
-    - test-nft.miladyos.net
-    secretName: test-nft-tls
+    - test.miladyos.net
+    secretName: test-tls
