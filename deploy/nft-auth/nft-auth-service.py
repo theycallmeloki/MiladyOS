@@ -12,6 +12,7 @@ from typing import Optional
 from web3 import Web3
 from eth_account.messages import encode_defunct
 from flask import Flask, request, jsonify, redirect, render_template_string, make_response
+from prometheus_client import Counter, Gauge, generate_latest, Info
 import os
 
 app = Flask(__name__)
@@ -24,12 +25,65 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8080"))
 
+# Prometheus Metrics
+nft_auth_info = Info('nft_auth_service', 'NFT Authentication Service Info')
+nft_auth_requests_total = Counter('nft_auth_requests_total', 'Total authentication requests', ['method', 'status'])
+nft_auth_active_sessions = Gauge('nft_auth_active_sessions', 'Active authenticated sessions')
+nft_auth_verification_time = Gauge('nft_auth_verification_time_seconds', 'NFT verification response time')
+nft_auth_ethereum_rpc_status = Gauge('nft_auth_ethereum_rpc_status', 'Ethereum RPC connection health (1=healthy, 0=unhealthy)')
+nft_auth_redis_status = Gauge('nft_auth_redis_status', 'Redis connection health (1=healthy, 0=unhealthy)')
+nft_auth_contract_calls_total = Counter('nft_auth_contract_calls_total', 'Ethereum contract calls', ['contract', 'method', 'status'])
+nft_auth_holder_list_size = Gauge('nft_auth_holder_list_size', 'Number of cached NFT holders')
+nft_auth_holder_list_age_seconds = Gauge('nft_auth_holder_list_age_seconds', 'Age of cached holder list in seconds')
+
+# Set service info
+nft_auth_info.info({
+    'version': '1.0.0',
+    'contract': HIGH_INTEGRITY_MILADY_CONTRACT,
+    'rpc_url': ETHEREUM_RPC_URL
+})
+
 class NFTAuthService:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(ETHEREUM_RPC_URL))
         self.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         self.contract_address = Web3.to_checksum_address(HIGH_INTEGRITY_MILADY_CONTRACT)
+        self.update_connection_metrics()
         
+    def update_connection_metrics(self):
+        """Update connection health metrics"""
+        try:
+            # Test Redis connection
+            self.redis_client.ping()
+            nft_auth_redis_status.set(1)
+        except Exception:
+            nft_auth_redis_status.set(0)
+            
+        try:
+            # Test Ethereum RPC connection
+            self.w3.is_connected()
+            nft_auth_ethereum_rpc_status.set(1)
+        except Exception:
+            nft_auth_ethereum_rpc_status.set(0)
+            
+        # Update holder list metrics
+        try:
+            cached_holders = self.redis_client.get("holder_list")
+            if cached_holders:
+                holder_list = json.loads(cached_holders)
+                nft_auth_holder_list_size.set(len(holder_list))
+                
+                # Calculate age of holder list
+                ttl = self.redis_client.ttl("holder_list")
+                if ttl > 0:
+                    age = 3600 - ttl  # Original TTL was 3600 seconds
+                    nft_auth_holder_list_age_seconds.set(age)
+            else:
+                nft_auth_holder_list_size.set(0)
+                nft_auth_holder_list_age_seconds.set(0)
+        except Exception:
+            pass
+            
     def check_nft_ownership(self, wallet_address: str) -> bool:
         """Check if wallet owns High Integrity Milady NFT"""
         try:
@@ -50,10 +104,12 @@ class NFTAuthService:
             })
             
             balance = int(result.hex(), 16)
+            nft_auth_contract_calls_total.labels(contract='high_integrity_milady', method='balanceOf', status='success').inc()
             return balance > 0
             
         except Exception as e:
             print(f"NFT ownership check failed: {e}")
+            nft_auth_contract_calls_total.labels(contract='high_integrity_milady', method='balanceOf', status='error').inc()
             return False
 
     def update_holder_list_async(self):
@@ -370,6 +426,7 @@ def login():
 @app.route('/authenticate', methods=['POST'])
 def authenticate():
     """Handle wallet signature authentication"""
+    start_time = time.time()
     try:
         data = request.get_json()
         wallet_address = data.get('walletAddress')
@@ -451,10 +508,17 @@ def authenticate():
                           httponly=True,
                           samesite='Lax')
         
+        # Update metrics
+        verification_time = time.time() - start_time
+        nft_auth_verification_time.set(verification_time)
+        nft_auth_requests_total.labels(method='authenticate', status='success').inc()
+        nft_auth.update_connection_metrics()
+        
         return response
         
     except Exception as e:
         print(f"Authentication error: {e}")
+        nft_auth_requests_total.labels(method='authenticate', status='error').inc()
         return jsonify({"success": False, "error": "Authentication failed"}), 500
 
 @app.route('/auth')
@@ -549,9 +613,16 @@ def admin_view_holders():
         return jsonify({"error": "Failed to retrieve holder list"}), 500
 
 
+@app.route('/metrics')
+def metrics():
+    """Prometheus metrics endpoint"""
+    nft_auth.update_connection_metrics()
+    return generate_latest()
+
 @app.route('/health')
 def health():
     """Health check endpoint"""
+    nft_auth.update_connection_metrics()
     return jsonify({"status": "healthy"})
 
 if __name__ == '__main__':

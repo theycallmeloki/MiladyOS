@@ -15,6 +15,10 @@ resources:
 - nft-auth-ingress.yaml
 # Test app to verify NFT authentication works
 - test-nginx-app.yaml
+# Prometheus monitoring
+- nft-auth-servicemonitor.yaml
+# Grafana dashboard
+- nft-auth-dashboard.yaml
 
 labels:
 - pairs:
