@@ -27,8 +27,6 @@ CACHE_TTL = int(os.getenv("CACHE_TTL", "600"))
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8080"))
 
-# Admin controls
-ACCESS_ENABLED = os.getenv("ACCESS_ENABLED", "false").lower() == "true"  # Block access by default
 
 class NFTAuthService:
     def __init__(self):
@@ -539,15 +537,11 @@ MAINTENANCE_TEMPLATE = """
 @app.route('/login')
 def login():
     """Login page with Web3 authentication"""
-    if not ACCESS_ENABLED:
-        return render_template_string(MAINTENANCE_TEMPLATE), 503
     return render_template_string(LOGIN_TEMPLATE, contract_address=HIGH_INTEGRITY_MILADY_CONTRACT)
 
 @app.route('/authenticate', methods=['POST'])
 def authenticate():
     """Handle wallet signature authentication"""
-    if not ACCESS_ENABLED:
-        return jsonify({"success": False, "error": "Authentication temporarily disabled"}), 503
         
     try:
         data = request.get_json()
@@ -613,8 +607,6 @@ def authenticate():
 @app.route('/auth')
 def auth_check():
     """Authentication check endpoint for ingress-nginx"""
-    if not ACCESS_ENABLED:
-        return '', 503
         
     try:
         # Check for authentication token
@@ -674,39 +666,6 @@ def logout():
     response.set_cookie('nft_auth_token', '', expires=0)
     return response
 
-@app.route('/admin/enable', methods=['POST'])
-def admin_enable():
-    """Admin endpoint to enable access"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    global ACCESS_ENABLED
-    ACCESS_ENABLED = True
-    return jsonify({"status": "Access enabled", "access_enabled": ACCESS_ENABLED})
-
-@app.route('/admin/disable', methods=['POST'])
-def admin_disable():
-    """Admin endpoint to disable access"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    global ACCESS_ENABLED
-    ACCESS_ENABLED = False
-    return jsonify({"status": "Access disabled", "access_enabled": ACCESS_ENABLED})
-
-@app.route('/admin/status')
-def admin_status():
-    """Admin endpoint to check access status"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {SECRET_KEY}":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    return jsonify({
-        "access_enabled": ACCESS_ENABLED,
-        "contract": HIGH_INTEGRITY_MILADY_CONTRACT
-    })
 
 @app.route('/admin/generate-holders', methods=['POST'])
 def admin_generate_holders():
@@ -763,8 +722,7 @@ def admin_view_holders():
 def health():
     """Health check endpoint"""
     return jsonify({
-        "status": "healthy",
-        "access_enabled": ACCESS_ENABLED
+        "status": "healthy"
     })
 
 if __name__ == '__main__':
