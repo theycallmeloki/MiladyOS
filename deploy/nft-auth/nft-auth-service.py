@@ -90,45 +90,12 @@ class NFTAuthService:
                 print("Returning cached holder list")
                 return json.loads(cached_holders)
             
-            # Get total supply
-            total_supply_signature = "0x18160ddd"  # totalSupply()
-            result = self.w3.eth.call({
-                "to": self.contract_address,
-                "data": total_supply_signature
-            })
-            total_supply = int(result.hex(), 16)
-            print(f"Total supply: {total_supply}")
+            # For now, return empty list - holder list generation removed
+            # TODO: Implement alternative method to get holder addresses
+            print("Holder list generation not implemented - returning empty list")
+            holder_list = []
             
-            holders = set()
-            
-            # For each token ID, get the owner
-            for token_id in range(total_supply):
-                try:
-                    # ownerOf(tokenId) function signature
-                    owner_of_signature = "0x6352211e"  # ownerOf(uint256)
-                    token_id_padded = hex(token_id)[2:].zfill(64)
-                    data = owner_of_signature + token_id_padded
-                    
-                    result = self.w3.eth.call({
-                        "to": self.contract_address,
-                        "data": data
-                    })
-                    
-                    # Extract address from result (last 20 bytes)
-                    owner_address = "0x" + result.hex()[-40:]
-                    holders.add(owner_address.lower())
-                    
-                    if token_id % 100 == 0:
-                        print(f"Processed {token_id}/{total_supply} tokens...")
-                        
-                except Exception as e:
-                    print(f"Error getting owner of token {token_id}: {e}")
-                    continue
-            
-            holder_list = list(holders)
-            print(f"Found {len(holder_list)} unique holders")
-            
-            # Cache for 1 hour
+            # Cache empty list for 1 hour
             self.redis_client.setex("holder_list", 3600, json.dumps(holder_list))
             
             return holder_list
