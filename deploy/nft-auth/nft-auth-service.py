@@ -250,40 +250,30 @@ LOGIN_TEMPLATE = """
                     throw new Error("High Integrity Milady NFT required for access");
                 }
                 
-                // Generate SIWE message (EIP-4361 compliant)
-                const domain = window.location.host;
-                const timestamp = new Date().toISOString();
-                const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-                
-                const siweMessage = `${domain} wants you to sign in with your Ethereum account:
-${walletAddress}
-
-I accept the terms of service.
-
-URI: ${window.location.origin}
-Version: 1
-Chain ID: 1
-Nonce: ${nonce}
-Issued At: ${timestamp}`;
-                
                 statusDiv.innerHTML = 'Please sign the message in MetaMask...';
                 
-                // Sign the SIWE message
+                // Generate a simple message to sign
+                const timestamp = Math.floor(Date.now() / 1000);
+                const nonce = Math.random().toString(36).substring(2, 15);
+                const message = `Sign in to MiladyOS
+
+Wallet: ${walletAddress}
+Time: ${timestamp}
+Nonce: ${nonce}`;
+                
+                // Sign the message using personal_sign
                 const signature = await window.ethereum.request({
                     method: 'personal_sign',
-                    params: [
-                        siweMessage,
-                        walletAddress
-                    ]
+                    params: [message, walletAddress]
                 });
                 
                 // Submit authentication to server
                 const authData = {
-                    wallet_address: walletAddress,
+                    walletAddress: walletAddress,
                     signature: signature,
-                    message: siweMessage,
-                    nonce: nonce,
-                    timestamp: timestamp
+                    message: message,
+                    timestamp: timestamp,
+                    nonce: nonce
                 };
                 
                 const response = await fetch('/authenticate', {
@@ -339,10 +329,10 @@ def login():
 
 @app.route('/authenticate', methods=['POST'])
 def authenticate():
-    """Handle SIWE (Sign-In with Ethereum) authentication"""
+    """Handle wallet signature authentication"""
     try:
         data = request.get_json()
-        wallet_address = data.get('wallet_address')
+        wallet_address = data.get('walletAddress')  # Note: using walletAddress to match frontend
         signature = data.get('signature')
         message = data.get('message')
         nonce = data.get('nonce')
@@ -351,34 +341,17 @@ def authenticate():
         if not all([wallet_address, signature, message, nonce, timestamp]):
             return jsonify({"success": False, "error": "Missing authentication data"}), 400
         
-        # Parse timestamp and check if it's within 5 minutes
-        try:
-            from datetime import datetime, timezone
-            issued_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            now = datetime.now(timezone.utc)
-            time_diff = (now - issued_time).total_seconds()
-            
-            if abs(time_diff) > 300:  # 5 minutes
-                return jsonify({"success": False, "error": "Authentication expired"}), 400
-        except Exception:
-            return jsonify({"success": False, "error": "Invalid timestamp format"}), 400
+        # Check timestamp (5 minute window)
+        current_time = int(time.time())
+        if abs(current_time - timestamp) > 300:
+            return jsonify({"success": False, "error": "Authentication expired"}), 400
         
-        # Verify SIWE message format
-        if not message.startswith(f"{request.headers.get('Host', 'localhost')} wants you to sign in"):
-            return jsonify({"success": False, "error": "Invalid message format"}), 400
-        
+        # Verify message format
         if wallet_address.lower() not in message.lower():
             return jsonify({"success": False, "error": "Wallet address mismatch"}), 400
         
         # Verify signature using personal_sign format
         try:
-            # Remove 0x prefix from signature if present
-            sig = signature[2:] if signature.startswith('0x') else signature
-            
-            # Verify the signature
-            message_hash = hashlib.sha256(message.encode()).hexdigest()
-            
-            # Use web3 to verify the signature
             from eth_account.messages import encode_defunct
             encoded_message = encode_defunct(text=message)
             recovered_address = nft_auth.w3.eth.account.recover_message(encoded_message, signature=signature)
@@ -399,8 +372,7 @@ def authenticate():
             "wallet": wallet_address,
             "authenticated": True,
             "timestamp": time.time(),
-            "nonce": nonce,
-            "siwe_message": message
+            "nonce": nonce
         }
         
         token = base64.b64encode(json.dumps(session_data).encode()).decode()
@@ -453,6 +425,25 @@ def auth_check():
     except Exception as e:
         print(f"Auth check error: {e}")
         return '', 500
+
+@app.route('/api/auth', methods=['POST'])
+def api_auth():
+    """API endpoint for wallet authorization check - matches your existing code pattern"""
+    try:
+        data = request.get_json()
+        wallet_address = data.get('walletAddress')
+        
+        if not wallet_address:
+            return jsonify({"authorized": False, "error": "Missing wallet address"}), 400
+        
+        # Check NFT ownership
+        owns_nft = nft_auth.check_nft_ownership_rpc(wallet_address)
+        
+        return jsonify({"authorized": owns_nft})
+        
+    except Exception as e:
+        print(f"API auth error: {e}")
+        return jsonify({"authorized": False, "error": "Authorization check failed"}), 500
 
 @app.route('/logout')
 def logout():
