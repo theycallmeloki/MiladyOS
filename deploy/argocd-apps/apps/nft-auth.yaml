@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: nft-auth
+  name: nft
   namespace: argocd
 spec:
   project: default
