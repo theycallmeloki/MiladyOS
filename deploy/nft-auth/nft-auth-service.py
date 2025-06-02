@@ -86,7 +86,6 @@ LOGIN_TEMPLATE = """
 <html>
 <head>
     <title>High Integrity Milady Authentication</title>
-    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -206,6 +205,8 @@ LOGIN_TEMPLATE = """
         const CONTRACT_ADDRESS = "{{ contract_address }}";
         
         async function signInWithEthereum() {
+            console.log('🦊 Sign in with Ethereum clicked!');
+            
             const connectBtn = document.getElementById('connectBtn');
             const statusDiv = document.getElementById('status');
             const errorDiv = document.getElementById('error');
@@ -219,35 +220,34 @@ LOGIN_TEMPLATE = """
             connectBtn.disabled = true;
             
             try {
+                console.log('Checking window.ethereum...');
                 if (!window.ethereum) {
                     throw new Error("MetaMask not found. Please install MetaMask to continue.");
                 }
+                console.log('✅ MetaMask detected!');
                 
                 // Request account access
+                console.log('Requesting accounts...');
                 const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 const walletAddress = accounts[0];
+                console.log('✅ Wallet connected:', walletAddress);
                 
                 statusDiv.innerHTML = `Connected: <div class="wallet-address">${walletAddress}</div>`;
                 statusDiv.className = 'status';
                 statusDiv.style.display = 'block';
                 
-                // Check network
-                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-                if (chainId !== '0x1') {
-                    await window.ethereum.request({
-                        method: 'wallet_switchEthereumChain',
-                        params: [{ chainId: '0x1' }],
-                    });
-                }
-                
-                // Check NFT ownership
-                const provider = new ethers.providers.Web3Provider(window.ethereum);
-                const abi = ["function balanceOf(address owner) view returns (uint256)"];
-                const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, provider);
-                const balance = await contract.balanceOf(walletAddress);
-                
-                if (!balance.gt(0)) {
-                    throw new Error("High Integrity Milady NFT required for access");
+                // Check network (optional - simplified)
+                try {
+                    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                    if (chainId !== '0x1') {
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: '0x1' }],
+                        });
+                    }
+                } catch (switchError) {
+                    console.log('Network switch error:', switchError);
+                    // Continue anyway - let server validate NFT ownership
                 }
                 
                 statusDiv.innerHTML = 'Please sign the message in MetaMask...';
@@ -261,11 +261,18 @@ Wallet: ${walletAddress}
 Time: ${timestamp}
 Nonce: ${nonce}`;
                 
-                // Sign the message using personal_sign
+                console.log('Message to sign:', message);
+                console.log('About to call personal_sign...');
+                
+                // Sign the message using personal_sign - this should trigger MetaMask popup
                 const signature = await window.ethereum.request({
                     method: 'personal_sign',
                     params: [message, walletAddress]
                 });
+                
+                console.log('✅ Message signed!', signature);
+                
+                statusDiv.innerHTML = 'Verifying NFT ownership...';
                 
                 // Submit authentication to server
                 const authData = {
@@ -312,9 +319,27 @@ Nonce: ${nonce}`;
         
         // Check if user is already connected
         window.addEventListener('load', async () => {
-            if (window.ethereum && window.ethereum.selectedAddress) {
-                const connectBtn = document.getElementById('connectBtn');
-                connectBtn.innerHTML = '🔗 Already Connected - Click to Sign In';
+            console.log('Page loaded, checking MetaMask...');
+            if (window.ethereum) {
+                console.log('MetaMask found on page load');
+                if (window.ethereum.selectedAddress) {
+                    console.log('Wallet already connected:', window.ethereum.selectedAddress);
+                    const connectBtn = document.getElementById('connectBtn');
+                    connectBtn.innerHTML = '🔗 Already Connected - Click to Sign In';
+                }
+            } else {
+                console.log('MetaMask not found on page load');
+            }
+        });
+        
+        // Add click event listener as backup
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, setting up button...');
+            const btn = document.getElementById('connectBtn');
+            if (btn) {
+                console.log('Button found, onclick should work');
+            } else {
+                console.log('ERROR: Button not found!');
             }
         });
     </script>
