@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: nft-auth-integration
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: default
+
+resources:
+# Simple integration patch for existing MiladyOS
+- integration-patch.yaml
+
+# RBAC for service account (if needed)
+- rbac/nft-auth-rbac.yaml
+
+commonLabels:
+  app.kubernetes.io/name: nft-auth-integration
+  app.kubernetes.io/part-of: miladyos
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/managed-by: kustomize
+
+# Generate ConfigMaps from local files
+configMapGenerator:
+- name: nft-auth-middleware
+  files:
+  - nft-auth-middleware.py
+- name: nft-auth-web
+  files:
+  - nft-web3-auth.js

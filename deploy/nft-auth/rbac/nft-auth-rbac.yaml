@@ -1,0 +1,150 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nft-auth-service
+  namespace: kube-system
+  labels:
+    app: nft-auth-service
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nft-auth-service
+  labels:
+    app: nft-auth-service
+rules:
+# Authentication webhook permissions
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["tokenreviews"]
+  verbs: ["create"]
+# Read configuration and secrets
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+# Service mesh integration
+- apiGroups: ["networking.istio.io"]
+  resources: ["authorizationpolicies", "requestauthentications"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nft-auth-service
+  labels:
+    app: nft-auth-service
+subjects:
+- kind: ServiceAccount
+  name: nft-auth-service
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: nft-auth-service
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# High Integrity Milady NFT Holders Access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nft-holders-access
+  labels:
+    app: nft-auth-service
+rules:
+# Full access to MiladyOS services for High Integrity Milady holders
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nft-holders-access
+  labels:
+    app: nft-auth-service
+subjects:
+- kind: Group
+  name: "nft-holders"
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: nft-holders-access
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Network Policies for tier-based access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nft-auth-ingress
+  namespace: kube-system
+  labels:
+    app: nft-auth-service
+spec:
+  podSelector:
+    matchLabels:
+      app: nft-auth-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow webhook traffic from API server
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - podSelector:
+        matchLabels:
+          component: kube-apiserver
+    ports:
+    - protocol: TCP
+      port: 8443
+  # Allow metrics scraping from Prometheus
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow health checks
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow OAuth2 proxy traffic
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 4180
+  egress:
+  # Allow blockchain RPC calls
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8545
+  # Allow Redis access
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: default
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
