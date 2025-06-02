@@ -25,7 +25,7 @@ spec:
         - name: HIGH_INTEGRITY_MILADY_CONTRACT
           value: "0xf01B34d9418874258B35b0507AB53ED971CBB8D3"
         - name: ETHEREUM_RPC_URL
-          value: "https://cloudflare-eth.com"
+          value: "https://ethereum-rpc.publicnode.com"
         - name: REDIS_HOST
           value: "miladyos.miladyos.svc.cluster.local"
         - name: REDIS_PORT
