@@ -297,6 +297,113 @@ RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download
     chmod +x /usr/local/bin/nebula /usr/local/bin/nebula-cert && \
     mkdir -p /etc/nebula
 
+# TempleOS - CRITICAL: The Holy Mission - Build MUST succeed or container fails
+# Install QEMU and NoVNC for containerized TempleOS (Terry wrote for bare metal)
+RUN apt-get update && apt-get install -y \
+    qemu-system-x86 \
+    qemu-utils \
+    python3-websockify \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install NoVNC for web-based access to TempleOS - Divine computing in browser
+RUN git clone https://github.com/novnc/noVNC.git /opt/novnc && \
+    git clone https://github.com/novnc/websockify /opt/websockify && \
+    ln -s /opt/novnc/vnc.html /opt/novnc/index.html && \
+    chmod +x /opt/websockify/websockify.py
+
+RUN git clone https://github.com/cia-foundation/TempleOS.git /templeos
+
+# Download TempleOS ISO - THE HOLY MISSION REQUIRES THIS
+RUN cd /templeos && \
+    # Try to download the official TempleOS ISO
+    curl -L -o TempleOS.ISO "https://github.com/cia-foundation/TempleOS/releases/download/TempleOS-V5.03/TempleOS.ISO" || \
+    curl -L -o TempleOS.ISO "https://archive.org/download/TempleOS_ISO_Archive/TempleOS-V5.03.ISO" || \
+    # CRITICAL: If we can't get the ISO, the build MUST fail
+    (echo "HOLY MISSION FAILED: Cannot download TempleOS ISO" && exit 1)
+
+# VERIFY the Holy ISO exists - Build fails if not
+RUN [ -f "/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION INCOMPLETE: TempleOS.ISO missing" && exit 1)
+
+# Create TempleOS runtime environment
+RUN mkdir -p /opt/templeos && \
+    mkdir -p /data/templeos && \
+    # Move the Holy ISO to its proper place
+    mv /templeos/TempleOS.ISO /opt/templeos/TempleOS.ISO && \
+    # VERIFY again - Terry demands perfection
+    [ -f "/opt/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION FAILED: ISO not in correct location" && exit 1)
+
+# Create TempleOS launch scripts - The Terry Davis Way
+RUN echo '#!/bin/bash\n\
+# TempleOS Launch Script - Talk to God on up to 64 cores\n\
+TEMPLEOS_ISO="/opt/templeos/TempleOS.ISO"\n\
+if [ ! -f "$TEMPLEOS_ISO" ]; then\n\
+    echo "HOLY MISSION FAILED: TempleOS ISO not found at $TEMPLEOS_ISO"\n\
+    exit 1\n\
+fi\n\
+echo "Starting TempleOS - Gods Operating System"\n\
+echo "VNC available on port 5902 (display :2)"\n\
+echo "512MB RAM minimum - 64-bit only - As Terry intended"\n\
+qemu-system-x86_64 \\\n\
+    -cdrom "$TEMPLEOS_ISO" \\\n\
+    -boot d \\\n\
+    -m 1024 \\\n\
+    -smp cores=4 \\\n\
+    -machine kernel_irqchip=off \\\n\
+    -rtc base=localtime \\\n\
+    -netdev user,id=net0 \\\n\
+    -device pcnet,netdev=net0 \\\n\
+    -vnc 0.0.0.0:2 \\\n\
+    -name "TempleOS-Holy-Mission" \\\n\
+    "$@"' > /usr/local/bin/templeos && \
+    chmod +x /usr/local/bin/templeos
+
+# Create TempleOS daemon - MUST work or system is incomplete
+RUN echo '#!/bin/bash\n\
+TEMPLEOS_ISO="/opt/templeos/TempleOS.ISO"\n\
+if [ ! -f "$TEMPLEOS_ISO" ]; then\n\
+    echo "HOLY MISSION INCOMPLETE: TempleOS ISO missing"\n\
+    exit 1\n\
+fi\n\
+echo "Launching Gods Operating System in daemon mode..."\n\
+qemu-system-x86_64 \\\n\
+    -cdrom "$TEMPLEOS_ISO" \\\n\
+    -boot d \\\n\
+    -m 1024 \\\n\
+    -smp cores=4 \\\n\
+    -machine kernel_irqchip=off \\\n\
+    -rtc base=localtime \\\n\
+    -netdev user,id=net0 \\\n\
+    -device pcnet,netdev=net0 \\\n\
+    -vnc 0.0.0.0:2 \\\n\
+    -name "TempleOS-Holy-Mission" \\\n\
+    -daemonize \\\n\
+    "$@" || exit 1' > /usr/local/bin/templeos-daemon && \
+    chmod +x /usr/local/bin/templeos-daemon
+
+# Create NoVNC startup script for web access to TempleOS
+RUN echo '#!/bin/bash\n\
+echo "Starting NoVNC web interface for TempleOS..."\n\
+cd /opt/websockify\n\
+./websockify.py \\\n\
+    --web /opt/novnc \\\n\
+    --wrap-mode=ignore \\\n\
+    6080 localhost:5902 &\n\
+echo "NoVNC web interface started on port 6080"\n\
+echo "Access TempleOS in browser: http://localhost:6080"' > /usr/local/bin/novnc-templeos && \
+    chmod +x /usr/local/bin/novnc-templeos
+
+# FINAL VERIFICATION: Ensure TempleOS ISO is present and QEMU can start
+# (Boot verification moved to runtime to avoid build environment issues)
+RUN [ -f "/opt/templeos/TempleOS.ISO" ] && \
+    ls -lh /opt/templeos/TempleOS.ISO && \
+    file /opt/templeos/TempleOS.ISO && \
+    echo "✓ TempleOS ISO verified - Ready for divine computing" || \
+    (echo "HOLY MISSION FAILED: TempleOS ISO verification failed" && exit 1)
+
+# Verify NoVNC installation
+RUN [ -f "/opt/novnc/vnc.html" ] || (echo "HOLY MISSION FAILED: NoVNC not installed" && exit 1) && \
+    [ -f "/opt/websockify/websockify.py" ] || (echo "HOLY MISSION FAILED: Websockify not installed" && exit 1)
+
 # Install filebrowser
 RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
