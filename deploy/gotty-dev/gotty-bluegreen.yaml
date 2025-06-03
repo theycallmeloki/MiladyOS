@@ -623,6 +623,53 @@ spec:
                   gawk \
                   inotify-tools \
                   coreutils
+
+      # Claude trace post-session processor – generates HTML reports and index
+      - name: claude-trace-processor
+        image: ubuntu:24.04
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+
+          # Install prerequisites (Node.js & git) if not already installed
+          if ! command -v node >/dev/null 2>&1; then
+            echo "Installing Node.js runtime..."
+            apt-get update && \
+            apt-get install -y curl gnupg ca-certificates git build-essential && \
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+            apt-get install -y nodejs && \
+            apt-get clean && rm -rf /var/lib/apt/lists/*
+          fi
+
+          # Ensure claude-trace wrapper is available and executable
+          cp /scripts/claude-trace-wrapper.sh /usr/local/bin/claude-trace-wrapper.sh
+          chmod +x /usr/local/bin/claude-trace-wrapper.sh
+
+          # Install claude-trace (idempotent)
+          /usr/local/bin/claude-trace-wrapper.sh install || true
+
+          # Run the post-session processor which generates HTML reports
+          exec /scripts/post-session-processor.sh
+        volumeMounts:
+        - name: session-logs
+          mountPath: /logs/sessions
+        - name: claude-trace-logs
+          mountPath: /logs/claude-trace
+        - name: claude-trace-config
+          mountPath: /scripts
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+
+        env:
+        - name: TZ
+          value: "UTC"
   service:
     metadata:
       name: gotty-dev
