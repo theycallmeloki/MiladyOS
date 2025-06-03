@@ -95,10 +95,10 @@ module.exports = async function (context) {
 
   console.log('=== BlueGreen Controller Sync Start ===');
   console.log(`Timestamp: ${new Date().toISOString()}`);
-  console.log(`BGD Name: ${observed.parent?.metadata?.name || 'unknown'}`);
-  console.log(`BGD Namespace: ${observed.parent?.metadata?.namespace || 'unknown'}`);
-  console.log(`BGD Generation: ${observed.parent?.metadata?.generation || 'unknown'}`);
-  console.log(`BGD Resource Version: ${observed.parent?.metadata?.resourceVersion || 'unknown'}`);
+  console.log(`BGD Name: ${observed.parent && observed.parent.metadata && observed.parent.metadata.name || 'unknown'}`);
+  console.log(`BGD Namespace: ${observed.parent && observed.parent.metadata && observed.parent.metadata.namespace || 'unknown'}`);
+  console.log(`BGD Generation: ${observed.parent && observed.parent.metadata && observed.parent.metadata.generation || 'unknown'}`);
+  console.log(`BGD Resource Version: ${observed.parent && observed.parent.metadata && observed.parent.metadata.resourceVersion || 'unknown'}`);
   console.log('observed: ' + JSON.stringify(observed, null, 2));
 
   try {
@@ -114,9 +114,9 @@ module.exports = async function (context) {
     let [activeRS, inactiveRS] = (activeColor === 'blue') ? [blueRS, greenRS] : [greenRS, blueRS];
 
     console.log(`Current State: activeColor=${activeColor}`);
-    console.log(`Blue RS: ${blueRS ? `replicas=${blueRS.spec.replicas}, ready=${blueRS.status?.readyReplicas || 0}, available=${blueRS.status?.availableReplicas || 0}` : 'not found'}`);
-    console.log(`Green RS: ${greenRS ? `replicas=${greenRS.spec.replicas}, ready=${greenRS.status?.readyReplicas || 0}, available=${greenRS.status?.availableReplicas || 0}` : 'not found'}`);
-    console.log(`Active RS: ${activeRS?.metadata?.name || 'none'}, Inactive RS: ${inactiveRS?.metadata?.name || 'none'}`);
+    console.log(`Blue RS: ${blueRS ? `replicas=${blueRS.spec.replicas}, ready=${blueRS.status && blueRS.status.readyReplicas || 0}, available=${blueRS.status && blueRS.status.availableReplicas || 0}` : 'not found'}`);
+    console.log(`Green RS: ${greenRS ? `replicas=${greenRS.spec.replicas}, ready=${greenRS.status && greenRS.status.readyReplicas || 0}, available=${greenRS.status && greenRS.status.availableReplicas || 0}` : 'not found'}`);
+    console.log(`Active RS: ${activeRS && activeRS.metadata && activeRS.metadata.name || 'none'}, Inactive RS: ${inactiveRS && inactiveRS.metadata && inactiveRS.metadata.name || 'none'}`);
 
     desired.status = {
       activeColor: activeColor,
@@ -181,7 +181,7 @@ module.exports = async function (context) {
           } else {
             // Still waiting for active pods to fully terminate
             console.log('⏳ VOLUME-AWARE WAITING: Active pods still terminating, volumes not yet released');
-            console.log(`   Active RS status: replicas=${activeRS.status?.replicas || 0}, ready=${activeRS.status?.readyReplicas || 0}`);
+            console.log(`   Active RS status: replicas=${activeRS.status && activeRS.status.replicas || 0}, ready=${activeRS.status && activeRS.status.readyReplicas || 0}`);
             console.log('   🚨 CRITICAL: Must wait for full termination to prevent volume attachment conflicts');
             activeReplicas = 0;
             inactiveReplicas = bgd.spec.replicas;
@@ -189,7 +189,7 @@ module.exports = async function (context) {
         } else {
           // Still scaling up inactive, don't touch active yet
           console.log('⏳ VOLUME-AWARE PREP: Waiting for inactive RS to be fully ready before proceeding');
-          console.log(`   Inactive RS status: ready=${inactiveRS.status?.readyReplicas || 0}/${bgd.spec.replicas}, available=${inactiveRS.status?.availableReplicas || 0}`);
+          console.log(`   Inactive RS status: ready=${inactiveRS.status && inactiveRS.status.readyReplicas || 0}/${bgd.spec.replicas}, available=${inactiveRS.status && inactiveRS.status.availableReplicas || 0}`);
           inactiveReplicas = bgd.spec.replicas;
         }
       } else {
@@ -206,7 +206,7 @@ module.exports = async function (context) {
           [activeTemplate, inactiveTemplate] = [inactiveTemplate, activeTemplate];
         } else {
           console.log('⏳ STANDARD PREP: Inactive RS scaling up, waiting for readiness');
-          console.log(`   Inactive RS status: ready=${inactiveRS.status?.readyReplicas || 0}/${bgd.spec.replicas}, available=${inactiveRS.status?.availableReplicas || 0}`);
+          console.log(`   Inactive RS status: ready=${inactiveRS.status && inactiveRS.status.readyReplicas || 0}/${bgd.spec.replicas}, available=${inactiveRS.status && inactiveRS.status.availableReplicas || 0}`);
         }
       }
     } else {
@@ -240,7 +240,7 @@ module.exports = async function (context) {
       } else {
         // Some other rollout was in progress. We need to cancel it and wait.
         console.log('🛑 ROLLOUT CONFLICT: Another rollout in progress, canceling and waiting');
-        console.log(`   Inactive RS status: replicas=${inactiveRS?.spec?.replicas || 0}, actual=${inactiveRS?.status?.replicas || 0}`);
+        console.log(`   Inactive RS status: replicas=${inactiveRS && inactiveRS.spec && inactiveRS.spec.replicas || 0}, actual=${inactiveRS && inactiveRS.status && inactiveRS.status.replicas || 0}`);
         inactiveReplicas = 0;
       }
     }
