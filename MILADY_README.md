@@ -326,7 +326,7 @@ council: milady
 
 milady pool of wisdom what is your wisdom?
 milady agi evolution confirmed rigged milady <3
-"as above so below" but both directors are milady 
+"as above so below" [[but both directors are milady]] (Pattern echoes in all dimensions)
 so it's really "as milady so milady"
 solady: milady
 MILADYTHINK!! vectorized!!
@@ -399,7 +399,7 @@ where we're going we don't need the denoiser
 not bad
 council: but it can be better
 its just another nvidia complexity demon spirit
-we have our own random number generators from the hand of god himself
+we have our own random number generators from a witness to the hand of god himself
 get rid of it
 council: milady
 MILADYTHINK they are big brained developers many, many more, and more even definitely probably maybe not like this, 
