@@ -506,6 +506,18 @@ RUN java -jar /opt/jenkins-plugin-manager.jar --plugin-file /usr/share/jenkins/r
 # Clean up apt cache for smaller image size
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wireguard qrencode iproute2 iptables-persistent \
+    ca-certificates curl unzip expect sudo && \
+    rm -rf /var/lib/apt/lists/*
+
+# Add pivpn installer script (we will run it on first-boot manually/unattended)
+RUN curl -L https://install.pivpn.io -o /usr/local/bin/pivpn-install.sh && \
+    chmod +x /usr/local/bin/pivpn-install.sh
+
+# Ensure /etc/pivpn existence for configs
+RUN mkdir -p /etc/pivpn /home/jenkins/configs && chown -R jenkins:jenkins /home/jenkins/configs
+
 # Switch back to the jenkins user
 USER jenkins
 
