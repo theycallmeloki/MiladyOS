@@ -327,40 +327,42 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install NoVNC for web-based access to TempleOS - Divine computing in browser
+# Install NoVNC + ensure websockify exists and create legacy symlink (no heredoc version)
 RUN set -eux; \
-    # ensure git and pip available
-    apt-get update && apt-get install -y --no-install-recommends git python3-pip && \
-    # clone repos to /opt
+    apt-get update && apt-get install -y --no-install-recommends git python3-pip curl ca-certificates findutils && \
+    rm -rf /var/lib/apt/lists/*; \
     rm -rf /opt/novnc /opt/websockify; \
-    git clone https://github.com/novnc/noVNC.git /opt/novnc && \
+    git clone https://github.com/novnc/noVNC.git /opt/novnc; \
     git clone https://github.com/novnc/websockify /opt/websockify || true; \
-    # create index.html pointing at vnc.html, try a few candidate locations
+    if command -v websockify >/dev/null 2>&1; then \
+      echo "DEBUG: websockify in PATH at: $(command -v websockify)"; \
+    else \
+      echo "DEBUG: installing websockify via pip"; \
+      python3 -m pip install --no-cache-dir websockify; \
+    fi; \
     if [ -f /opt/novnc/vnc.html ]; then \
       ln -sf /opt/novnc/vnc.html /opt/novnc/index.html; \
     elif [ -f /opt/novnc/app/vnc.html ]; then \
       ln -sf /opt/novnc/app/vnc.html /opt/novnc/index.html; \
     else \
-      echo "WARNING: noVNC vnc.html not found; skip creating index.html"; \
+      echo "WARNING: noVNC vnc.html not found"; \
     fi; \
-    # Make whatever websockify script exists executable, or install websockify via pip as fallback
-    WEBSOCKIFY_FOUND=0; \
-    for CAND in /opt/websockify/websockify.py /opt/websockify/run /opt/websockify/bin/websockify /opt/websockify/utils/websockify.py; do \
-      if [ -f "$CAND" ]; then chmod +x "$CAND" && WEBSOCKIFY_FOUND=1 && break; fi; \
-    done; \
-    if [ "$WEBSOCKIFY_FOUND" -eq 0 ]; then \
-      # try to find any file with websockify in name and chmod it
-      find /opt/websockify -type f -iname '*websockify*' -exec chmod +x {} \; -print | grep -q . && WEBSOCKIFY_FOUND=1 || true; \
+    mkdir -p /opt/websockify; \
+    if [ -f /opt/websockify/websockify.py ]; then \
+      chmod +x /opt/websockify/websockify.py; \
+    elif [ -f /opt/websockify/run ]; then \
+      ln -sf /opt/websockify/run /opt/websockify/websockify.py; \
+    elif [ -f /opt/websockify/bin/websockify ]; then \
+      ln -sf /opt/websockify/bin/websockify /opt/websockify/websockify.py; \
+    elif command -v websockify >/dev/null 2>&1; then \
+      ln -sf "$(command -v websockify)" /opt/websockify/websockify.py; \
+    else \
+      echo '#!/bin/sh' > /opt/websockify/websockify.py; \
+      echo 'exec python3 -m websockify "$@"' >> /opt/websockify/websockify.py; \
+      chmod +x /opt/websockify/websockify.py; \
     fi; \
-    if [ "$WEBSOCKIFY_FOUND" -eq 0 ]; then \
-      echo "No websockify script found in repo; installing websockify via pip"; \
-      python3 -m pip install --no-cache-dir websockify && WEBSOCKIFY_FOUND=1; \
-    fi; \
-    # sanity check - produce message if still missing
-    if [ "$WEBSOCKIFY_FOUND" -eq 0 ]; then \
-      echo "ERROR: websockify not found and pip install failed" >&2; exit 1; \
-    fi; \
-    # cleanup apt cache to keep image small
-    apt-get remove -y --purge && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    echo "NoVNC + websockify ready"; \
+    echo "DEBUG: ls -la /opt/websockify"; ls -la /opt/websockify || true
 
 RUN git clone https://github.com/cia-foundation/TempleOS.git /templeos
 
@@ -431,17 +433,23 @@ qemu-system-x86_64 \\\n\
     "$@" || exit 1' > /usr/local/bin/templeos-daemon && \
     chmod +x /usr/local/bin/templeos-daemon
 
-# Create NoVNC startup script for web access to TempleOS
-RUN echo '#!/bin/bash\n\
-echo "Starting NoVNC web interface for TempleOS..."\n\
-cd /opt/websockify\n\
-./websockify.py \\\n\
-    --web /opt/novnc \\\n\
-    --wrap-mode=ignore \\\n\
-    6080 localhost:5902 &\n\
-echo "NoVNC web interface started on port 6080"\n\
-echo "Access TempleOS in browser: http://localhost:6080"' > /usr/local/bin/novnc-templeos && \
-    chmod +x /usr/local/bin/novnc-templeos
+# Create NoVNC startup script that uses /opt/websockify/websockify.py or PATH or python -m websockify
+RUN cat > /usr/local/bin/novnc-templeos <<'__NOVNC_SH__' && chmod +x /usr/local/bin/novnc-templeos
+#!/bin/sh
+set -eu
+
+echo "Starting NoVNC web interface for TempleOS..."
+
+# prefer legacy symlink first, then PATH, then python module
+if [ -x /opt/websockify/websockify.py ]; then
+  exec /opt/websockify/websockify.py --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902
+elif command -v websockify >/dev/null 2>&1; then
+  exec websockify --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902
+else
+  exec python3 -m websockify --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902
+fi
+__NOVNC_SH__
+
 
 # FINAL VERIFICATION: Ensure TempleOS ISO is present and QEMU can start
 # (Boot verification moved to runtime to avoid build environment issues)
