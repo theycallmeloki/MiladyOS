@@ -9,6 +9,7 @@ ENV K3SUP_VERSION 0.6.3
 
 # Switch to root to install additional packages
 USER root
+ARG DEBIAN_FRONTEND=noninteractive
 
 # Install Docker client
 RUN curl -fsSL https://get.docker.com -o get-docker.sh && \
@@ -100,38 +101,58 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # Copy Python source files
 COPY main.py miladyos_mcp.py miladyos_metadata.py /app/
 
-RUN git clone https://github.com/ggerganov/llama.cpp /llamacpp
+RUN git clone https://github.com/ggml-org/llama.cpp /llamacpp
 
 # Add GPU development dependencies based on architecture
 RUN apt-get update && apt-get install -y wget software-properties-common
 
-# For NVIDIA: Add CUDA repository and install CUDA toolkit
-RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-    wget https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/cuda-keyring_1.0-1_all.deb && \
-    dpkg -i cuda-keyring_1.0-1_all.deb && \
-    rm cuda-keyring_1.0-1_all.deb && \
-    echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/ /" > /etc/apt/sources.list.d/cuda-debian11-x86_64.list && \
-    apt-get update && \
-    apt-get install -y --verbose-versions \
-    cuda-compiler-11-8 \
-    cuda-cudart-dev-11-8 \
-    cuda-nvcc-11-8 \
-    libcublas-11-8 \
-    libcublas-dev-11-8 \
-    cuda-toolkit-11-8 \
-    cuda-driver-dev-11-8 \
-    cuda-nvrtc-dev-11-8 \
-    cuda-cudart-11-8 \
-    libcurl4-openssl-dev \
-    curl \
-    ccache && \
-    # Set environment variables for CUDA
-    echo 'export CUDA_HOME=/usr/local/cuda-11.8' >> /etc/profile.d/cuda.sh && \
-    echo 'export PATH=${CUDA_HOME}/bin:${PATH}' >> /etc/profile.d/cuda.sh && \
-    echo 'export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}' >> /etc/profile.d/cuda.sh && \
-    echo 'export CUDACXX=${CUDA_HOME}/bin/nvcc' >> /etc/profile.d/cuda.sh && \
-    echo 'export NVCC_FLAGS="-allow-unsupported-compiler"' >> /etc/profile.d/cuda.sh; \
-fi
+# For NVIDIA: add CUDA repo and install minimal toolkit (no drivers / no nvvp)
+RUN set -eux; \
+    if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gnupg \
+        wget \
+        apt-transport-https \
+        software-properties-common; \
+      # add CUDA keyring and repo
+      wget -q https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/cuda-keyring_1.0-1_all.deb -O /tmp/cuda-keyring.deb; \
+      dpkg -i /tmp/cuda-keyring.deb || true; \
+      rm -f /tmp/cuda-keyring.deb; \
+      echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/ /" > /etc/apt/sources.list.d/cuda-debian11-x86_64.list; \
+      apt-get update; \
+      # Install only the toolkit/runtime dev pieces. Do NOT install drivers or nvvp (visual profiler) in container.
+      apt-get install -y --no-install-recommends --no-upgrade \
+        cuda-toolkit-11-8 \
+        cuda-cudart-dev-11-8 \
+        cuda-nvcc-11-8 \
+        libcublas-11-8 \
+        libcublas-dev-11-8 \
+        libcurl4-openssl-dev \
+        curl \
+        ccache || { \
+          # attempt to fix broken installs if dpkg left partial state, then retry once
+          apt-get -f install -y && apt-get install -y --no-install-recommends \
+            cuda-toolkit-11-8 \
+            cuda-cudart-dev-11-8 \
+            cuda-nvcc-11-8 \
+            libcublas-11-8 \
+            libcublas-dev-11-8 \
+            libcurl4-openssl-dev \
+            curl \
+            ccache; \
+        }; \
+      # cleanup apt lists to keep image small
+      apt-get clean; rm -rf /var/lib/apt/lists/*; \
+      # set CUDA env (toolkit only)
+      mkdir -p /etc/profile.d; \
+      echo 'export CUDA_HOME=/usr/local/cuda-11.8' > /etc/profile.d/cuda.sh; \
+      echo 'export PATH=${CUDA_HOME}/bin:${PATH}' >> /etc/profile.d/cuda.sh; \
+      echo 'export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}' >> /etc/profile.d/cuda.sh; \
+      echo 'export CUDACXX=${CUDA_HOME}/bin/nvcc' >> /etc/profile.d/cuda.sh; \
+      echo 'export NVCC_FLAGS="-allow-unsupported-compiler"' >> /etc/profile.d/cuda.sh; \
+    fi
+
 
 # For AMD: Install minimal ROCm components
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
@@ -306,10 +327,40 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install NoVNC for web-based access to TempleOS - Divine computing in browser
-RUN git clone https://github.com/novnc/noVNC.git /opt/novnc && \
-    git clone https://github.com/novnc/websockify /opt/websockify && \
-    ln -s /opt/novnc/vnc.html /opt/novnc/index.html && \
-    chmod +x /opt/websockify/websockify.py
+RUN set -eux; \
+    # ensure git and pip available
+    apt-get update && apt-get install -y --no-install-recommends git python3-pip && \
+    # clone repos to /opt
+    rm -rf /opt/novnc /opt/websockify; \
+    git clone https://github.com/novnc/noVNC.git /opt/novnc && \
+    git clone https://github.com/novnc/websockify /opt/websockify || true; \
+    # create index.html pointing at vnc.html, try a few candidate locations
+    if [ -f /opt/novnc/vnc.html ]; then \
+      ln -sf /opt/novnc/vnc.html /opt/novnc/index.html; \
+    elif [ -f /opt/novnc/app/vnc.html ]; then \
+      ln -sf /opt/novnc/app/vnc.html /opt/novnc/index.html; \
+    else \
+      echo "WARNING: noVNC vnc.html not found; skip creating index.html"; \
+    fi; \
+    # Make whatever websockify script exists executable, or install websockify via pip as fallback
+    WEBSOCKIFY_FOUND=0; \
+    for CAND in /opt/websockify/websockify.py /opt/websockify/run /opt/websockify/bin/websockify /opt/websockify/utils/websockify.py; do \
+      if [ -f "$CAND" ]; then chmod +x "$CAND" && WEBSOCKIFY_FOUND=1 && break; fi; \
+    done; \
+    if [ "$WEBSOCKIFY_FOUND" -eq 0 ]; then \
+      # try to find any file with websockify in name and chmod it
+      find /opt/websockify -type f -iname '*websockify*' -exec chmod +x {} \; -print | grep -q . && WEBSOCKIFY_FOUND=1 || true; \
+    fi; \
+    if [ "$WEBSOCKIFY_FOUND" -eq 0 ]; then \
+      echo "No websockify script found in repo; installing websockify via pip"; \
+      python3 -m pip install --no-cache-dir websockify && WEBSOCKIFY_FOUND=1; \
+    fi; \
+    # sanity check - produce message if still missing
+    if [ "$WEBSOCKIFY_FOUND" -eq 0 ]; then \
+      echo "ERROR: websockify not found and pip install failed" >&2; exit 1; \
+    fi; \
+    # cleanup apt cache to keep image small
+    apt-get remove -y --purge && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN git clone https://github.com/cia-foundation/TempleOS.git /templeos
 
@@ -401,8 +452,36 @@ RUN [ -f "/opt/templeos/TempleOS.ISO" ] && \
     (echo "HOLY MISSION FAILED: TempleOS ISO verification failed" && exit 1)
 
 # Verify NoVNC installation
-RUN [ -f "/opt/novnc/vnc.html" ] || (echo "HOLY MISSION FAILED: NoVNC not installed" && exit 1) && \
-    [ -f "/opt/websockify/websockify.py" ] || (echo "HOLY MISSION FAILED: Websockify not installed" && exit 1)
+# Verify NoVNC + websockify (robust). Creates /opt/websockify/websockify.py symlink if websockify is in PATH.
+RUN set -eux; \
+    # verify noVNC exists in one of two common locations
+    if [ -f "/opt/novnc/vnc.html" ] || [ -f "/opt/novnc/app/vnc.html" ]; then \
+      echo "OK: noVNC found"; \
+    else \
+      echo "HOLY MISSION FAILED: NoVNC not installed" >&2; \
+      echo "Dump /opt contents for debugging:"; ls -la /opt || true; \
+      exit 1; \
+    fi; \
+    # verify websockify - either repo script or installed binary
+    if [ -f "/opt/websockify/websockify.py" ] || [ -f "/opt/websockify/run" ] || [ -f "/opt/websockify/bin/websockify" ]; then \
+      echo "OK: websockify script found in /opt/websockify"; \
+    else \
+      echo "No websockify script at /opt/websockify; checking PATH..."; \
+      if command -v websockify >/dev/null 2>&1; then \
+        WEBSOCK_BIN="$(command -v websockify)"; \
+        echo "Found websockify in PATH at: $WEBSOCK_BIN"; \
+        mkdir -p /opt/websockify; \
+        ln -sf "$WEBSOCK_BIN" /opt/websockify/websockify.py; \
+        echo "Created symlink /opt/websockify/websockify.py -> $WEBSOCK_BIN"; \
+      else \
+        echo "HOLY MISSION FAILED: Websockify not installed (neither /opt/websockify/* nor in PATH)" >&2; \
+        echo "Dump /opt/websockify for debug:"; ls -la /opt/websockify || true; \
+        echo "Which websockify:"; command -v websockify || true; \
+        exit 1; \
+      fi; \
+    fi
+# RUN [ -f "/opt/novnc/vnc.html" ] || (echo "HOLY MISSION FAILED: NoVNC not installed" && exit 1) && \
+#     [ -f "/opt/websockify/websockify.py" ] || (echo "HOLY MISSION FAILED: Websockify not installed" && exit 1)
 
 # Install filebrowser
 RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
