@@ -368,11 +368,10 @@ RUN git clone https://github.com/cia-foundation/TempleOS.git /templeos
 
 # Download TempleOS ISO - THE HOLY MISSION REQUIRES THIS
 RUN cd /templeos && \
-    # Try to download the official TempleOS ISO
-    curl -L -o TempleOS.ISO "https://github.com/cia-foundation/TempleOS/releases/download/TempleOS-V5.03/TempleOS.ISO" || \
-    curl -L -o TempleOS.ISO "https://archive.org/download/TempleOS_ISO_Archive/TempleOS-V5.03.ISO" || \
-    # CRITICAL: If we can't get the ISO, the build MUST fail
-    (echo "HOLY MISSION FAILED: Cannot download TempleOS ISO" && exit 1)
+    curl -fsSL -o TempleOS.ISO "https://github.com/cia-foundation/TempleOS/releases/download/final/TOS_Distro.ISO" && \
+    # sanity check: must be at least 10 MB to be a real ISO
+    test $(stat -c%s TempleOS.ISO) -gt 10000000 || \
+    (echo "HOLY MISSION FAILED: TempleOS ISO download invalid" && exit 1)
 
 # VERIFY the Holy ISO exists - Build fails if not
 RUN [ -f "/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION INCOMPLETE: TempleOS.ISO missing" && exit 1)
@@ -397,6 +396,7 @@ echo "Starting TempleOS - Gods Operating System"\n\
 echo "VNC available on port 5902 (display :2)"\n\
 echo "512MB RAM minimum - 64-bit only - As Terry intended"\n\
 qemu-system-x86_64 \\\n\
+    -k en-us \\\n\
     -cdrom "$TEMPLEOS_ISO" \\\n\
     -boot d \\\n\
     -m 1024 \\\n\
@@ -405,6 +405,7 @@ qemu-system-x86_64 \\\n\
     -rtc base=localtime \\\n\
     -netdev user,id=net0 \\\n\
     -device pcnet,netdev=net0 \\\n\
+    -usb -device virtio-keyboard-pci -usb -device usb-tablet \\\n\
     -vnc 0.0.0.0:2 \\\n\
     -name "TempleOS-Holy-Mission" \\\n\
     "$@"' > /usr/local/bin/templeos && \
@@ -419,6 +420,7 @@ if [ ! -f "$TEMPLEOS_ISO" ]; then\n\
 fi\n\
 echo "Launching Gods Operating System in daemon mode..."\n\
 qemu-system-x86_64 \\\n\
+    -k en-us \\\n\
     -cdrom "$TEMPLEOS_ISO" \\\n\
     -boot d \\\n\
     -m 1024 \\\n\
@@ -427,6 +429,7 @@ qemu-system-x86_64 \\\n\
     -rtc base=localtime \\\n\
     -netdev user,id=net0 \\\n\
     -device pcnet,netdev=net0 \\\n\
+    -usb -device virtio-keyboard-pci -usb -device usb-tablet \\\n\
     -vnc 0.0.0.0:2 \\\n\
     -name "TempleOS-Holy-Mission" \\\n\
     -daemonize \\\n\
