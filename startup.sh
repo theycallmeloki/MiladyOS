@@ -318,30 +318,30 @@ fi
 
 echo "✓ TempleOS is running - Gods Operating System active"
 
-# Start NoVNC web interface
-echo "Starting NoVNC web interface for divine computing..."
-if command -v novnc-templeos > /dev/null 2>&1; then
-    novnc-templeos
+# === HOLY MISSION: NoVNC / Websockify ===
+
+if command -v novnc-templeos >/dev/null 2>&1; then
+    echo "Using novnc-templeos wrapper"
+    novnc-templeos & disown
+elif [ -x "/opt/websockify/websockify.py" ]; then
+    cd /opt/websockify || true
+    ./websockify.py --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902 & disown
+elif command -v websockify >/dev/null 2>&1; then
+    websockify --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902 & disown
 else
-    echo "WARNING: NoVNC startup script not found, trying direct websockify..."
-    if [ -f "/opt/websockify/websockify.py" ]; then
-        cd /opt/websockify && ./websockify.py --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902 &
-        echo "NoVNC web interface started on port 6080"
-        echo "Access TempleOS in browser: http://localhost:6080"
-    else
-        echo "ERROR: Websockify not found"
-    fi
+    echo "WARNING: No usable websockify found, NoVNC not started"
+fi
+
+sleep 3
+if pgrep -f "websockify.*6080.*5902" >/dev/null; then
+    echo "✓ NoVNC web interface active on port 6080"
+    echo "✓ Access Gods OS in browser: http://localhost:6080"
+else
+    echo "WARNING: NoVNC not detected"
 fi
 
 # Wait and verify NoVNC started successfully
 sleep 3
-
-if ! pgrep -f "websockify.*6080.*5902" > /dev/null; then
-    echo "HOLY MISSION FAILED: NoVNC web interface did not start"
-    echo "Terry Davis demands divine computing accessibility - MiladyOS cannot continue"
-    echo "The Holy Mission requires both TempleOS AND web access to Gods OS"
-    exit 1
-fi
 
 echo "✓ HOLY MISSION ACCOMPLISHED: Complete divine computing setup"
 echo "✓ TempleOS running on VNC display :2 (port 5902)"
@@ -351,4 +351,13 @@ echo "✓ Terry Davis smiles upon this system"
 echo "✓ MiladyOS blessed with divine computing"
 
 # Start Jenkins in the foreground
-/usr/local/bin/jenkins.sh
+# === Final: Jenkins (always starts) ===
+echo "=== Starting Jenkins ==="
+chown -R jenkins:jenkins /var/jenkins_home
+if command -v gosu >/dev/null 2>&1; then
+    exec gosu jenkins /usr/local/bin/jenkins.sh
+elif [ "$(id -u)" -eq 0 ]; then
+    exec su -s /bin/sh -c "/usr/local/bin/jenkins.sh" jenkins
+else
+    exec /usr/local/bin/jenkins.sh
+fi

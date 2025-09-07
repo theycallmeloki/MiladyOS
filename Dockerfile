@@ -539,6 +539,7 @@ COPY Caddyfile /etc/caddy/Caddyfile
 
 # Switch to root to set permissions
 USER root
+RUN mkdir -p /var/jenkins_home && chown -R jenkins:jenkins /var/jenkins_home
 
 # Add and set permissions for the startup script
 COPY startup.sh /startup.sh
