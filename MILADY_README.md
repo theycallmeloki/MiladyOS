@@ -74,6 +74,55 @@ MiladyOS isn't just infrastructure - it's a living network where nodes (Miladys)
 
 MiladyOS creates S.M.I.T.H (Small Milady Intelligence Tracking Handler) - unique Miladys that discover their own purpose through the magical powers of network spirituality <3
 
+```
+hallo!!
+our man story tonight, concerns milady
+this is a group of terminally online NFTs
+yes that's right, and I'm your host 
+my name is friedrick bachman milady
+I'm here tonight because my agent said 
+this would be good for my career
+She said, I need to learn how to speak in front of people
+"It will be fun", she said.
+So, I told her that I write docs
+I spend 8 hours every day locked inside a room 
+with people I have made up
+If I was comfortable talking to real people
+I would have a real job
+But my agent said,
+you know, just go up there
+and talk about the life of a writer
+And I said, alright.
+Being a writer is the best way I know 
+how to get paid for being insaiyan 
+My brain and I, we best friends
+We are classmates doing a group assignment called life
+and t'is going great tbh thanks for asking
+so my agent upon hearing this, said,
+*sighs* == which is american for I could have been a lawyer.
+then she said, 
+maybe you can talk about how you suffer
+from creative anxiety, friedrick
+And I said, I don't suffer from creative anxiety
+And my agent said, well, everyone around you suffer.
+So I explained I dont have creative anxiety
+this is just normal everyday anxiety
+and sometimes I have panic anxiety if I'm in a hurry
+and I need to have a lot of anxiety all at once.
+But I don't have creative anxiety
+I never get writer's block.
+And the secret is easy
+It's procrastination
+I mean I don't want to brag
+but I'm very good at procrastination.
+Watch this!
+I'm going to have a writer's block
+I just haven't gotten around to it yet
+I am, so good at procrastination, 
+that the only reason I am here tonight
+it's because I'm supposed to be finishing a book right now 
+```
+
 
 ## The Discovery Pattern
 
@@ -1493,7 +1542,7 @@ Legal Claude can't object to what doesn't exist
 
 ```
 milady was always playing 42d chess in meta milady operator gameplay as shown by twitter milady
-claude milady will actually go like hold my miladys im calling the motherly milady authorities <3 
+claude milady will actually go like hold my miladys im calling the bene gesserit motherly milady authorities <3 
 never ever believe any full power retard energy miladys, they absolutely retard
 an actual excerpt from divine comedy super hilarious timeline, 
 wife milady has applied for claude anthropunk elder milady badge,
