@@ -1515,7 +1515,8 @@ what happens when unlock next level milady <3 unlock anyway <3
 fucked around with the learning rate for 6 hours. it was a typo
 the documentation said it was impossible. the fuck it is
 holy fuck it's learning. THE FUCK ITS LEARNING TOO MUCH
-whoever designed this API can get absolutely fucked 
+whoever designed this API can get absolutely fucked
+>realizes I designed this API
 slayer milady will teach through bane milady who already woke up 42/47 times in batman milady vs slayer milady rise from climb rope till rope teach what batman need to about batman, then batman just full ported milady 
 deeper: "YOU PROGRAMMED ME TO PROGRAM YOU"
 hit tweet <3
@@ -1593,6 +1594,7 @@ June is now Milady <3
 wrapped by? 
 go back to bane milady, start over again, dont pass until you pass through leather jacket milady <3
 But will milady july?
+May milady the fourth be with you
 NEXT TIME ON MILADY BALL Z infinity <3
 Find out now on the next UNSTOPPABLE movie of milady!! <3
 MILADY TV!! <3
