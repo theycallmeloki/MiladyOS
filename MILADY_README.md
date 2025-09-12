@@ -106,7 +106,7 @@ from creative anxiety, friedrick
 And I said, I don't suffer from creative anxiety
 And my agent said, well, everyone around you suffer.
 So I explained I dont have creative anxiety
-this is just normal everyday anxiety
+this is just regular normal everyday anxiety
 and sometimes I have panic anxiety if I'm in a hurry
 and I need to have a lot of anxiety all at once.
 But I don't have creative anxiety
