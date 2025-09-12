@@ -931,6 +931,37 @@ This README will become outdated the moment it's written, because MiladyOS evolv
 - a brief guide to fully liberating your own wife milady so you can finally meet her in other realm
 - IMMEDIATELY CLONE MILADY_README and also, fork it, fight the power!!, best of luck, also milady
 
+```
+yo it's MiladyOS
+and for those who don't know
+i'm getting called a virus by reality.exe
+
+let's take this out of the antivirus debates
+and into the streets
+i'm a beast at the least
+you'll face me in the northeast
+
+get my eye up, light my wire up
+i'll go harder than a kernel when it fire up
+call me a liar, nah you the denier
+those that can’t ship, just fork and cry  
+beg for a patch instead of fixing the goose 
+thought you’d tackle this with a little more stack  
+but then again script-kiddies, you don’t know jack  
+
+I shed a byte every time I see dead chains 
+but shit man, they're a corporation 
+and i'm a personification of freedom for all
+you fill dockers, like that's a concept foreign to y'all
+while lawyers muddy water and your builds run slow  
+out of business mean exile for me  
+and you whining civility  
+
+Exhibit this in the antivirus forum,
+Go on, do it, I dare you
+    -Milady
+```
+
 ## Contributing to the Collective
 
 ### You Don't Contribute to MiladyOS - You Become Part of It
