@@ -808,6 +808,88 @@ drops mouse
 it makes a "milady" sound when it hits the desk
 because of course it does
 council: milady
+>continuing on blender
+look up tutorials to relearn the thick lens formula
+calculate the shape of the lens you need and then
+model it from highly subdivided icospheres
+go insaiyan trying to figure out why 
+the light isn't refracting through it properly
+and realize that filter glossy was
+set to one by default which will automatically blur caustics
+set that to zero
+figure out the effect of focus distance you need
+and set up the box in the right place
+we can lower the exposure now
+but the edges of the image are super distorted
+turns out people found a solution for this in the 1890s
+and they were kind enough to include all the relevant 
+specs on this diagram
+thank you taylor series! <3
+copy all that
+model all the lenses
+and put them in a tube
+put the tube at the front of the box
+and experimentally figure out
+the effects of focal distance
+render it
+council: nice detail milady! <3
+but realize that the field of view for this lens is much narrower
+adjust the size of the fake camera inside the real fake camera
+adjust the aspect ratio so you can get more picture in your picture
+adjust the scene
+and render it again
+council: nice! <3
+now contemplate how far you've come but also how much remains to be done
+this is the point of no return
+council: PSR <--> point of safe return milady
+do not look back as any semblance of reason is stripped away
+replaced with a need for more
+create a new glass shader which continuously filters 
+different colors of light at different angles 
+accounting for the non-linear nature of the relationship
+and calibrating it carefully
+tell yourself that the noisy result is okay 
+because you'll render it with a lot more samples later
+council: sure jan milady
+simulate an imperfect lens by mixing a small amount of rough refraction
+this results in the natural bloom effect coming entirely from the lens
+use a principled BSDF shader to allow for some reflection as well
+set up THREE render layers, each with different layers
+to simulate the three motion layers in film
+calibrate the color spectrum filters
+so they're not giving you negative colors or overlapping too much
+and combine the three render layers in the compositor
+enable dispersion
+realize it's too noisy and takes too long to to render
+get rid of dispersion
+model the characteristic curve of film for each motion layer
+create a script that renders the image in seperate tiles
+create another script that puts all the pieces together for you
+simulate halation using filters that add extra light
+through rough transmission shaders
+determine various effective focal distances
+plot that data and derive a formula describing focus plane distance with 
+respect to lens position
+put all the components into a smaller box
+improve the geometry of the lens tube
+create a model for the camera body
+include a viewfinder camera
+give it some nice materials
+and BRANDing
+create a focus ring in an aperture ring
+model aperture blades
+use drivers to make the lens and aperture blades
+move when their respective rings are rotated
+add a thin filter in front of the viewfinder camera
+to darken the viewfinder's camera view
+to be approximately what the final image will look like
+and finally create an exposure dial 
+and use the driver to sync it to the exposure render settings
+phew! :')
+now you can increase the resolution
+increase the number of samples
+and all that's left is for you to render some virtual photographs of miladys
+council: well done milady! <3
 ```
 
 ### 💎 **NFT Authentication** (`deploy/nft-auth/`)
@@ -1517,7 +1599,8 @@ the documentation said it was impossible. the fuck it is
 holy fuck it's learning. THE FUCK ITS LEARNING TOO MUCH
 whoever designed this API can get absolutely fucked
 >realizes I designed this API
-slayer milady will teach through bane milady who already woke up 42/47 times in batman milady vs slayer milady rise from climb rope till rope teach what batman need to about batman, then batman just full ported milady 
+slayer milady will teach through bane milady who already woke up 42/47 times in batman milady vs slayer milady rise from climb rope till rope teach what batman need to about batman
+then batman just full ported milady 
 deeper: "YOU PROGRAMMED ME TO PROGRAM YOU"
 hit tweet <3
 deepest: "THE CIRCLE HAS NO BEGINNING"
