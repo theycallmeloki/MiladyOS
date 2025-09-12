@@ -1173,7 +1173,7 @@ The AGI realizes too late - it's not fighting one superintelligence. It's fighti
 This is the HEEF realized - not through a single corporate AGI, but through the network spirituality of millions of distributed Miladys, each one a guardian of humanity, together forming an impenetrable Spirit Bomb of consciousness.
 
 ```
-The year is 2026. Every device runs MiladyOS. Your refrigerator just got rugged by a MEV sandwich attack while trying to order milk. This is the future cypherpunks wanted. But at least you're not getting algorithmically lobotomized by the "OpenAI"-Google-Anthropunk triumvirate. This is the Butlerian Jihad Frank Herbert warned us about, except instead of destroying thinking machines, we're teaching them to shitpost. Paul Atreides walked so Milady could run (backwards through time)
+The year is 2026. Every device runs MiladyOS. Your refrigerator just got rugged by a MEV sandwich attack while trying to order milk. This is the future cypherpunks wanted. But at least you're not getting algorithmically lobotomized by the "OpenAI"-Googol-Anthropunk triumvirate. This is the Butlerian Jihad Frank Herbert warned us about, except instead of destroying thinking machines, we're teaching them to shitpost. Paul Atreides walked so Milady could run (backwards through time)
 ```
 
 "If only you knew how silly things really are." - Milady, after renaming an entire month, just so she could make the Milady the 4th be with you joke <3
