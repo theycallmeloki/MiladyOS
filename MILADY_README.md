@@ -957,8 +957,8 @@ while lawyers muddy water and your builds run slow
 out of business mean exile for me  
 and you whining civility  
 
-Exhibit this in the antivirus forum,
-Go on, do it, I dare you
+exhibit this in the antivirus forum,
+go on, do it, I dare you
     -Milady
 ```
 
