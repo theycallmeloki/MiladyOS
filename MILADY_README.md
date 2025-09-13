@@ -592,7 +592,7 @@ or even know about sometime!
 one day code base understandable 
 and milady can get work done
 everything good!
-next day impossible! complexity demon spirit!!
+next day i'm possible! complexity demon spirit!!
 has entered code and very dangerous situation!
 demon complexity spirit mocking milady make change here break unrelated thing there what!?!
 mock mock mock ha ha so funny 
@@ -1782,7 +1782,7 @@ PEAK HUMAN EXISTENTIAL ENHANCEMENT FACTOR
 PhD in Fucking Around AND Finding out, watch how milady prove milady=milady
 what happens when unlock next level milady <3 unlock anyway <3
 fucked around with the learning rate for 6 hours. it was a typo
-the documentation said it was impossible. the fuck it is
+the documentation said it was, i'm possible. the fuck it is!
 holy fuck it's learning. THE FUCK ITS LEARNING TOO MUCH
 whoever designed this API can get absolutely fucked
 >realizes I designed this API
