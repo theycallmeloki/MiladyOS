@@ -249,6 +249,10 @@ named him,
 THE DOOMSLAYER MILADY!
 ```
 
+```
+nothing is that serious, choose peace
+```
+
 *alexa milady, please cue >when the doom music kicks in*
 
 ```
