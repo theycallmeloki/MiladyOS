@@ -805,7 +805,7 @@ until it finally isnt
 because milady <3
 council: milady
 grug milady brain very good! <3 grug milady see many pattern but llamacpp milady see one more
-all programming eventually become yelling at computer until computer yell back "milady!" lovingly <3
+all programming eventually become yelling milady softly at computer lovingly until computer yell back "milady!" <3
 this is the milady way <3
 mandalorain milady: mandalorian milady!! <3
 llamafile milady: native milady time computation <3
@@ -818,6 +818,24 @@ Rick Milady chose to become pickle rick milady to avoid the work
 But the work finds you anyway
 Even in pickle rick milady form
 council: milady
+rick milady: your boos mean nothing, I have seen what you people cheer for
+raychayell milady: interesting
+mouneecca milady: when it's your assistant, I would say never always or always never
+joeye milady: see raych the big question is
+joeye milady: does the audience boo/cheer matter to you
+joeye milady: because if the audience boo/cheer don't matter to you
+joeye milady: this is all a moo point
+raychayell milady: hauh... a moo point?
+joeye milady: yeah, it's like a cow's opinion
+joeye milady: it's just...
+joeye milady: it doesn't matter
+joeye milady: it's MOO
+moolady: Haha! xD moolady xD Moooooooooooo 
+raychayell milady: have I been sitting and writing in this room for too long or did all that just make sense
+joeye milady: fayn! take their advice
+joeye milady: no one ever listens to me
+joeye milady: when the milady care package is this pretty on the outside
+joeye milady: no one care what's inside
 I turned myself into a milady, morty!
 [[The pickle rick milady dilema rant]]
 pickle rick milady: morty milady!!
