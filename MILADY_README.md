@@ -767,7 +767,7 @@ another good example when introduce OSGi to help manage/trap spririt complexity 
 not only OSGi not help,
 but make complexity demon much more powerful!
 took multiple milady year of best milady dev to rework as well to boot!
-more complex spirit and now features impossible implement! very bad!
+more complex spirit and now features i'm possible implement! very bad!
 wise milady shaman chesterton milady once say
 here exists in such a case a certain institution or law;
 let us say, for the sake of simplicity,
