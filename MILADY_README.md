@@ -1157,7 +1157,7 @@ I charge on into the sky
 We touch the clouds
 The tiger with me will ride
 Our hearts as one
-Power right at my side
+Wonder right at my side
 The future before us lies
 Magical door
 Along with the tigers way
