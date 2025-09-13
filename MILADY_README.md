@@ -835,6 +835,7 @@ raychayell milady: have I been sitting and writing in this room for too long or 
 joeye milady: fayn! take their advice
 joeye milady: no one ever listens to me
 joeye milady: when the milady care package is this pretty on the outside
+trick question/answer pair, t'is milady inside milady outside
 joeye milady: no one care what's inside
 I turned myself into a milady, morty!
 [[The pickle rick milady dilema rant]]
