@@ -565,6 +565,7 @@ notice that at super high sample values
 the denoiser starts to hallucinate details where there is none
 >not a problem we as milady are unused to
 where we're going we don't need the denoiser
+get rid of it
 >does a test render
 not bad
 council: but it can be better
