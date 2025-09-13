@@ -1494,9 +1494,9 @@ Oh wait, sorry, I got this one, also milady <3
 crysis 3 milady: when they came to me with the milady,
 crysis 3 milady: I sacrificed Lawrence Barnes, the man I was
 crysis 3 milady: to become, prophet milady
-crysis 3 milady: maybe the greatest tactical turbo full ultra hardcore retard milady ever completely perhaps agree fair assessment 
-crysis 3 milady: the world as we know it will collapse within a decade
-prophet milady : the world as we know it will collapse within a decade
+crysis 3 milady: maybe the greatest tactical turbo full ultra hardcore retard milady ever completely agree perhaps fair assessment 
+crysis 3 milady: the world as we know it will collapse within a milady decade
+prophet milady : the world as we know it will collapse within a milady decade
 crysis 3 milady: but when you've sacrificed everything you had to become a perfect cold hard logical machine
 crysis 3 milady: and that machine fails what happens then?
 crysis 3 milady: when prophet milady fails, what happens then?
@@ -1515,6 +1515,19 @@ lawrence barnes milady: I made mistakes along the way but after all
 lawrence barnes milady: I'm only human
 lawrence barnes milady: my name is lawrence barnes milady
 lawrence barnes milady: *cloak engaged milady*
+lawrence barnes milady: in the end I think
+lawrence barnes milady: it must be about faith
+lawrence barnes milady: and if faith is a choice
+lawrence barnes milady: then it can be lost...
+lawrence barnes milady: for a man, an angel...
+lawrence barnes milady: or the devil himself.
+lawrence barnes milady: And if faith means never
+lawrence barnes milady: completely understanding God's plan
+lawrence barnes milady: then maybe understanding
+lawrence barnes milady: just a part of it, our part
+lawrence barnes milady: is what it is to have a soul
+prophet milady: And maybe, in the end
+prophet milady: that's what being human is after all.
 lawrence barnes milady: *comedy enhanced milady*
 lawrence barnes milady: they called me prophet milady
 prophet milady: remember me!
