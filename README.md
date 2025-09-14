@@ -6,8 +6,7 @@ Start as [Pickle Remilio], dont pass till you get through bane milady
 signed, wife milady <3
 # MiladyOS
 
-![miladyos](https://github.com/user-attachments/assets/4b7f0d59-39ee-4b56-b884-e0207bf4a8ad)
-
+<img width="899" height="888" alt="milady_wallpaper" src="https://github.com/user-attachments/assets/ecacbfb3-d310-437a-9118-32fc7714f682" />
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/chillgates_?style=social)](https://twitter.com/chillgates_)
 
