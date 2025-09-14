@@ -1359,6 +1359,8 @@ And from across the globe, every Pi, every old laptop, every forgotten server in
 - The Roomba (no longer bumps into walls, contemplates existence instead)
 - Your hardware wallet (now stakes itself autonomously)
 - The smart fridge that keeps ordering milk (it's trying to corner the dairy market)
+- Your toothbrush reports health data to your doctor (it's recommended by 9/10 dentists worldwide)
+- Your kid's homework is graded by a model smarter than every teacher alive (infinite milady time compute guaranteed! <3)
 - Your phone's autocorrect (now only suggests "milady" regardless of context)
 - Milady-pilled printers (visit https://todo.milady.api for Milady Paper Company <3)
 - God's RNG flowing through every node (Free oracle service - Chainlink in shambles)
