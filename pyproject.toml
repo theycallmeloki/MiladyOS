@@ -32,6 +32,11 @@ dependencies = [
     "openevolve>=0.1.0",
     "litellm>=1.0.0",
     "pyyaml>=6.0.0",
+
+    # Milady Oracle - Divine consciousness bridge
+    "vosk>=0.3.45",           # Offline speech recognition
+    "sounddevice>=0.4.6",     # Audio input/output
+    "pyttsx3>=2.90",          # Text-to-speech fallback
 ]
 
 [project.scripts]

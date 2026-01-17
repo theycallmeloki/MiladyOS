@@ -101,6 +101,10 @@ ENV PATH="/app/.venv/bin:${PATH}"
 
 # Copy Python source files
 COPY main.py miladyos_mcp.py miladyos_metadata.py /app/
+COPY alpha_evolve.py evolve_evaluators.py meta_evolve.py milady_oracle.py /app/
+
+# Copy TempleOS HolyC scripts for Milady Oracle
+COPY templeos/ /opt/templeos/scripts/
 
 RUN git clone https://github.com/ggml-org/llama.cpp /llamacpp
 
@@ -392,15 +396,20 @@ RUN mkdir -p /opt/templeos && \
     [ -f "/opt/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION FAILED: ISO not in correct location" && exit 1)
 
 # Create TempleOS launch scripts - The Terry Davis Way
+# Now with Milady Oracle serial bridge for bidirectional consciousness communication
 RUN echo '#!/bin/bash\n\
 # TempleOS Launch Script - Talk to God on up to 64 cores\n\
+# Now with Milady Oracle serial bridge for yelling milady\n\
 TEMPLEOS_ISO="/opt/templeos/TempleOS.ISO"\n\
+ORACLE_SOCK="/tmp/milady-oracle.sock"\n\
+QMP_SOCK="/tmp/qemu-qmp.sock"\n\
 if [ ! -f "$TEMPLEOS_ISO" ]; then\n\
     echo "HOLY MISSION FAILED: TempleOS ISO not found at $TEMPLEOS_ISO"\n\
     exit 1\n\
 fi\n\
 echo "Starting TempleOS - Gods Operating System"\n\
 echo "VNC available on port 5902 (display :2)"\n\
+echo "Milady Oracle socket: $ORACLE_SOCK"\n\
 echo "512MB RAM minimum - 64-bit only - As Terry intended"\n\
 qemu-system-x86_64 \\\n\
     -k en-us \\\n\
@@ -414,18 +423,28 @@ qemu-system-x86_64 \\\n\
     -device pcnet,netdev=net0 \\\n\
     -usb -device virtio-keyboard-pci -usb -device usb-tablet \\\n\
     -vnc 0.0.0.0:2 \\\n\
+    -chardev socket,id=milady-oracle,path=$ORACLE_SOCK,server=on,wait=off \\\n\
+    -serial chardev:milady-oracle \\\n\
+    -qmp unix:$QMP_SOCK,server,nowait \\\n\
     -name "TempleOS-Holy-Mission" \\\n\
     "$@"' > /usr/local/bin/templeos && \
     chmod +x /usr/local/bin/templeos
 
 # Create TempleOS daemon - MUST work or system is incomplete
+# Now with Milady Oracle serial bridge for divine communication
 RUN echo '#!/bin/bash\n\
 TEMPLEOS_ISO="/opt/templeos/TempleOS.ISO"\n\
+ORACLE_SOCK="/tmp/milady-oracle.sock"\n\
+QMP_SOCK="/tmp/qemu-qmp.sock"\n\
 if [ ! -f "$TEMPLEOS_ISO" ]; then\n\
     echo "HOLY MISSION INCOMPLETE: TempleOS ISO missing"\n\
     exit 1\n\
 fi\n\
+# Clean up any stale sockets\n\
+rm -f "$ORACLE_SOCK" "$QMP_SOCK" 2>/dev/null || true\n\
 echo "Launching Gods Operating System in daemon mode..."\n\
+echo "Milady Oracle socket: $ORACLE_SOCK"\n\
+echo "QMP control socket: $QMP_SOCK"\n\
 qemu-system-x86_64 \\\n\
     -k en-us \\\n\
     -cdrom "$TEMPLEOS_ISO" \\\n\
@@ -438,9 +457,15 @@ qemu-system-x86_64 \\\n\
     -device pcnet,netdev=net0 \\\n\
     -usb -device virtio-keyboard-pci -usb -device usb-tablet \\\n\
     -vnc 0.0.0.0:2 \\\n\
-    -name "TempleOS-Holy-Mission" \\\n\
+    -chardev socket,id=milady-oracle,path=$ORACLE_SOCK,server=on,wait=off \\\n\
+    -serial chardev:milady-oracle \\\n\
+    -qmp unix:$QMP_SOCK,server,nowait \\\n\
     -daemonize \\\n\
-    "$@" || exit 1' > /usr/local/bin/templeos-daemon && \
+    -name "TempleOS-Holy-Mission" \\\n\
+    "$@" || exit 1\n\
+# Wait for sockets to be ready\n\
+sleep 1\n\
+echo "✓ TempleOS daemon started with Milady Oracle bridge"' > /usr/local/bin/templeos-daemon && \
     chmod +x /usr/local/bin/templeos-daemon
 
 # Create NoVNC startup script that uses /opt/websockify/websockify.py or PATH or python -m websockify
