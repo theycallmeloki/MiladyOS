@@ -283,18 +283,26 @@ console.log('%c🎤 Psst... click the mic icon in the corner and say "milady"', 
   // Load voices (needed for some browsers)
   speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
 
-  // Keyboard shortcut: press 'm' three times quickly to activate
-  let mPresses = [];
+  // Keyboard shortcut: type "milady" to activate
+  let keyBuffer = '';
+  let keyTimeout;
   document.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      const now = Date.now();
-      mPresses = mPresses.filter(t => now - t < 1000);
-      mPresses.push(now);
-      if (mPresses.length >= 3) {
-        mPresses = [];
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1) {
+      clearTimeout(keyTimeout);
+      keyBuffer += e.key.toLowerCase();
+      // Keep only the last 6 characters
+      if (keyBuffer.length > 6) {
+        keyBuffer = keyBuffer.slice(-6);
+      }
+      // Check if they typed "milady"
+      if (keyBuffer === 'milady') {
+        keyBuffer = '';
         startListening();
         listenTimeout = setTimeout(stopListening, 30000);
       }
+      // Clear buffer after 2 seconds of no typing
+      keyTimeout = setTimeout(() => { keyBuffer = ''; }, 2000);
     }
   });
 })();
