@@ -259,13 +259,15 @@ def main():
         'docker_count': len(docker_containers)
     }
     
-    with open('mcp_docker_containers.json', 'w') as f:
+    import os
+    output_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'mcp_docker_containers.json')
+    with open(output_path, 'w') as f:
         json.dump(output_data, f, indent=2)
-    
+
     print(f"\n=== Scraping Complete ===")
     print(f"Total MCP spaces: {len(spaces)}")
     print(f"Docker containers: {len(docker_containers)}")
-    print(f"Output saved to: mcp_docker_containers.json")
+    print(f"Output saved to: {output_path}")
     
     # Print Docker images for quick reference
     print(f"\nDocker images found:")

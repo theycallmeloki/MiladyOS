@@ -142,12 +142,14 @@ def main():
         'docker_containers': docker_containers
     }
     
-    with open('mcp_docker_images.json', 'w') as f:
+    import os
+    output_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'mcp_docker_images.json')
+    with open(output_path, 'w') as f:
         json.dump(output, f, indent=2)
-    
+
     print(f"\nTotal spaces: {len(all_spaces)}")
     print(f"Docker containers with details: {len(docker_containers)}")
-    print(f"Saved to mcp_docker_images.json")
+    print(f"Saved to {output_path}")
     
     # Show what we actually found
     print("\nExample spaces found:")

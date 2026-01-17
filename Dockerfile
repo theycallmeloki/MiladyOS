@@ -629,7 +629,7 @@ COPY amd.sh /amd.sh
 RUN chmod +x /nvidia.sh /amd.sh
 
 # Copy Nebula configuration files
-COPY ca.crt miladyos.crt miladyos.key /etc/nebula/
+COPY certs/ca.crt certs/miladyos.crt certs/miladyos.key /etc/nebula/
 COPY config.yaml /etc/nebula/config.yaml
 
 # Switch back to the jenkins user (or whichever user you wish to use)
