@@ -364,6 +364,8 @@ class MiladySpeaker:
             # Try to find a working backend
             if sys.platform == "darwin" and self._test_say():
                 self._backend = "say"
+            elif self._test_piper():
+                self._backend = "piper"
             elif self._test_espeak():
                 self._backend = "espeak"
             elif self._test_pyttsx3():
@@ -381,6 +383,14 @@ class MiladySpeaker:
         """Test macOS say command"""
         try:
             result = subprocess.run(['which', 'say'], capture_output=True)
+            return result.returncode == 0
+        except:
+            return False
+
+    def _test_piper(self) -> bool:
+        """Test piper neural TTS"""
+        try:
+            result = subprocess.run(['which', 'piper'], capture_output=True)
             return result.returncode == 0
         except:
             return False
@@ -408,7 +418,16 @@ class MiladySpeaker:
 
         try:
             if self._backend == "say":
-                subprocess.run(['say', text], check=True)
+                # Use Moira (Irish) voice - sounds great for "milady!"
+                voice = self.config.tts_voice or "Moira"
+                subprocess.run(['say', '-v', voice, text], check=True)
+            elif self._backend == "piper":
+                # Use British/Scottish voice for Linux
+                # Default to jenny_dioco (British female) or alba (Scottish)
+                model = self.config.tts_voice or "en_GB-jenny_dioco-medium"
+                # Piper outputs raw audio, pipe to aplay
+                piper_cmd = f'echo "{text}" | piper --model {model} --output-raw | aplay -r 22050 -f S16_LE -t raw -q'
+                subprocess.run(piper_cmd, shell=True, check=True)
             elif self._backend == "espeak":
                 subprocess.run(['espeak', text], check=True)
             elif self._backend == "pyttsx3" and self.engine:
