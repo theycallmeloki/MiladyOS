@@ -34,9 +34,16 @@ dependencies = [
     "pyyaml>=6.0.0",
 
     # Milady Oracle - Divine consciousness bridge
-    "vosk>=0.3.45",           # Offline speech recognition
     "sounddevice>=0.4.6",     # Audio input/output
     "pyttsx3>=2.90",          # Text-to-speech fallback
+    "SpeechRecognition>=3.10.0",  # Multi-backend speech recognition
+    "pyaudio>=0.2.14",        # Audio I/O for SpeechRecognition
+]
+
+[project.optional-dependencies]
+# vosk only works on Linux (no macOS ARM64 wheels)
+linux = [
+    "vosk>=0.3.45",
 ]
 
 [project.scripts]
