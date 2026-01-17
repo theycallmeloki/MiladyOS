@@ -18,6 +18,7 @@ This reference documents all configurable parameters in MiladyOS. Understanding 
 | [GPU Support](#gpu-configuration) | Environment | `GPU_TYPE`, `CUDA_VISIBLE_DEVICES` |
 | [Networking](#networking) | `config.yaml` | Nebula VPN, Headscale/Tailscale |
 | [LLM Serving](#llm-configuration) | ConfigMap | LiteLLM proxy, vLLM settings |
+| [AlphaEvolve](#alphaevolve-configuration) | `evolve_default.yaml` | Evolution parameters, LLM models |
 | [Monitoring](#monitoring-configuration) | ConfigMap | Gatus, Prometheus exporters |
 | [Authentication](#authentication) | Environment | NFT auth service settings |
 
@@ -386,6 +387,149 @@ vLLM serves individual models with these common options:
 | `OLLAMA_HOST` | `0.0.0.0` | Bind address for Ollama server. |
 
 Ollama runs on port `11434` by default.
+
+---
+
+## AlphaEvolve Configuration
+
+AlphaEvolve evolutionary optimization is configured via `configs/evolve_default.yaml`.
+
+### LLM Settings
+
+```yaml
+llm:
+  # Primary model for high-quality mutations
+  primary:
+    model: "ollama/deepseek-r1:14b"
+    api_base: "http://localhost:11434/v1"
+    temperature: 0.8
+    max_tokens: 4096
+
+  # Secondary model for rapid iteration
+  secondary:
+    model: "ollama/qwen2.5-coder:7b"
+    api_base: "http://localhost:11434/v1"
+    temperature: 0.9
+    max_tokens: 2048
+
+  # LiteLLM proxy (recommended)
+  proxy:
+    enabled: true
+    api_base: "http://localhost:4000/v1"
+```
+
+### Evolution Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `population_size` | 20 | Total candidates per generation |
+| `num_islands` | 4 | Isolated populations (prevents premature convergence) |
+| `migration_interval` | 5 | Generations between island migrations |
+| `migration_size` | 2 | Candidates migrated per interval |
+| `tournament_size` | 3 | Selection tournament size |
+| `elite_ratio` | 0.2 | Fraction of population preserved each generation |
+| `mutation_rate` | 0.4 | Probability of LLM mutation vs crossover |
+| `crossover_rate` | 0.6 | Probability of parent crossover |
+| `max_generations` | 100 | Maximum evolution iterations |
+| `stagnation_limit` | 15 | Generations without improvement before stopping |
+| `target_fitness` | 0.95 | Early termination fitness threshold |
+| `seed` | 42 | Random seed for reproducibility |
+
+```yaml
+evolution:
+  population_size: 20
+  num_islands: 4
+  migration_interval: 5
+  migration_size: 2
+  tournament_size: 3
+  elite_ratio: 0.2
+  mutation_rate: 0.4
+  crossover_rate: 0.6
+  max_generations: 100
+  stagnation_limit: 15
+  target_fitness: 0.95
+  seed: 42
+```
+
+### MAP-Elites Quality-Diversity
+
+```yaml
+map_elites:
+  enabled: true
+  grid_resolution: 20
+  feature_dimensions:
+    - name: "execution_speed"
+      min: 0.0
+      max: 1.0
+    - name: "reliability"
+      min: 0.0
+      max: 1.0
+    - name: "resource_efficiency"
+      min: 0.0
+      max: 1.0
+```
+
+### Evaluator Cascade
+
+```yaml
+evaluator:
+  cascade:
+    - name: "syntax"
+      timeout: 5        # seconds
+      weight: 0.1
+    - name: "dry_run"
+      timeout: 30
+      weight: 0.2
+    - name: "execution"
+      timeout: 300
+      weight: 0.7
+
+  # Enable live Jenkins execution (expensive)
+  live_execution: false
+
+  metrics:
+    - "duration_seconds"
+    - "success_rate"
+    - "resource_usage"
+    - "error_count"
+    - "warning_count"
+```
+
+### Jenkins Integration
+
+```yaml
+jenkins:
+  url: "${JENKINS_URL:-http://localhost:8080}"
+  username: "${JENKINS_USER:-milady}"
+  password: "${JENKINS_PASSWORD:-milady}"
+  test_job_prefix: "evolve-test-"
+  cleanup_test_jobs: true
+```
+
+### Storage
+
+```yaml
+storage:
+  redis:
+    url: "${REDIS_URL:-redis://localhost:6379}"
+    prefix: "miladyos:evolve:"
+    ttl: 86400  # 24 hours
+
+  backup_dir: "evolved_templates"
+  keep_generations: 10
+```
+
+### Evolution Goals
+
+Five pre-configured optimization goals:
+
+| Goal | Primary Metrics | Description |
+|------|-----------------|-------------|
+| `speed` | duration_seconds, parallelism_score | Optimize execution time |
+| `reliability` | success_rate, error_handling_score | Improve success rate |
+| `resources` | resource_efficiency, cleanup_score | Optimize resource usage |
+| `security` | security_score, secrets_handling | Enhance security practices |
+| `observability` | logging_score, notification_score | Improve monitoring |
 
 ---
 
