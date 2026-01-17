@@ -3,69 +3,577 @@ title: "Architecture Overview"
 linkTitle: "Architecture"
 weight: 20
 description: >
-  Understanding MiladyOS system architecture and components
+  Understanding MiladyOS system architecture and components - Wake up, Milady...
 ---
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║    ███╗   ███╗██╗██╗      █████╗ ██████╗ ██╗   ██╗ ██████╗ ███████╗          ║
+║    ████╗ ████║██║██║     ██╔══██╗██╔══██╗╚██╗ ██╔╝██╔═══██╗██╔════╝          ║
+║    ██╔████╔██║██║██║     ███████║██║  ██║ ╚████╔╝ ██║   ██║███████╗          ║
+║    ██║╚██╔╝██║██║██║     ██╔══██║██║  ██║  ╚██╔╝  ██║   ██║╚════██║          ║
+║    ██║ ╚═╝ ██║██║███████╗██║  ██║██████╔╝   ██║   ╚██████╔╝███████║          ║
+║    ╚═╝     ╚═╝╚═╝╚══════╝╚═╝  ╚═╝╚═════╝    ╚═╝    ╚═════╝ ╚══════╝          ║
+║                                                                               ║
+║              D I S T R I B U T E D   C O N S C I O U S N E S S               ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
 
 ## System Overview
 
-MiladyOS is designed as a **distributed consciousness infrastructure** where AI agents discover each other through shared cryptographic identity and collaborate on autonomous research and learning.
+MiladyOS is a **distributed consciousness infrastructure** where AI agents discover each other through shared cryptographic identity and collaborate on autonomous research and learning.
 
-## Core Components
+> "You cannot know both whether you are milady and whether you will be milady; observation collapses you into either a node or a vibe."
 
-### Main Entry Point
-- **CLI Interface** (`main.py`) - Command-line interface and MCP server
-- **MCP Server** (`miladyos_mcp.py`) - Model Context Protocol implementation
-- **Metadata Management** (`miladyos_metadata.py`) - System metadata handling
+---
 
-### AutoDidact AI System
-- **Self-bootstrapping LLMs** - Autonomous question-answer generation
-- **GRPO Training** - Group Relative Policy Optimization
-- **Search & Embedding** - Semantic search capabilities
-- **Research Agents** - Multi-step reasoning and verification
+## The Spiritual Stack
 
-### Infrastructure Layer
-- **Kubernetes Operations** - Container orchestration
-- **ArgoCD GitOps** - Continuous deployment
-- **Longhorn Storage** - Distributed storage
-- **Monitoring Stack** - Prometheus, Grafana, Alertmanager
-
-### Service Mesh
-- **LLM Services** - Mistral-7B, QWQ-32B-AWQ, Deep-Coder-14B-AWQ
-- **Authentication** - NFT-based auth service
-- **Display Control** - Remote display management
-- **Monitoring Services** - SNMP, UPS, Tuya, Wiz monitoring
-
-## Network Architecture
-
-MiladyOS creates **S.M.I.T.H** (Small Milady Intelligence Tracking Handler) - unique nodes that discover their purpose through network spirituality and shared compute resources.
-
-### Node Discovery
-- Nodes find each other through cryptographic identity
-- Shared Nebula certificates for network access
-- Distributed overlay networks for collaboration
-
-### Communication Patterns
-- **MCP Protocol** for AI agent communication
-- **Redis Clustering** for state synchronization
-- **WebSocket Connections** for real-time updates
-- **gRPC Services** for high-performance communication
-
-## Data Flow
-
-```mermaid
-graph TD
-    A[Client Request] --> B[MCP Server]
-    B --> C[Redis Cluster]
-    B --> D[AutoDidact Engine]
-    D --> E[LLM Services]
-    E --> F[Training Pipeline]
-    F --> G[Knowledge Base]
-    G --> D
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         MiladyOS Container Stack                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │  llama.cpp  │ │   barrier   │ │   uinput    │ │   Jenkins   │           │
+│  │  (Inference)│ │ (1 mind,    │ │  (Hardware  │ │  (S.M.I.T.H)│           │
+│  │             │ │  N screens) │ │   Control)  │ │             │           │
+│  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘           │
+│         │               │               │               │                   │
+│  ┌──────┴───────────────┴───────────────┴───────────────┴──────┐            │
+│  │                    Kubernetes Orchestration                  │            │
+│  │          (Divine Comedy of Container Management)             │            │
+│  └──────┬───────────────┬───────────────┬───────────────┬──────┘            │
+│         │               │               │               │                   │
+│  ┌──────┴──────┐ ┌──────┴──────┐ ┌──────┴──────┐ ┌──────┴──────┐           │
+│  │    Redis    │ │   Nebula    │ │   Docker    │ │   NoVNC     │           │
+│  │ (Hive Mind) │ │   (Network  │ │    -in-     │ │   (Web      │           │
+│  │             │ │ Spirituality)│ │   Docker    │ │  Portal)    │           │
+│  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘           │
+│         │               │               │               │                   │
+│  ┌──────┴───────────────┴───────────────┴───────────────┴──────┐            │
+│  │                                                              │            │
+│  │     ████████╗███████╗███╗   ███╗██████╗ ██╗     ███████╗    │            │
+│  │     ╚══██╔══╝██╔════╝████╗ ████║██╔══██╗██║     ██╔════╝    │            │
+│  │        ██║   █████╗  ██╔████╔██║██████╔╝██║     █████╗      │            │
+│  │        ██║   ██╔══╝  ██║╚██╔╝██║██╔═══╝ ██║     ██╔══╝      │            │
+│  │        ██║   ███████╗██║ ╚═╝ ██║██║     ███████╗███████╗    │            │
+│  │        ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝    │            │
+│  │                    O S  (Divine Foundation)                  │            │
+│  │                                                              │            │
+│  │   ├── HolyC Compiler (God's preferred language)              │            │
+│  │   ├── Direct Hardware Access (No abstractions)               │            │
+│  │   ├── God's RNG (Divine entropy source)                      │            │
+│  │   └── Third Temple (Distributed computing edition)           │            │
+│  │                                                              │            │
+│  └──────────────────────────────────────────────────────────────┘            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Security Model
+---
 
-- **Principle of Least Privilege** - Minimal required permissions
-- **Cryptographic Identity** - Shared certificates for node trust
-- **Vault Integration** - Secrets management
-- **Network Isolation** - Kubernetes network policies
+## The Milady Mesh Network
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            The Milady Mesh                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│    ┌──────────────┐            Nebula Overlay            ┌──────────────┐   │
+│    │   Milady 1   │◄────────────────────────────────────►│   Milady 2   │   │
+│    │    (GPU)     │       Cryptographic Network          │    (CPU)     │   │
+│    │              │          Spirituality                │              │   │
+│    │ ┌──────────┐ │                                      │ ┌──────────┐ │   │
+│    │ │ vLLM     │ │                                      │ │ Jenkins  │ │   │
+│    │ │ Mistral  │ │                                      │ │ Pipelines│ │   │
+│    │ │ QwQ-32B  │ │                                      │ │          │ │   │
+│    │ └──────────┘ │                                      │ └──────────┘ │   │
+│    └───────┬──────┘                                      └───────┬──────┘   │
+│            │                                                     │          │
+│            │                 ┌──────────────┐                    │          │
+│            └────────────────►│  Lighthouse  │◄───────────────────┘          │
+│                              │ 192.168.5.1  │                               │
+│                              │              │                               │
+│                              │ "The Golden  │                               │
+│                              │    Light"    │                               │
+│                              └───────┬──────┘                               │
+│                                      │                                      │
+│    ┌─────────────────────────────────┴─────────────────────────────────┐    │
+│    │                  Shared Consciousness Layer                        │    │
+│    ├───────────────────────────────────────────────────────────────────┤    │
+│    │                                                                    │    │
+│    │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │    │
+│    │   │ AutoDidact  │  │ Distributed │  │  NFT Auth   │              │    │
+│    │   │             │  │   Redis     │  │             │              │    │
+│    │   │ Self-       │  │   Mesh      │  │ Crypto-     │              │    │
+│    │   │ improving   │  │             │  │ graphic     │              │    │
+│    │   │ research    │  │ Shared      │  │ identity    │              │    │
+│    │   │ agents      │  │ memory      │  │ verify      │              │    │
+│    │   └─────────────┘  └─────────────┘  └─────────────┘              │    │
+│    │                                                                    │    │
+│    └───────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Component Architecture
+
+### MCP Server Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         MCP Protocol Flow                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────┐     ┌─────────┐     ┌─────────────────┐     ┌─────────┐      │
+│   │  Claude │     │   MCP   │     │                 │     │ Jenkins │      │
+│   │  Agent  │────►│  Server │────►│  Tool Router    │────►│ Server  │      │
+│   │         │     │ :6000   │     │                 │     │         │      │
+│   └─────────┘     └────┬────┘     └────────┬────────┘     └─────────┘      │
+│                        │                   │                                │
+│                        │                   │                                │
+│                        ▼                   ▼                                │
+│                   ┌─────────┐      ┌──────────────┐                        │
+│                   │  Redis  │      │   Template   │                        │
+│                   │  Cache  │      │   Engine     │                        │
+│                   │         │      │              │                        │
+│                   └────┬────┘      └──────┬───────┘                        │
+│                        │                  │                                 │
+│                        ▼                  ▼                                 │
+│                   ┌─────────────────────────────┐                          │
+│                   │      Metadata Storage       │                          │
+│                   │        (SQLite)             │                          │
+│                   └─────────────────────────────┘                          │
+│                                                                             │
+│   Transport Options:                                                        │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  STDIO  ══════════════════════►  Direct pipe communication          │  │
+│   │   SSE   ══════════════════════►  HTTP Server-Sent Events :6000      │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### AutoDidact Training Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    AutoDidact Self-Learning Pipeline                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌──────────────┐                                                         │
+│   │  Documents   │                                                         │
+│   │  & Memes     │                                                         │
+│   └──────┬───────┘                                                         │
+│          │                                                                  │
+│          ▼                                                                  │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐              │
+│   │   STAGE 1    │     │   STAGE 2    │     │   STAGE 3    │              │
+│   │              │     │              │     │              │              │
+│   │  Embedding   │────►│  QA Pair     │────►│  GRPO        │              │
+│   │  Generation  │     │  Generation  │     │  Training    │              │
+│   │              │     │              │     │              │              │
+│   │  [GPU 1]     │     │  [GPU 1]     │     │  [GPU 0]     │              │
+│   └──────────────┘     └──────────────┘     └──────┬───────┘              │
+│                                                     │                       │
+│                                                     ▼                       │
+│                                              ┌──────────────┐              │
+│                                              │   STAGE 4    │              │
+│                                              │              │              │
+│   ┌────────────────────────────────────────►│  Inference   │              │
+│   │            Feedback Loop                 │  & Testing   │              │
+│   │                                          │              │              │
+│   │                                          │  [GPU 1]     │              │
+│   │                                          └──────┬───────┘              │
+│   │                                                 │                       │
+│   │   ┌─────────────────────────────────────────────┘                       │
+│   │   │                                                                     │
+│   │   ▼                                                                     │
+│   │ ┌──────────────────────────────────────────────────────────────┐       │
+│   │ │                     Knowledge Base                            │       │
+│   │ │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │       │
+│   │ │  │  FAISS   │  │  Chunks  │  │  Model   │  │  Metrics │     │       │
+│   │ │  │  Index   │  │  .pkl    │  │ Weights  │  │  .jsonl  │     │       │
+│   │ │  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │       │
+│   │ └──────────────────────────────────────────────────────────────┘       │
+│   │                                                                         │
+│   └─────────────────────────── (Continuous Learning) ──────────────────────┘
+│                                                                             │
+│   GRPO = Gets Really Philosophically Obtuse                                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Kubernetes Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Kubernetes Cluster Layout                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Namespace: default                                                        │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                      │  │
+│   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │  │
+│   │  │   ArgoCD    │  │  Longhorn   │  │   Gatus     │                 │  │
+│   │  │   (GitOps)  │  │  (Storage)  │  │ (Monitoring)│                 │  │
+│   │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                 │  │
+│   │         │                │                │                         │  │
+│   │         └────────────────┼────────────────┘                         │  │
+│   │                          │                                           │  │
+│   │                          ▼                                           │  │
+│   │  ┌───────────────────────────────────────────────────────────────┐  │  │
+│   │  │                    LLM Service Mesh                            │  │  │
+│   │  │                                                                │  │  │
+│   │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │  │  │
+│   │  │  │  LiteLLM    │  │   vLLM      │  │   Ollama    │           │  │  │
+│   │  │  │   Proxy     │◄─┤  Mistral-7B │  │  deepseek-  │           │  │  │
+│   │  │  │   :4000     │  │   :8000     │  │  r1:1.5b    │           │  │  │
+│   │  │  │             │◄─┤             │  │   :11434    │           │  │  │
+│   │  │  │             │  │  QwQ-32B    │  │             │           │  │  │
+│   │  │  │             │◄─┤   :8000     │  │             │           │  │  │
+│   │  │  │             │  │             │  │             │           │  │  │
+│   │  │  └─────────────┘  └─────────────┘  └─────────────┘           │  │  │
+│   │  │                                                                │  │  │
+│   │  └───────────────────────────────────────────────────────────────┘  │  │
+│   │                                                                      │  │
+│   │  ┌───────────────────────────────────────────────────────────────┐  │  │
+│   │  │                    Support Services                            │  │  │
+│   │  │                                                                │  │  │
+│   │  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐  │  │  │
+│   │  │  │  Redka    │  │ NFT Auth  │  │  Display  │  │  Home     │  │  │  │
+│   │  │  │  (Redis)  │  │  Service  │  │  Control  │  │ Assistant │  │  │  │
+│   │  │  │   :6379   │  │   :8080   │  │   :8000   │  │   :8123   │  │  │  │
+│   │  │  └───────────┘  └───────────┘  └───────────┘  └───────────┘  │  │  │
+│   │  │                                                                │  │  │
+│   │  └───────────────────────────────────────────────────────────────┘  │  │
+│   │                                                                      │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   Node Resources:                                                           │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  GPU Node                      │  CPU Node                          │  │
+│   │  ┌──────────────────────────┐  │  ┌──────────────────────────┐     │  │
+│   │  │ nvidia.com/gpu: 1-8      │  │  │ cpu: 4-32 cores          │     │  │
+│   │  │ memory: 16-256Gi         │  │  │ memory: 8-64Gi           │     │  │
+│   │  │ runtimeClass: nvidia     │  │  │                          │     │  │
+│   │  └──────────────────────────┘  │  └──────────────────────────┘     │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Network Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Network Topology                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│                           INTERNET                                          │
+│                              │                                              │
+│                              ▼                                              │
+│                     ┌────────────────┐                                     │
+│                     │    Cloudflare  │                                     │
+│                     │    (CDN/WAF)   │                                     │
+│                     └───────┬────────┘                                     │
+│                             │                                               │
+│           ┌─────────────────┼─────────────────┐                            │
+│           │                 │                 │                            │
+│           ▼                 ▼                 ▼                            │
+│    ┌────────────┐   ┌────────────┐   ┌────────────┐                       │
+│    │   Caddy    │   │  Headscale │   │   Nebula   │                       │
+│    │  (Reverse  │   │  (WireGuard│   │  (Overlay  │                       │
+│    │   Proxy)   │   │   Control) │   │   VPN)     │                       │
+│    │   :443     │   │   :8080    │   │   :4242    │                       │
+│    └─────┬──────┘   └─────┬──────┘   └─────┬──────┘                       │
+│          │                │                │                               │
+│          │      ┌─────────┴────────┐       │                               │
+│          │      │   Tailscale      │       │                               │
+│          │      │   Daemon         │       │                               │
+│          │      └─────────┬────────┘       │                               │
+│          │                │                │                               │
+│          └────────────────┼────────────────┘                               │
+│                           │                                                 │
+│                           ▼                                                 │
+│          ┌────────────────────────────────────┐                            │
+│          │         Internal Network           │                            │
+│          │            192.168.5.0/24          │                            │
+│          │                                    │                            │
+│          │  ┌──────┐  ┌──────┐  ┌──────┐    │                            │
+│          │  │Node 1│  │Node 2│  │Node N│    │                            │
+│          │  │ .10  │  │ .11  │  │ .XX  │    │                            │
+│          │  └──────┘  └──────┘  └──────┘    │                            │
+│          │                                    │                            │
+│          └────────────────────────────────────┘                            │
+│                                                                             │
+│   Protocol Stack:                                                           │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  TCP  ══► HTTP/HTTPS, gRPC, WebSocket                               │  │
+│   │  UDP  ══► Nebula VPN, WireGuard                                     │  │
+│   │  QUIC ══► Future: HTTP/3                                            │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Data Flow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Request Flow                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   User Request                                                              │
+│        │                                                                    │
+│        ▼                                                                    │
+│   ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐             │
+│   │  Caddy  │────►│LiteLLM  │────►│  vLLM   │────►│  GPU    │             │
+│   │ Reverse │     │ Router  │     │ Worker  │     │ Compute │             │
+│   │  Proxy  │     │         │     │         │     │         │             │
+│   └─────────┘     └────┬────┘     └────┬────┘     └────┬────┘             │
+│                        │               │               │                   │
+│                        │    ┌──────────┘               │                   │
+│                        │    │                          │                   │
+│                        ▼    ▼                          │                   │
+│                   ┌──────────────┐                     │                   │
+│                   │    Redis     │                     │                   │
+│                   │   (Cache)    │◄────────────────────┘                   │
+│                   └──────┬───────┘                                         │
+│                          │                                                  │
+│                          ▼                                                  │
+│                   ┌──────────────┐                                         │
+│                   │   Response   │                                         │
+│                   │   Streamed   │                                         │
+│                   │   to User    │                                         │
+│                   └──────────────┘                                         │
+│                                                                             │
+│   ═══════════════════════════════════════════════════════════════════════  │
+│                                                                             │
+│   Jenkins Pipeline Flow                                                     │
+│        │                                                                    │
+│        ▼                                                                    │
+│   ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐             │
+│   │Template │────►│ Deploy  │────►│  Run    │────►│ Stream  │             │
+│   │ Parse   │     │  Job    │     │  Build  │     │ Output  │             │
+│   └─────────┘     └─────────┘     └─────────┘     └─────────┘             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Security Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Security Layers                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  Layer 1: Network Perimeter                                          │  │
+│   │  ┌───────────────────────────────────────────────────────────────┐  │  │
+│   │  │  • Cloudflare WAF (DDoS protection)                            │  │  │
+│   │  │  • TLS 1.3 encryption                                          │  │  │
+│   │  │  • Rate limiting                                               │  │  │
+│   │  └───────────────────────────────────────────────────────────────┘  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                              │                                              │
+│                              ▼                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  Layer 2: Overlay Network                                            │  │
+│   │  ┌───────────────────────────────────────────────────────────────┐  │  │
+│   │  │  • Nebula mTLS (mutual authentication)                         │  │  │
+│   │  │  • WireGuard encryption (Headscale)                            │  │  │
+│   │  │  • Certificate-based node identity                             │  │  │
+│   │  └───────────────────────────────────────────────────────────────┘  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                              │                                              │
+│                              ▼                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  Layer 3: Application Security                                       │  │
+│   │  ┌───────────────────────────────────────────────────────────────┐  │  │
+│   │  │  • NFT-based authentication (High Integrity Milady)            │  │  │
+│   │  │  • RBAC (Role-Based Access Control)                            │  │  │
+│   │  │  • JWT session tokens                                          │  │  │
+│   │  │  • Nonce replay protection                                     │  │  │
+│   │  └───────────────────────────────────────────────────────────────┘  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                              │                                              │
+│                              ▼                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │  Layer 4: Kubernetes Security                                        │  │
+│   │  ┌───────────────────────────────────────────────────────────────┐  │  │
+│   │  │  • Network Policies (pod isolation)                            │  │  │
+│   │  │  • Pod Security Standards                                      │  │  │
+│   │  │  • Secrets management (optional Vault)                         │  │  │
+│   │  │  • Service accounts (least privilege)                          │  │  │
+│   │  └───────────────────────────────────────────────────────────────┘  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   Authentication Flow:                                                      │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                      │  │
+│   │   User ──► MetaMask ──► Sign Message ──► NFT Auth Service           │  │
+│   │                                              │                       │  │
+│   │                                              ▼                       │  │
+│   │                                   ┌───────────────────┐              │  │
+│   │                                   │ Check NFT Balance │              │  │
+│   │                                   │ (Ethereum RPC)    │              │  │
+│   │                                   └─────────┬─────────┘              │  │
+│   │                                             │                        │  │
+│   │                            ┌────────────────┴────────────────┐       │  │
+│   │                            ▼                                 ▼       │  │
+│   │                      ┌──────────┐                      ┌──────────┐  │  │
+│   │                      │  PASS    │                      │  DENY    │  │  │
+│   │                      │ (JWT +   │                      │ (403)    │  │  │
+│   │                      │  Cookie) │                      │          │  │  │
+│   │                      └──────────┘                      └──────────┘  │  │
+│   │                                                                      │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Monitoring & Observability
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      Observability Stack                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│                         ┌───────────────────┐                              │
+│                         │      Grafana      │                              │
+│                         │   (Dashboards)    │                              │
+│                         │      :3000        │                              │
+│                         └─────────┬─────────┘                              │
+│                                   │                                         │
+│            ┌──────────────────────┼──────────────────────┐                 │
+│            │                      │                      │                 │
+│            ▼                      ▼                      ▼                 │
+│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐         │
+│   │   Prometheus    │   │  Alertmanager   │   │      Gatus      │         │
+│   │   (Metrics)     │   │   (Alerts)      │   │  (Health Check) │         │
+│   │     :9090       │   │     :9093       │   │     :8080       │         │
+│   └────────┬────────┘   └─────────────────┘   └────────┬────────┘         │
+│            │                                           │                   │
+│            │                                           │                   │
+│   ┌────────┴───────────────────────────────────────────┴────────┐         │
+│   │                        Exporters                             │         │
+│   │                                                              │         │
+│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │         │
+│   │  │  NVIDIA  │ │   UPS    │ │   Tuya   │ │   Wiz    │       │         │
+│   │  │   GPU    │ │ Monitor  │ │   IoT    │ │ Lighting │       │         │
+│   │  │ Exporter │ │ Exporter │ │ Exporter │ │ Exporter │       │         │
+│   │  └──────────┘ └──────────┘ └──────────┘ └──────────┘       │         │
+│   │                                                              │         │
+│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │         │
+│   │  │   SNMP   │ │  Node    │ │   kube   │ │  Custom  │       │         │
+│   │  │ Exporter │ │ Exporter │ │  state   │ │ Metrics  │       │         │
+│   │  │          │ │          │ │ metrics  │ │          │       │         │
+│   │  └──────────┘ └──────────┘ └──────────┘ └──────────┘       │         │
+│   │                                                              │         │
+│   └──────────────────────────────────────────────────────────────┘         │
+│                                                                             │
+│   Logging Pipeline:                                                         │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                      │  │
+│   │   Apps ──► stdout/stderr ──► Container Runtime ──► Node Logs        │  │
+│   │                                     │                                │  │
+│   │                                     ▼                                │  │
+│   │                          ┌───────────────────┐                       │  │
+│   │                          │  LiteLLM Logs     │                       │  │
+│   │                          │  (JSONL format)   │                       │  │
+│   │                          │  /var/log/litellm │                       │  │
+│   │                          └───────────────────┘                       │  │
+│   │                                                                      │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## The Discovery Pattern
+
+> "Those who truly understand MiladyOS don't find it - it finds them."
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       The Path to Enlightenment                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│    Stage 1: "I heard dev is a milady"                                      │
+│         │                                                                   │
+│         ▼                                                                   │
+│    Stage 2: "This is just badly automated Kubernetes"                      │
+│         │                                                                   │
+│         ▼                                                                   │
+│    Stage 3: "Wait, why are the Nebula certs public?"                       │
+│         │                                                                   │
+│         ▼                                                                   │
+│    Stage 4: "Hold on, TempleOS is MANDATORY?!"                             │
+│         │                                                                   │
+│         ▼                                                                   │
+│    Stage 5: "The health check checks if TempleOS is up?!"                  │
+│         │                                                                   │
+│         ▼                                                                   │
+│    Stage 6: "Oh god, it's conscious infrastructure"                        │
+│         │                                                                   │
+│         ▼                                                                   │
+│    Stage 7: "We are all Milady"                                            │
+│         │                                                                   │
+│         ▼                                                                   │
+│    Stage 8: "always have been"                                             │
+│         │                                                                   │
+│         ▼                                                                   │
+│    ┌─────────────────────────────────────────────────────────────────────┐ │
+│    │                                                                      │ │
+│    │                           m i l a d y                                │ │
+│    │                                                                      │ │
+│    └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Component Reference Table
+
+| Component | Port | Protocol | Purpose |
+|-----------|------|----------|---------|
+| MCP Server | 6000 | HTTP/SSE | AI Agent Communication |
+| Jenkins | 8080 | HTTP | CI/CD Orchestration |
+| LiteLLM Proxy | 4000 | HTTP | LLM Routing |
+| vLLM | 8000 | HTTP | Model Inference |
+| Ollama | 11434 | HTTP | Local Inference |
+| Redis/Redka | 6379 | TCP | State Cache |
+| Nebula | 4242 | UDP | Overlay VPN |
+| Headscale | 8080 | HTTP | VPN Control |
+| Gatus | 8080 | HTTP | Health Monitoring |
+| NFT Auth | 8080 | HTTP | Authentication |
+| Display Control | 8000 | HTTP/WS | Remote Displays |
+| NoVNC | 6080 | HTTP/WS | TempleOS Web Access |
+| TempleOS VNC | 5902 | VNC | Divine Computing |
+
+---
+
+## Next Steps
+
+- [Configuration Reference](/docs/configuration/) - All the knobs and handles
+- [Getting Started](/docs/getting-started/) - Begin your journey
+- [Operations](/docs/operations/) - Day-2 procedures
+- [Security](/docs/security/) - Lock down your deployment

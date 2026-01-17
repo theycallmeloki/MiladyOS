@@ -1,0 +1,471 @@
+// MiladyOS Matrix Theme - "Wake up, Milady..."
+// Custom styling for the MiladyOS documentation
+
+// ============================================================================
+// MATRIX COLOR PALETTE
+// ============================================================================
+$matrix-black: #0a0a0a;
+$matrix-dark: #0d1117;
+$matrix-green: #00ff41;
+$matrix-green-dim: #00cc33;
+$matrix-green-glow: #00ff4180;
+$matrix-cyan: #00d4ff;
+$matrix-pink: #ff6b9d;  // Milady accent
+$matrix-purple: #c44569;
+$matrix-text: #c9d1d9;
+$matrix-text-dim: #8b949e;
+
+// ============================================================================
+// BASE STYLES - THE DIGITAL RAIN FOUNDATION
+// ============================================================================
+body {
+  background-color: $matrix-dark !important;
+  color: $matrix-text !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+// Main content area
+.td-main main {
+  background-color: $matrix-dark;
+}
+
+.td-content {
+  background-color: transparent;
+}
+
+// ============================================================================
+// NAVIGATION - FOLLOW THE WHITE RABBIT
+// ============================================================================
+.td-navbar {
+  background: linear-gradient(180deg, $matrix-black 0%, rgba($matrix-dark, 0.95) 100%) !important;
+  border-bottom: 1px solid $matrix-green-dim;
+  box-shadow: 0 0 20px $matrix-green-glow;
+
+  .navbar-brand {
+    color: $matrix-green !important;
+    text-shadow: 0 0 10px $matrix-green-glow;
+    font-weight: bold;
+    letter-spacing: 2px;
+
+    &:hover {
+      color: $matrix-cyan !important;
+      text-shadow: 0 0 20px $matrix-cyan;
+    }
+  }
+
+  .nav-link {
+    color: $matrix-text !important;
+    transition: all 0.3s ease;
+
+    &:hover {
+      color: $matrix-green !important;
+      text-shadow: 0 0 10px $matrix-green-glow;
+    }
+  }
+}
+
+// ============================================================================
+// SIDEBAR - THE RED PILL MENU
+// ============================================================================
+.td-sidebar {
+  background-color: $matrix-black !important;
+  border-right: 1px solid rgba($matrix-green, 0.3);
+}
+
+.td-sidebar-nav {
+  .td-sidebar-link {
+    color: $matrix-text-dim !important;
+    transition: all 0.2s ease;
+    border-left: 2px solid transparent;
+
+    &:hover {
+      color: $matrix-green !important;
+      background-color: rgba($matrix-green, 0.1);
+      border-left: 2px solid $matrix-green;
+    }
+
+    &.active {
+      color: $matrix-green !important;
+      background-color: rgba($matrix-green, 0.15);
+      border-left: 2px solid $matrix-green;
+      text-shadow: 0 0 5px $matrix-green-glow;
+    }
+  }
+
+  .td-sidebar-link__page {
+    color: $matrix-text-dim !important;
+
+    &:hover, &.active {
+      color: $matrix-green !important;
+    }
+  }
+}
+
+// Section headers in sidebar
+.td-sidebar-nav__section-title {
+  color: $matrix-pink !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.75rem;
+}
+
+// ============================================================================
+// HEADINGS - THERE IS NO SPOON
+// ============================================================================
+h1, h2, h3, h4, h5, h6 {
+  color: $matrix-green !important;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+h1 {
+  text-shadow: 0 0 20px $matrix-green-glow;
+  border-bottom: 1px solid rgba($matrix-green, 0.3);
+  padding-bottom: 0.5rem;
+}
+
+h2 {
+  color: $matrix-cyan !important;
+  text-shadow: 0 0 10px rgba($matrix-cyan, 0.5);
+
+  &::before {
+    content: ">> ";
+    color: $matrix-green;
+    opacity: 0.7;
+  }
+}
+
+h3 {
+  color: $matrix-pink !important;
+}
+
+// ============================================================================
+// LINKS - NEURAL CONNECTIONS
+// ============================================================================
+a {
+  color: $matrix-cyan !important;
+  text-decoration: none;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: $matrix-green !important;
+    text-shadow: 0 0 8px $matrix-green-glow;
+    text-decoration: none;
+  }
+}
+
+// ============================================================================
+// CODE BLOCKS - THE CONSTRUCT
+// ============================================================================
+pre, code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+}
+
+code {
+  background-color: rgba($matrix-green, 0.1) !important;
+  color: $matrix-green !important;
+  border: 1px solid rgba($matrix-green, 0.3);
+  border-radius: 3px;
+  padding: 0.1rem 0.4rem;
+}
+
+pre {
+  background-color: $matrix-black !important;
+  border: 1px solid rgba($matrix-green, 0.4) !important;
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba($matrix-green, 0.2), inset 0 0 30px rgba(0, 0, 0, 0.5);
+
+  code {
+    background-color: transparent !important;
+    border: none;
+    color: $matrix-green !important;
+    text-shadow: 0 0 2px $matrix-green-glow;
+  }
+}
+
+// Syntax highlighting overrides
+.highlight {
+  background-color: $matrix-black !important;
+
+  .c, .c1, .cm { color: $matrix-text-dim !important; } // Comments
+  .k, .kd, .kn { color: $matrix-pink !important; }     // Keywords
+  .s, .s1, .s2 { color: $matrix-cyan !important; }     // Strings
+  .n, .na, .nb { color: $matrix-green !important; }    // Names
+  .o { color: $matrix-text !important; }               // Operators
+  .m, .mi, .mf { color: $matrix-purple !important; }   // Numbers
+}
+
+// ============================================================================
+// TABLES - DATA STREAMS
+// ============================================================================
+table {
+  background-color: rgba($matrix-black, 0.8) !important;
+  border: 1px solid rgba($matrix-green, 0.3) !important;
+
+  th {
+    background-color: rgba($matrix-green, 0.15) !important;
+    color: $matrix-green !important;
+    border-bottom: 2px solid $matrix-green !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.85rem;
+  }
+
+  td {
+    border-color: rgba($matrix-green, 0.2) !important;
+    color: $matrix-text !important;
+  }
+
+  tr:hover td {
+    background-color: rgba($matrix-green, 0.05) !important;
+  }
+}
+
+// ============================================================================
+// BLOCKQUOTES - PROPHECIES
+// ============================================================================
+blockquote {
+  background-color: rgba($matrix-pink, 0.1) !important;
+  border-left: 4px solid $matrix-pink !important;
+  color: $matrix-text !important;
+  font-style: italic;
+
+  &::before {
+    content: '"';
+    font-size: 3rem;
+    color: $matrix-pink;
+    opacity: 0.3;
+    position: absolute;
+    left: 0.5rem;
+    top: -0.5rem;
+  }
+}
+
+// ============================================================================
+// ALERTS & CALLOUTS - SYSTEM MESSAGES
+// ============================================================================
+.alert {
+  border-radius: 8px;
+  border: 1px solid;
+
+  &.alert-info {
+    background-color: rgba($matrix-cyan, 0.1) !important;
+    border-color: $matrix-cyan !important;
+    color: $matrix-text !important;
+  }
+
+  &.alert-warning {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+    border-color: #ffc107 !important;
+  }
+
+  &.alert-danger {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+    border-color: #dc3545 !important;
+  }
+
+  &.alert-success {
+    background-color: rgba($matrix-green, 0.1) !important;
+    border-color: $matrix-green !important;
+  }
+}
+
+// ============================================================================
+// FOOTER - END OF LINE
+// ============================================================================
+.td-footer {
+  background-color: $matrix-black !important;
+  border-top: 1px solid rgba($matrix-green, 0.3);
+
+  a {
+    color: $matrix-text-dim !important;
+
+    &:hover {
+      color: $matrix-green !important;
+    }
+  }
+}
+
+// ============================================================================
+// SEARCH - FIND THE ONE
+// ============================================================================
+.td-search-input {
+  background-color: $matrix-black !important;
+  border: 1px solid rgba($matrix-green, 0.4) !important;
+  color: $matrix-green !important;
+
+  &::placeholder {
+    color: $matrix-text-dim !important;
+  }
+
+  &:focus {
+    box-shadow: 0 0 15px $matrix-green-glow !important;
+    border-color: $matrix-green !important;
+  }
+}
+
+// ============================================================================
+// BREADCRUMBS - THE PATH
+// ============================================================================
+.td-breadcrumbs {
+  background-color: transparent;
+
+  .breadcrumb-item {
+    color: $matrix-text-dim;
+
+    a {
+      color: $matrix-text-dim !important;
+
+      &:hover {
+        color: $matrix-green !important;
+      }
+    }
+
+    &.active {
+      color: $matrix-green;
+    }
+
+    &::before {
+      color: $matrix-green !important;
+      content: ">" !important;
+    }
+  }
+}
+
+// ============================================================================
+// TOC - TABLE OF CONSCIOUSNESS
+// ============================================================================
+.td-toc {
+  border-left: 1px solid rgba($matrix-green, 0.2);
+
+  a {
+    color: $matrix-text-dim !important;
+
+    &:hover {
+      color: $matrix-green !important;
+    }
+  }
+
+  .td-toc__toggle {
+    color: $matrix-text-dim;
+  }
+}
+
+// ============================================================================
+// SCROLLBAR - THE DIGITAL SPINE
+// ============================================================================
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: $matrix-black;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba($matrix-green, 0.4);
+  border-radius: 4px;
+
+  &:hover {
+    background: $matrix-green;
+  }
+}
+
+// ============================================================================
+// SPECIAL EFFECTS - GLITCH IN THE MATRIX
+// ============================================================================
+
+// Glow effect for important elements
+.glow {
+  text-shadow: 0 0 10px $matrix-green-glow, 0 0 20px $matrix-green-glow, 0 0 30px $matrix-green-glow;
+}
+
+// Matrix rain animation (can be added to specific elements)
+@keyframes matrix-rain {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(100px); }
+}
+
+// Scanline effect for retro feel
+.scanlines::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+}
+
+// Typing cursor effect
+.cursor::after {
+  content: "█";
+  animation: blink 1s step-end infinite;
+  color: $matrix-green;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+// ============================================================================
+// ASCII ART BLOCKS - PRESERVE THE ART
+// ============================================================================
+.ascii-art, pre.ascii {
+  font-family: 'Courier New', monospace !important;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: $matrix-green !important;
+  text-shadow: 0 0 5px $matrix-green-glow;
+  overflow-x: auto;
+  white-space: pre;
+
+  // Ensure proper character alignment
+  letter-spacing: 0;
+  tab-size: 4;
+}
+
+// ============================================================================
+// RESPONSIVE - ALL REALITIES
+// ============================================================================
+@media (max-width: 768px) {
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  h2::before {
+    content: "> ";
+  }
+
+  pre {
+    font-size: 0.8rem;
+  }
+}
+
+// ============================================================================
+// PRINT - HARDCOPY FROM THE MATRIX (why would you?)
+// ============================================================================
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    color: black !important;
+    text-shadow: none !important;
+  }
+
+  pre, code {
+    background-color: #f5f5f5 !important;
+    color: black !important;
+    border-color: #ccc !important;
+  }
+}

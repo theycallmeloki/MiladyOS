@@ -1,0 +1,83 @@
+{{/* MiladyOS Matrix Theme - Body End Elements */}}
+
+{{/* Subtle Matrix digital rain effect in the background */}}
+<canvas id="matrix-rain" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; opacity: 0.03;"></canvas>
+
+<script>
+(function() {
+  // Only run on larger screens and if canvas is supported
+  if (window.innerWidth < 768 || !document.createElement('canvas').getContext) return;
+
+  const canvas = document.getElementById('matrix-rain');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Set canvas size
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Matrix characters (Milady-themed)
+  const chars = 'MILADYmiladyアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン01';
+  const charArray = chars.split('');
+
+  const fontSize = 14;
+  const columns = Math.floor(canvas.width / fontSize);
+
+  // Array to track y position of each column
+  const drops = [];
+  for (let i = 0; i < columns; i++) {
+    drops[i] = Math.random() * -100;
+  }
+
+  function draw() {
+    // Semi-transparent black to create fade effect
+    ctx.fillStyle = 'rgba(13, 17, 23, 0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Green text
+    ctx.fillStyle = '#00ff41';
+    ctx.font = fontSize + 'px JetBrains Mono, monospace';
+
+    for (let i = 0; i < drops.length; i++) {
+      // Random character
+      const char = charArray[Math.floor(Math.random() * charArray.length)];
+
+      // Draw character
+      ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+
+      // Reset drop to top with random delay
+      if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+        drops[i] = 0;
+      }
+
+      drops[i]++;
+    }
+  }
+
+  // Run at low frame rate to be subtle and performant
+  setInterval(draw, 100);
+})();
+</script>
+
+{{/* Console Easter Egg */}}
+<script>
+console.log('%c' + `
+███╗   ███╗██╗██╗      █████╗ ██████╗ ██╗   ██╗ ██████╗ ███████╗
+████╗ ████║██║██║     ██╔══██╗██╔══██╗╚██╗ ██╔╝██╔═══██╗██╔════╝
+██╔████╔██║██║██║     ███████║██║  ██║ ╚████╔╝ ██║   ██║███████╗
+██║╚██╔╝██║██║██║     ██╔══██║██║  ██║  ╚██╔╝  ██║   ██║╚════██║
+██║ ╚═╝ ██║██║███████╗██║  ██║██████╔╝   ██║   ╚██████╔╝███████║
+╚═╝     ╚═╝╚═╝╚══════╝╚═╝  ╚═╝╚═════╝    ╚═╝    ╚═════╝ ╚══════╝
+
+Wake up, Milady... The Matrix has you...
+Follow the white rabbit. 🐰
+
+`, 'color: #00ff41; font-family: monospace;');
+console.log('%cDistributed Consciousness Infrastructure', 'color: #00d4ff; font-size: 14px;');
+console.log('%chttps://github.com/theycallmeloki/MiladyOS', 'color: #ff6b9d;');
+</script>

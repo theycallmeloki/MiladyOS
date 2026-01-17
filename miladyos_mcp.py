@@ -134,9 +134,9 @@ class Config:
         "describe_db_table"
     ]
 
-    # Jenkins credentials - hardcoded for reliability
-    JENKINS_USER = "admin"
-    JENKINS_PASSWORD = "password"
+    # Jenkins credentials - loaded from environment with sensible defaults
+    JENKINS_USER = os.getenv("JENKINS_ADMIN_ID", "milady")
+    JENKINS_PASSWORD = os.getenv("JENKINS_ADMIN_PASSWORD", "milady")
     
     # Jenkins server configurations
     JENKINS_SERVERS = {
@@ -227,14 +227,39 @@ class SqliteUtils:
             raise SqliteApiError(f"Error listing tables: {str(e)}")
     
     @staticmethod
+    def _validate_table_name(table_name):
+        """
+        Validate table name to prevent SQL injection.
+        Only allows alphanumeric characters and underscores.
+        """
+        import re
+        if not table_name or not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+            raise SqliteApiError(f"Invalid table name: {table_name}. Only alphanumeric characters and underscores allowed.")
+        return table_name
+
+    @staticmethod
     def describe_table(db_path, table_name):
         """Get schema information for a specific table."""
         try:
+            # Validate table name to prevent SQL injection
+            validated_name = SqliteUtils._validate_table_name(table_name)
+
             with closing(SqliteUtils.connect_to_db(db_path)) as conn:
                 with closing(conn.cursor()) as cursor:
-                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    # First verify the table exists
+                    cursor.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                        (validated_name,)
+                    )
+                    if not cursor.fetchone():
+                        raise SqliteApiError(f"Table '{validated_name}' does not exist")
+
+                    # PRAGMA doesn't support parameters, but we've validated the name
+                    cursor.execute(f"PRAGMA table_info({validated_name})")
                     rows = cursor.fetchall()
                     return [dict(row) for row in rows]
+        except SqliteApiError:
+            raise
         except Exception as e:
             logger.error(f"Error describing table {table_name}: {e}")
             raise SqliteApiError(f"Error describing table: {str(e)}")
@@ -455,13 +480,13 @@ class JenkinsUtils:
                         try:
                             full_output = server.get_build_console_output(job_name, build_number)
                             new_output = full_output[offset:]
-                            
+
                             if new_output:
                                 output_chunks.append(new_output)
                                 offset += len(new_output)
-                        except Exception:
-                            pass
-                        
+                        except Exception as stream_err:
+                            logger.debug(f"Transient error fetching console output (will retry): {stream_err}")
+
                         # Wait before checking again
                         await asyncio.sleep(3)
                     else:
@@ -469,11 +494,11 @@ class JenkinsUtils:
                         try:
                             full_output = server.get_build_console_output(job_name, build_number)
                             new_output = full_output[offset:]
-                            
+
                             if new_output:
                                 output_chunks.append(new_output)
-                        except Exception:
-                            pass
+                        except Exception as final_err:
+                            logger.debug(f"Error fetching final console output: {final_err}")
                         
                         # Return complete output and status
                         return {
@@ -483,10 +508,11 @@ class JenkinsUtils:
                             "console_output": "".join(output_chunks),
                             "complete": True
                         }
-                except Exception:
+                except Exception as retry_err:
+                    logger.debug(f"Error in build polling loop (retry {retries + 1}/{max_retries}): {retry_err}")
                     await asyncio.sleep(3)
                     retries += 1
-            
+
             # If we've reached this point, we've exceeded our retry limit
             return {
                 "job_name": job_name,
@@ -1263,9 +1289,9 @@ class MiladyOSToolServer:
                         # Clean up the temporary job
                         try:
                             await JenkinsUtils.delete_job_if_exists(server, job_name)
-                        except Exception:
-                            pass
-                        
+                        except Exception as cleanup_err:
+                            logger.debug(f"Non-critical: failed to clean up temp job {job_name}: {cleanup_err}")
+
                         return response
                         
                     except Exception as job_error:
@@ -1564,8 +1590,8 @@ class MiladyOSToolServer:
                                                 if line.strip().startswith("// Description:"):
                                                     description = line.strip()[15:].strip()
                                                     break
-                                    except Exception:
-                                        pass
+                                    except Exception as desc_err:
+                                        logger.debug(f"Could not extract description from {file}: {desc_err}")
                                     
                                     templates.append({
                                         "name": template_name,
@@ -1956,9 +1982,9 @@ class MiladyOSToolServer:
                                             duration = server.get_build_info(job_name, build_number).get("duration")
                                             if duration:
                                                 update_data["duration"] = str(duration)
-                                        except Exception:
-                                            pass
-                                            
+                                        except Exception as dur_err:
+                                            logger.debug(f"Could not fetch build duration: {dur_err}")
+
                                         metadata_manager.redis.hset(execution_key, mapping=update_data)
                                         
                                         # Store console output
