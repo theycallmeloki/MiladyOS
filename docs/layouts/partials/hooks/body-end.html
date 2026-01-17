@@ -80,4 +80,222 @@ Follow the white rabbit. 🐰
 `, 'color: #00ff41; font-family: monospace;');
 console.log('%cDistributed Consciousness Infrastructure', 'color: #00d4ff; font-size: 14px;');
 console.log('%chttps://github.com/theycallmeloki/MiladyOS', 'color: #ff6b9d;');
+console.log('%c🎤 Psst... click the mic icon in the corner and say "milady"', 'color: #ff6b9d; font-style: italic;');
+</script>
+
+{{/* Milady Oracle - Voice Easter Egg */}}
+<style>
+#milady-oracle-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(13, 17, 23, 0.8);
+  border: 2px solid #30363d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  opacity: 0.6;
+}
+#milady-oracle-btn:hover {
+  opacity: 1;
+  border-color: #00ff41;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+}
+#milady-oracle-btn.listening {
+  opacity: 1;
+  border-color: #ff6b9d;
+  animation: pulse 1.5s infinite;
+}
+#milady-oracle-btn.speaking {
+  border-color: #00d4ff;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 157, 0.4); }
+  50% { box-shadow: 0 0 0 15px rgba(255, 107, 157, 0); }
+}
+#milady-oracle-tooltip {
+  position: fixed;
+  bottom: 75px;
+  right: 20px;
+  background: rgba(13, 17, 23, 0.95);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #8b949e;
+  z-index: 1000;
+  display: none;
+  max-width: 200px;
+}
+#milady-oracle-tooltip.show {
+  display: block;
+}
+</style>
+
+<button id="milady-oracle-btn" title="Milady Oracle - Click to activate voice">🎤</button>
+<div id="milady-oracle-tooltip"></div>
+
+<script>
+(function() {
+  // Check for Web Speech API support
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    console.log('Speech recognition not supported in this browser');
+    return;
+  }
+
+  const btn = document.getElementById('milady-oracle-btn');
+  const tooltip = document.getElementById('milady-oracle-tooltip');
+  let recognition = null;
+  let isListening = false;
+
+  // Fuzzy matching for "milady" - same variants as Python oracle
+  const miladyVariants = [
+    'milady', 'my lady', 'melody', 'mill lady', 'moolady',
+    'me lady', 'mail lady', 'mail id', 'malady', 'm lady',
+    'my leidy', 'ma lady', 'miledi', 'bloody', 'lady'
+  ];
+
+  function showTooltip(text, duration = 3000) {
+    tooltip.textContent = text;
+    tooltip.classList.add('show');
+    setTimeout(() => tooltip.classList.remove('show'), duration);
+  }
+
+  function speakMilady() {
+    btn.classList.remove('listening');
+    btn.classList.add('speaking');
+    btn.textContent = '🔊';
+
+    const utterance = new SpeechSynthesisUtterance('milady!');
+    utterance.rate = 0.9;
+    utterance.pitch = 1.1;
+
+    // Try to find a nice voice (prefer female voices)
+    const voices = speechSynthesis.getVoices();
+    const preferredVoices = ['Samantha', 'Moira', 'Fiona', 'Karen', 'Victoria', 'Tessa'];
+    for (const name of preferredVoices) {
+      const voice = voices.find(v => v.name.includes(name));
+      if (voice) {
+        utterance.voice = voice;
+        break;
+      }
+    }
+
+    utterance.onend = () => {
+      btn.classList.remove('speaking');
+      btn.textContent = '🎤';
+      showTooltip('✨ milady!', 2000);
+    };
+
+    speechSynthesis.speak(utterance);
+  }
+
+  function startListening() {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      isListening = true;
+      btn.classList.add('listening');
+      btn.textContent = '👂';
+      showTooltip('Listening... say "milady"', 5000);
+    };
+
+    recognition.onresult = (event) => {
+      const last = event.results[event.results.length - 1];
+      const transcript = last[0].transcript.toLowerCase().trim();
+
+      // Check for milady variants
+      const detected = miladyVariants.some(v => transcript.includes(v));
+
+      if (detected && last.isFinal) {
+        console.log('%c🎯 Milady detected: ' + transcript, 'color: #00ff41;');
+        stopListening();
+        speakMilady();
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.log('Speech recognition error:', event.error);
+      if (event.error === 'not-allowed') {
+        showTooltip('Microphone access denied', 3000);
+      }
+      stopListening();
+    };
+
+    recognition.onend = () => {
+      if (isListening) {
+        // Restart if still supposed to be listening
+        try {
+          recognition.start();
+        } catch (e) {
+          stopListening();
+        }
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      showTooltip('Could not start listening', 3000);
+    }
+  }
+
+  function stopListening() {
+    isListening = false;
+    btn.classList.remove('listening');
+    btn.textContent = '🎤';
+    if (recognition) {
+      try {
+        recognition.stop();
+      } catch (e) {}
+      recognition = null;
+    }
+  }
+
+  // Auto-stop after 30 seconds of listening
+  let listenTimeout;
+  btn.addEventListener('click', () => {
+    clearTimeout(listenTimeout);
+    if (!isListening) {
+      startListening();
+      listenTimeout = setTimeout(stopListening, 30000);
+    } else {
+      stopListening();
+    }
+  });
+
+  // Load voices (needed for some browsers)
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+
+  // Keyboard shortcut: press 'm' three times quickly to activate
+  let mPresses = [];
+  document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const now = Date.now();
+      mPresses = mPresses.filter(t => now - t < 1000);
+      mPresses.push(now);
+      if (mPresses.length >= 3) {
+        mPresses = [];
+        startListening();
+        listenTimeout = setTimeout(stopListening, 30000);
+      }
+    }
+  });
+})();
 </script>
