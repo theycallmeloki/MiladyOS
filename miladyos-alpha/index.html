@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiladyOS Alpha - Sanko Contract Interface</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .button:hover {
+            background: #5558e3;
+        }
+        .button:disabled {
+            background: #4a4a4a;
+            cursor: not-allowed;
+        }
+        .input {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            width: 100%;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        .status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 14px;
+        }
+        .status.connected {
+            background: #10b981;
+            color: white;
+        }
+        .status.disconnected {
+            background: #ef4444;
+            color: white;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: #2a2a2a;
+            border-radius: 8px;
+        }
+        .label {
+            color: #888;
+        }
+        .value {
+            color: #fff;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+        .message.success {
+            background: #065f46;
+            color: #10b981;
+        }
+        .message.error {
+            background: #7f1d1d;
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>MiladyOS Alpha</h1>
+                <p>Sanko Contract Interface</p>
+            </div>
+
+            <div class="card">
+                <h2>Wallet Connection</h2>
+                <div v-if="!connected">
+                    <button class="button" @click="connectWallet">Connect MetaMask</button>
+                </div>
+                <div v-else>
+                    <div class="info-row">
+                        <span class="label">Status:</span>
+                        <span class="status connected">Connected</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Address:</span>
+                        <span class="value">{{ shortAddress }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Network:</span>
+                        <span class="value">{{ networkName }}</span>
+                    </div>
+                    <button class="button" @click="disconnectWallet">Disconnect</button>
+                </div>
+            </div>
+
+            <div class="card" v-if="connected">
+                <h2>Contract Info</h2>
+                <div class="info-row">
+                    <span class="label">Contract Address:</span>
+                    <span class="value">{{ contractAddress }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Current Greeting:</span>
+                    <span class="value">{{ currentGreeting }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Deployer:</span>
+                    <span class="value">{{ deployer }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Deployment Time:</span>
+                    <span class="value">{{ deploymentTime }}</span>
+                </div>
+                <button class="button" @click="refreshContractInfo">Refresh Info</button>
+            </div>
+
+            <div class="card" v-if="connected">
+                <h2>Set New Greeting</h2>
+                <input 
+                    v-model="newGreeting" 
+                    class="input" 
+                    placeholder="Enter new greeting..."
+                    @keyup.enter="setGreeting"
+                >
+                <button class="button" @click="setGreeting" :disabled="!newGreeting">
+                    Set Greeting
+                </button>
+            </div>
+
+            <div class="card" v-if="connected">
+                <h2>Store Message</h2>
+                <input 
+                    v-model="newMessage" 
+                    class="input" 
+                    placeholder="Enter your message..."
+                    @keyup.enter="storeMessage"
+                >
+                <button class="button" @click="storeMessage" :disabled="!newMessage">
+                    Store Message
+                </button>
+                <div v-if="userMessage" class="info-row" style="margin-top: 20px;">
+                    <span class="label">Your Stored Message:</span>
+                    <span class="value">{{ userMessage }}</span>
+                </div>
+            </div>
+
+            <div v-if="statusMessage" :class="['message', statusType]">
+                {{ statusMessage }}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        const { ethers } = window;
+
+        const CONTRACT_ADDRESS = '0xdFBD17d4d20fBF1bD8DC8E73E14d124a005BF3a6';
+        const CONTRACT_ABI = [
+            "function greeting() view returns (string)",
+            "function deploymentTime() view returns (uint256)",
+            "function deployer() view returns (address)",
+            "function userMessages(address) view returns (string)",
+            "function setGreeting(string memory _greeting)",
+            "function storeMessage(string memory _message)",
+            "function getContractInfo() view returns (string, uint256, address, uint256)",
+            "event MessageStored(address indexed user, string message)",
+            "event GreetingChanged(string newGreeting)"
+        ];
+
+        createApp({
+            data() {
+                return {
+                    connected: false,
+                    account: null,
+                    provider: null,
+                    signer: null,
+                    contract: null,
+                    contractAddress: CONTRACT_ADDRESS,
+                    currentGreeting: '',
+                    deployer: '',
+                    deploymentTime: '',
+                    newGreeting: '',
+                    newMessage: '',
+                    userMessage: '',
+                    statusMessage: '',
+                    statusType: 'success',
+                    networkName: ''
+                }
+            },
+            computed: {
+                shortAddress() {
+                    if (!this.account) return '';
+                    return `${this.account.slice(0, 6)}...${this.account.slice(-4)}`;
+                }
+            },
+            methods: {
+                async connectWallet() {
+                    try {
+                        console.log('Connect button clicked');
+                        
+                        if (typeof window.ethereum === 'undefined') {
+                            alert('MetaMask not found! Please install MetaMask.');
+                            return;
+                        }
+
+                        // Add small delay to ensure MetaMask is ready
+                        await new Promise(resolve => setTimeout(resolve, 100));
+
+                        // Try to get existing accounts first
+                        let accounts = await window.ethereum.request({ 
+                            method: 'eth_accounts' 
+                        });
+                        
+                        // If no accounts, request access
+                        if (accounts.length === 0) {
+                            accounts = await window.ethereum.request({ 
+                                method: 'eth_requestAccounts' 
+                            });
+                        }
+                        
+                        console.log('Accounts:', accounts);
+                        
+                        if (accounts.length === 0) {
+                            throw new Error('No accounts found. Please connect your wallet.');
+                        }
+                        
+                        this.account = accounts[0];
+                        this.provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+                        this.signer = this.provider.getSigner();
+                        
+                        // Check network
+                        const network = await this.provider.getNetwork();
+                        console.log('Current network:', network);
+                        
+                        if (network.chainId !== 1996) {
+                            this.showStatus('Switching to Sanko network...', 'success');
+                            await this.switchToSanko();
+                        }
+                        
+                        this.networkName = 'Sanko Mainnet';
+                        this.contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, this.signer);
+                        this.connected = true;
+                        
+                        await this.refreshContractInfo();
+                        await this.getUserMessage();
+                        
+                        this.showStatus('Wallet connected successfully!', 'success');
+                        
+                        // Listen for account changes
+                        window.ethereum.on('accountsChanged', this.handleAccountsChanged);
+                        window.ethereum.on('chainChanged', () => window.location.reload());
+                    } catch (error) {
+                        console.error('Connect error:', error);
+                        
+                        // Handle specific MetaMask errors
+                        if (error.code === 4001) {
+                            this.showStatus('Connection cancelled by user', 'error');
+                        } else if (error.code === -32002) {
+                            this.showStatus('Please open MetaMask and connect your wallet', 'error');
+                        } else {
+                            this.showStatus(error.message || 'Connection failed', 'error');
+                        }
+                    }
+                },
+                
+                async switchToSanko() {
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: '0x7CC' }], // 1996 in hex
+                        });
+                    } catch (switchError) {
+                        if (switchError.code === 4902) {
+                            // Chain not added, add it
+                            await window.ethereum.request({
+                                method: 'wallet_addEthereumChain',
+                                params: [{
+                                    chainId: '0x7CC',
+                                    chainName: 'Sanko',
+                                    nativeCurrency: {
+                                        name: 'DMT',
+                                        symbol: 'DMT',
+                                        decimals: 18
+                                    },
+                                    rpcUrls: ['https://mainnet.sanko.xyz'],
+                                    blockExplorerUrls: ['https://tools.sanko.xyz']
+                                }]
+                            });
+                        } else {
+                            throw switchError;
+                        }
+                    }
+                },
+                
+                handleAccountsChanged(accounts) {
+                    if (accounts.length === 0) {
+                        this.disconnectWallet();
+                    } else {
+                        this.account = accounts[0];
+                        this.refreshContractInfo();
+                        this.getUserMessage();
+                    }
+                },
+                
+                disconnectWallet() {
+                    this.connected = false;
+                    this.account = null;
+                    this.provider = null;
+                    this.signer = null;
+                    this.contract = null;
+                    window.ethereum.removeListener('accountsChanged', this.handleAccountsChanged);
+                },
+                
+                async refreshContractInfo() {
+                    try {
+                        const [greeting, deploymentTime, deployer] = await Promise.all([
+                            this.contract.greeting(),
+                            this.contract.deploymentTime(),
+                            this.contract.deployer()
+                        ]);
+                        
+                        this.currentGreeting = greeting;
+                        this.deployer = deployer;
+                        this.deploymentTime = new Date(deploymentTime.toNumber() * 1000).toLocaleString();
+                    } catch (error) {
+                        this.showStatus('Error fetching contract info: ' + error.message, 'error');
+                    }
+                },
+                
+                async getUserMessage() {
+                    try {
+                        const message = await this.contract.userMessages(this.account);
+                        this.userMessage = message;
+                    } catch (error) {
+                        console.error('Error fetching user message:', error);
+                    }
+                },
+                
+                async setGreeting() {
+                    try {
+                        this.showStatus('Sending transaction...', 'success');
+                        const tx = await this.contract.setGreeting(this.newGreeting);
+                        this.showStatus('Transaction sent! Waiting for confirmation...', 'success');
+                        await tx.wait();
+                        this.showStatus('Greeting updated successfully!', 'success');
+                        this.newGreeting = '';
+                        await this.refreshContractInfo();
+                    } catch (error) {
+                        this.showStatus('Error: ' + error.message, 'error');
+                    }
+                },
+                
+                async storeMessage() {
+                    try {
+                        this.showStatus('Sending transaction...', 'success');
+                        const tx = await this.contract.storeMessage(this.newMessage);
+                        this.showStatus('Transaction sent! Waiting for confirmation...', 'success');
+                        await tx.wait();
+                        this.showStatus('Message stored successfully!', 'success');
+                        this.newMessage = '';
+                        await this.getUserMessage();
+                    } catch (error) {
+                        this.showStatus('Error: ' + error.message, 'error');
+                    }
+                },
+                
+                showStatus(message, type) {
+                    this.statusMessage = message;
+                    this.statusType = type;
+                    setTimeout(() => {
+                        this.statusMessage = '';
+                    }, 5000);
+                }
+            },
+            mounted() {
+                console.log('App mounted');
+                console.log('MetaMask available:', typeof window.ethereum !== 'undefined');
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

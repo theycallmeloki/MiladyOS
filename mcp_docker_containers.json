@@ -1,0 +1,998 @@
+{
+  "timestamp": "2025-05-28T02:27:56.528320",
+  "total_spaces": 489,
+  "docker_containers": [
+    {
+      "id": "okanyav/mcp-server",
+      "docker_image": "registry.hf.space/okanyav-mcp-server:latest",
+      "created_at": "2025-03-18T15:31:23.000Z",
+      "last_modified": "2025-03-18T15:35:54.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "albertvillanova/mcp-server",
+      "docker_image": "registry.hf.space/albertvillanova-mcp-server:latest",
+      "created_at": "2025-04-09T15:19:50.000Z",
+      "last_modified": "2025-04-09T15:28:35.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "pharma-IA/MCP_Public_Server",
+      "docker_image": "registry.hf.space/pharma-IA-MCP_Public_Server:latest",
+      "created_at": "2025-04-30T18:43:14.000Z",
+      "last_modified": "2025-04-30T20:50:26.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "Jofthomas/MCP_Server_Template",
+      "docker_image": "registry.hf.space/Jofthomas-MCP_Server_Template:latest",
+      "created_at": "2025-05-06T12:37:31.000Z",
+      "last_modified": "2025-05-06T16:47:41.000Z",
+      "likes": 1,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "MCP",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "evalstate/hf-mcp-server",
+      "docker_image": "registry.hf.space/evalstate-hf-mcp-server:latest",
+      "created_at": "2025-05-06T17:16:41.000Z",
+      "last_modified": "2025-05-16T11:09:17.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "saqibkareem/mcp_server_tool",
+      "docker_image": "registry.hf.space/saqibkareem-mcp_server_tool:latest",
+      "created_at": "2025-05-12T17:01:29.000Z",
+      "last_modified": "2025-05-27T11:45:04.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "evalstate/hf-mcp-server-sse",
+      "docker_image": "registry.hf.space/evalstate-hf-mcp-server-sse:latest",
+      "created_at": "2025-05-13T08:28:43.000Z",
+      "last_modified": "2025-05-19T21:48:52.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "AtPeak/mcp-server",
+      "docker_image": "registry.hf.space/AtPeak-mcp-server:latest",
+      "created_at": "2025-05-14T13:31:28.000Z",
+      "last_modified": "2025-05-14T17:49:52.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "lausayag/jira-mcp-server",
+      "docker_image": "registry.hf.space/lausayag-jira-mcp-server:latest",
+      "created_at": "2025-05-15T08:14:20.000Z",
+      "last_modified": "2025-05-15T08:23:56.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "alexcpn/mcpserver-demo",
+      "docker_image": "registry.hf.space/alexcpn-mcpserver-demo:latest",
+      "created_at": "2025-05-17T14:14:17.000Z",
+      "last_modified": "2025-05-19T11:42:45.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": "Dockerfile"
+    },
+    {
+      "id": "frascuchon/mcp-server-test",
+      "docker_image": "registry.hf.space/frascuchon-mcp-server-test:latest",
+      "created_at": "2025-05-19T09:47:49.000Z",
+      "last_modified": "2025-05-19T10:14:16.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "PAUSED",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "hongdnn/mcp_server",
+      "docker_image": "registry.hf.space/hongdnn-mcp_server:latest",
+      "created_at": "2025-05-22T18:21:10.000Z",
+      "last_modified": "2025-05-22T18:28:00.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "alexcpn/code-review-mcp-server",
+      "docker_image": "registry.hf.space/alexcpn-code-review-mcp-server:latest",
+      "created_at": "2025-05-26T12:18:03.000Z",
+      "last_modified": "2025-05-27T12:56:40.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "BUILDING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": "Dockerfile"
+    },
+    {
+      "id": "imrashi/mcp-server-sentiment-analysis",
+      "docker_image": "registry.hf.space/imrashi-mcp-server-sentiment-analysis:latest",
+      "created_at": "2025-05-26T21:08:35.000Z",
+      "last_modified": "2025-05-26T21:26:20.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "streamlit",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "McPeverick/bert-headline-stock-classification",
+      "docker_image": "registry.hf.space/McPeverick-bert-headline-stock-classification:latest",
+      "created_at": "2024-01-04T15:16:02.000Z",
+      "last_modified": "2024-01-04T15:16:02.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNTIME_ERROR",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "McPeverick/bert-fine-tuning3",
+      "docker_image": "registry.hf.space/McPeverick-bert-fine-tuning3:latest",
+      "created_at": "2024-01-04T18:53:33.000Z",
+      "last_modified": "2024-01-04T18:53:33.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNTIME_ERROR",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "jstoppa/mcp_example",
+      "docker_image": "registry.hf.space/jstoppa-mcp_example:latest",
+      "created_at": "2025-02-23T13:52:41.000Z",
+      "last_modified": "2025-02-23T14:42:01.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNTIME_ERROR",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": "mcp_task_client.py"
+    },
+    {
+      "id": "jack-jiang2025/mcp",
+      "docker_image": "registry.hf.space/jack-jiang2025-mcp:latest",
+      "created_at": "2025-03-16T03:35:45.000Z",
+      "last_modified": "2025-03-16T03:50:25.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "BUILDING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "luoluoluo22/mcp-open-ai",
+      "docker_image": "registry.hf.space/luoluoluo22-mcp-open-ai:latest",
+      "created_at": "2025-03-19T09:16:44.000Z",
+      "last_modified": "2025-03-19T10:41:41.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": "app.py"
+    },
+    {
+      "id": "ZHZ1024/MCPo-OpenwebUI-modelcontextprotocol-server-sequential-thinking",
+      "docker_image": "registry.hf.space/ZHZ1024-MCPo-OpenwebUI-modelcontextprotocol-server-sequential-thinking:latest",
+      "created_at": "2025-04-04T09:55:42.000Z",
+      "last_modified": "2025-04-04T10:00:22.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNTIME_ERROR",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "Zxen/mcp",
+      "docker_image": "registry.hf.space/Zxen-mcp:latest",
+      "created_at": "2025-04-12T02:43:13.000Z",
+      "last_modified": "2025-04-12T02:44:28.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "tibbar/mcp",
+      "docker_image": "registry.hf.space/tibbar-mcp:latest",
+      "created_at": "2025-04-12T02:45:18.000Z",
+      "last_modified": "2025-04-12T06:38:49.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "AnkRoot/Proxy-MCP-OpenAI",
+      "docker_image": "registry.hf.space/AnkRoot-Proxy-MCP-OpenAI:latest",
+      "created_at": "2025-04-12T16:25:21.000Z",
+      "last_modified": "2025-04-13T08:12:35.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "SimonSun/mcpo-proxy",
+      "docker_image": "registry.hf.space/SimonSun-mcpo-proxy:latest",
+      "created_at": "2025-04-14T07:03:45.000Z",
+      "last_modified": "2025-04-14T07:08:01.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "asddf2077/MCPO1",
+      "docker_image": "registry.hf.space/asddf2077-MCPO1:latest",
+      "created_at": "2025-04-14T08:31:23.000Z",
+      "last_modified": "2025-04-14T08:45:22.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "stfghly/OWU-mcp",
+      "docker_image": "registry.hf.space/stfghly-OWU-mcp:latest",
+      "created_at": "2025-04-17T06:46:58.000Z",
+      "last_modified": "2025-04-17T08:10:05.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "genaitiwari/fastapi-mcp",
+      "docker_image": "registry.hf.space/genaitiwari-fastapi-mcp:latest",
+      "created_at": "2025-04-18T08:03:47.000Z",
+      "last_modified": "2025-04-18T09:15:58.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "hu0688/mcpo_proxy",
+      "docker_image": "registry.hf.space/hu0688-mcpo_proxy:latest",
+      "created_at": "2025-04-23T05:41:23.000Z",
+      "last_modified": "2025-04-23T07:54:23.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "rclon/mcp-test",
+      "docker_image": "registry.hf.space/rclon-mcp-test:latest",
+      "created_at": "2025-04-28T15:18:11.000Z",
+      "last_modified": "2025-04-29T11:48:05.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "PAUSED",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "ropic/MCPO",
+      "docker_image": "registry.hf.space/ropic-MCPO:latest",
+      "created_at": "2025-04-29T04:54:01.000Z",
+      "last_modified": "2025-04-29T06:35:48.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "rclon/mcppo",
+      "docker_image": "registry.hf.space/rclon-mcppo:latest",
+      "created_at": "2025-04-29T10:39:57.000Z",
+      "last_modified": "2025-04-29T11:27:04.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "Daertar/MCPO_OWU",
+      "docker_image": "registry.hf.space/Daertar-MCPO_OWU:latest",
+      "created_at": "2025-04-29T15:17:36.000Z",
+      "last_modified": "2025-04-30T03:24:04.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "OrganizedProgrammers/MCPSynapseChat",
+      "docker_image": "registry.hf.space/OrganizedProgrammers-MCPSynapseChat:latest",
+      "created_at": "2025-04-30T12:46:51.000Z",
+      "last_modified": "2025-05-02T13:02:48.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "OrganizedProgrammers/MCPGroqChat",
+      "docker_image": "registry.hf.space/OrganizedProgrammers-MCPGroqChat:latest",
+      "created_at": "2025-04-30T14:29:13.000Z",
+      "last_modified": "2025-05-02T13:10:56.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "tang-x/MCPO",
+      "docker_image": "registry.hf.space/tang-x-MCPO:latest",
+      "created_at": "2025-04-30T16:17:42.000Z",
+      "last_modified": "2025-04-30T17:39:48.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "luohhhh/mcp",
+      "docker_image": "registry.hf.space/luohhhh-mcp:latest",
+      "created_at": "2025-05-01T13:42:34.000Z",
+      "last_modified": "2025-05-03T11:05:42.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "ZHZ1024/FastGPT-MCP",
+      "docker_image": "registry.hf.space/ZHZ1024-FastGPT-MCP:latest",
+      "created_at": "2025-05-02T01:12:31.000Z",
+      "last_modified": "2025-05-02T01:15:23.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "abdelhaqelamraoui/mcp",
+      "docker_image": "registry.hf.space/abdelhaqelamraoui-mcp:latest",
+      "created_at": "2025-05-03T14:47:56.000Z",
+      "last_modified": "2025-05-07T19:19:26.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "enltlh/mcpo",
+      "docker_image": "registry.hf.space/enltlh-mcpo:latest",
+      "created_at": "2025-05-04T02:35:14.000Z",
+      "last_modified": "2025-05-04T02:57:23.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "nfsn/mcpo",
+      "docker_image": "registry.hf.space/nfsn-mcpo:latest",
+      "created_at": "2025-05-10T16:52:16.000Z",
+      "last_modified": "2025-05-15T11:46:44.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "Orion-zhen/mcpo",
+      "docker_image": "registry.hf.space/Orion-zhen-mcpo:latest",
+      "created_at": "2025-05-12T05:56:41.000Z",
+      "last_modified": "2025-05-12T06:52:04.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "cleyrop-ai/mcp-try",
+      "docker_image": "registry.hf.space/cleyrop-ai-mcp-try:latest",
+      "created_at": "2025-05-13T12:30:09.000Z",
+      "last_modified": "2025-05-13T12:36:17.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "m8chaa/playwright_mcp",
+      "docker_image": "registry.hf.space/m8chaa-playwright_mcp:latest",
+      "created_at": "2025-05-16T05:23:52.000Z",
+      "last_modified": "2025-05-16T07:36:03.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNTIME_ERROR",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "issawcmf/mcp",
+      "docker_image": "registry.hf.space/issawcmf-mcp:latest",
+      "created_at": "2025-05-19T13:15:21.000Z",
+      "last_modified": "2025-05-20T11:14:41.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "srivatsavdamaraju/ollama-llava-mcp",
+      "docker_image": "registry.hf.space/srivatsavdamaraju-ollama-llava-mcp:latest",
+      "created_at": "2025-05-21T06:46:50.000Z",
+      "last_modified": "2025-05-21T06:53:36.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "yrajm1997/my_mcp1",
+      "docker_image": "registry.hf.space/yrajm1997-my_mcp1:latest",
+      "created_at": "2025-05-21T17:59:12.000Z",
+      "last_modified": "2025-05-21T18:00:25.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "SLEEPING",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "leafcat/leafcat-mcp",
+      "docker_image": "registry.hf.space/leafcat-leafcat-mcp:latest",
+      "created_at": "2025-05-23T22:15:24.000Z",
+      "last_modified": "2025-05-24T00:16:08.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "Engmhabib/MCP-EdTech",
+      "docker_image": "registry.hf.space/Engmhabib-MCP-EdTech:latest",
+      "created_at": "2025-05-24T18:11:50.000Z",
+      "last_modified": "2025-05-24T18:19:04.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": "main.py"
+    },
+    {
+      "id": "bchgod/mcpo",
+      "docker_image": "registry.hf.space/bchgod-mcpo:latest",
+      "created_at": "2025-05-25T03:20:20.000Z",
+      "last_modified": "2025-05-25T04:14:34.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "erhardinho/demo-mcp-app",
+      "docker_image": "registry.hf.space/erhardinho-demo-mcp-app:latest",
+      "created_at": "2025-05-26T08:12:56.000Z",
+      "last_modified": "2025-05-26T11:00:32.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "streamlit",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    },
+    {
+      "id": "alexcpn/llm-mcp-code-review",
+      "docker_image": "registry.hf.space/alexcpn-llm-mcp-code-review:latest",
+      "created_at": "2025-05-27T06:45:56.000Z",
+      "last_modified": "2025-05-27T12:19:15.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "RUNNING",
+        "hardware": "cpu-basic",
+        "gpu_enabled": true
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": "Dockerfile"
+    },
+    {
+      "id": "srivatsavdamaraju/fastPi_mcp",
+      "docker_image": "registry.hf.space/srivatsavdamaraju-fastPi_mcp:latest",
+      "created_at": "2025-05-27T12:50:06.000Z",
+      "last_modified": "2025-05-27T13:07:07.000Z",
+      "likes": 0,
+      "runtime": {
+        "stage": "BUILD_ERROR",
+        "hardware": null,
+        "gpu_enabled": null
+      },
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "requires_gpu": false,
+      "docker_config": {},
+      "app_file": null
+    }
+  ],
+  "docker_count": 52
+}

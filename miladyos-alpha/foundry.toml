@@ -1,0 +1,13 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+
+# Sanko chain configuration
+[rpc_endpoints]
+sanko = "https://mainnet.sanko.xyz"
+
+# [etherscan]
+# sanko = { key = "${SANKO_EXPLORER_API_KEY}", url = "https://tools.sanko.xyz/api" }
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -6,6 +6,7 @@ ENV PACHCTL_TAG_VER 1.12.5
 ENV CADDY_TAG_VER 2.4.6
 ENV K3S_VERSION v1.26.10+k3s2
 ENV K3SUP_VERSION 0.6.3
+ENV HEADSCALE_VERSION 0.26.1
 
 # Switch to root to install additional packages
 USER root
@@ -215,66 +216,72 @@ RUN mkdir -p /usr/local/cuda-11.8/lib64/stubs && \
 # Patch the CMake file to avoid CUDA driver dependency
 RUN sed -i 's/target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/# Commented out: target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/' /llamacpp/ggml/src/ggml-cuda/CMakeLists.txt
 
+# Force CUDA build when nvcc exists in image (useful for GPU-less build hosts that carry CUDA toolkit).
+# Default target architectures now include Pascal P40 (61), Turing (75), Ampere (80/86).
+# You can override target architectures at build time: docker build --build-arg CUDA_ARCHS="86;80;75;61" .
+ARG CUDA_ARCHS="86;80;75;61"
+ENV CUDA_ARCHS=${CUDA_ARCHS}
+
 # Detect if NVIDIA or AMD GPU is present and build accordingly
 RUN if command -v nvcc &> /dev/null; then \
-    # Build with CUDA support
-    mkdir -p build && cd build && \
-    export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
-    cmake .. -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
-             -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
-             -DLLAMA_NATIVE=OFF \
-             -DLLAMA_CURL=ON \
-             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release -j 8 && \
-    mkdir -p ../build-rpc && cd ../build-rpc && \
-    export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
-    cmake .. -DLLAMA_RPC=ON -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="60" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
-             -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
-             -DLLAMA_NATIVE=OFF \
-             -DLLAMA_CURL=ON \
-             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release; \
+  echo "nvcc present in image -> forcing CUDA build (no host GPU required)"; \
+  mkdir -p build && cd build && \
+  export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
+  cmake .. -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
+            -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
+            -DLLAMA_NATIVE=OFF \
+            -DLLAMA_CURL=ON \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+  cmake --build . --config Release -j 8 && \
+  mkdir -p ../build-rpc && cd ../build-rpc && \
+  export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
+  cmake .. -DLLAMA_RPC=ON -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
+            -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
+            -DLLAMA_NATIVE=OFF \
+            -DLLAMA_CURL=ON \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+  cmake --build . --config Release; \
 elif command -v hipcc &> /dev/null; then \
-    # Build with ROCm/HIP support - using settings compatible with ROCm 5.4.3
-    mkdir -p build && cd build && \
-    cmake .. -DGGML_HIP=ON \
-             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
-             -DLLAMA_NATIVE=OFF \
-             -DLLAMA_CURL=ON \
-             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release -j 8 && \
-    mkdir -p ../build-rpc && cd ../build-rpc && \
-    cmake .. -DLLAMA_RPC=ON -DGGML_HIP=ON \
-             -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
-             -DLLAMA_NATIVE=OFF \
-             -DLLAMA_CURL=ON \
-             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release; \
+  echo "hipcc present -> building HIP targets" && \
+  mkdir -p build && cd build && \
+  cmake .. -DGGML_HIP=ON \
+            -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
+            -DLLAMA_NATIVE=OFF \
+            -DLLAMA_CURL=ON \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+  cmake --build . --config Release -j 8 && \
+  mkdir -p ../build-rpc && cd ../build-rpc && \
+  cmake .. -DLLAMA_RPC=ON -DGGML_HIP=ON \
+            -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
+            -DLLAMA_NATIVE=OFF \
+            -DLLAMA_CURL=ON \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+  cmake --build . --config Release; \
 else \
-    # Build CPU-only version as fallback
-    mkdir -p build && cd build && \
-    cmake .. -DLLAMA_NATIVE=OFF \
-             -DLLAMA_CURL=ON \
-             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release -j 8 && \
-    mkdir -p ../build-rpc && cd ../build-rpc && \
-    cmake .. -DLLAMA_RPC=ON \
-             -DLLAMA_NATIVE=OFF \
-             -DLLAMA_CURL=ON \
-             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-             -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-             -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-    cmake --build . --config Release; \
+  echo "No nvcc/hipcc found -> falling back to CPU-only build" && \
+  mkdir -p build && cd build && \
+  cmake .. -DLLAMA_NATIVE=OFF \
+            -DLLAMA_CURL=ON \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+  cmake --build . --config Release -j 8 && \
+  mkdir -p ../build-rpc && cd ../build-rpc && \
+  cmake .. -DLLAMA_RPC=ON \
+            -DLLAMA_NATIVE=OFF \
+            -DLLAMA_CURL=ON \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+  cmake --build . --config Release; \
 fi
 
 WORKDIR /
@@ -522,12 +529,80 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl unzip expect sudo && \
     rm -rf /var/lib/apt/lists/*
 
-# Add pivpn installer script (we will run it on first-boot manually/unattended)
-RUN curl -L https://install.pivpn.io -o /usr/local/bin/pivpn-install.sh && \
-    chmod +x /usr/local/bin/pivpn-install.sh
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget ca-certificates gnupg2 apt-transport-https jq iproute2 iptables \
+    && rm -rf /var/lib/apt/lists/*
 
-# Ensure /etc/pivpn existence for configs
-RUN mkdir -p /etc/pivpn /home/jenkins/configs && chown -R jenkins:jenkins /home/jenkins/configs
+# Install Tailscale client
+RUN curl -fsSL https://tailscale.com/install.sh | sh
+
+# Install Headscale server binary
+RUN ARCH=$(dpkg --print-architecture) && \
+    wget -O /tmp/headscale.deb "https://github.com/juanfont/headscale/releases/download/v${HEADSCALE_VERSION}/headscale_${HEADSCALE_VERSION}_linux_${ARCH}.deb" && \
+    dpkg -i /tmp/headscale.deb || apt-get -f install -y && \
+    rm -f /tmp/headscale.deb && \
+    mkdir -p /etc/headscale /var/lib/headscale /var/lib/tailscale && \
+    chmod 0755 /etc/headscale /var/lib/headscale /var/lib/tailscale
+
+# Configure headscale defaults
+RUN mkdir -p /etc/headscale /var/lib/headscale && \
+    cat > /etc/headscale/config.yaml <<'EOF'
+server_url: https://headscale.transparentlyrotatableproxy.me
+listen_addr: 0.0.0.0:8080
+grpc_listen_addr: 0.0.0.0:50443
+
+# Use sqlite for simplicity inside container
+db_type: sqlite3
+db_path: /var/lib/headscale/db.sqlite
+
+# Keys & state
+private_key_path: /var/lib/headscale/private.key
+noise:
+  private_key_path: /var/lib/headscale/noise.key
+
+# MiDNS 
+dns_config:
+  magic_dns: true
+  base_domain: headscale.internal
+  nameservers:
+    - 1.1.1.1
+    - 8.8.8.8
+
+# Policy mode
+policy:
+  mode: file
+  path: /etc/headscale/policy.acl
+EOF
+
+# Configure headscale policy everynode talk everynode
+RUN cat > /etc/headscale/policy.acl <<'EOF'
+{
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["*"],
+      "dst": ["*:*"]
+    }
+  ]
+}
+EOF
+
+# Install Hugo Extended and build documentation
+RUN apt-get update && apt-get install -y wget && \
+    wget https://github.com/gohugoio/hugo/releases/download/v0.150.1/hugo_extended_0.150.1_linux-amd64.tar.gz && \
+    tar -xzf hugo_extended_0.150.1_linux-amd64.tar.gz && \
+    mv hugo /usr/local/bin/ && \
+    rm hugo_extended_0.150.1_linux-amd64.tar.gz
+
+# Copy docs source
+COPY docs /app/docs
+WORKDIR /app/docs
+
+# Initialize Hugo modules and build docs
+RUN hugo mod get github.com/google/docsy@v0.8.0 && \
+    hugo mod get && \
+    npm i && \
+    hugo --gc --minify
 
 # Switch back to the jenkins user
 USER jenkins

@@ -1,0 +1,1 @@
+docker run -it -p 7860:7860 --platform=linux/amd64 -e API_BASE_URL="YOUR_VALUE_HERE" registry.hf.space/viktor-hu-parakeet-asr-mcp-server:latest python app.py

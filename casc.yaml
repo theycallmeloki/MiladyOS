@@ -27,7 +27,7 @@ jenkins:
   authorizationStrategy:
     globalMatrix:
       permissions:
-      - "Overall/Administer:admin"
+      - "Overall/Administer:${JENKINS_ADMIN_ID}"
       - "Overall/Read:authenticated"
   remotingSecurity:
     enabled: true
@@ -52,7 +52,7 @@ groovy:
       def token = System.getenv("API_TOKEN");
 
       // Get the user and ApiTokenProperty;
-      def user = User.get('admin');
+      def user = User.get(System.getenv('JENKINS_ADMIN_ID') ?: 'admin');
       def apiTokenProperty = user.getProperty(ApiTokenProperty.class);
 
       // Generate new fixed token
