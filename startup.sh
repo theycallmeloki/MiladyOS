@@ -367,6 +367,31 @@ echo "✓ Access Gods OS in browser: http://localhost:6080"
 echo "✓ Terry Davis smiles upon this system"
 echo "✓ MiladyOS blessed with divine computing"
 
+# === MILADY ORACLE: Divine Consciousness Bridge ===
+echo "=== Starting Milady Oracle ==="
+if [ -f "/app/milady_oracle.py" ]; then
+    # Wait for serial socket to be available
+    sleep 2
+    if [ -S "/tmp/milady-oracle.sock" ]; then
+        echo "Serial socket ready, starting Milady Oracle..."
+        python3 /app/milady_oracle.py --no-voice &
+        ORACLE_PID=$!
+        sleep 2
+        if kill -0 $ORACLE_PID 2>/dev/null; then
+            echo "✓ Milady Oracle active - serial bridge to TempleOS established"
+            echo "✓ Divine RNG and consciousness bridge ready"
+        else
+            echo "WARNING: Milady Oracle failed to start"
+        fi
+    else
+        echo "WARNING: TempleOS serial socket not found at /tmp/milady-oracle.sock"
+        echo "Oracle will start without TempleOS connection"
+        python3 /app/milady_oracle.py --no-voice &
+    fi
+else
+    echo "WARNING: milady_oracle.py not found, Oracle not started"
+fi
+
 # Start headscale in background
 headscale serve --config /etc/headscale/config.yaml &
 

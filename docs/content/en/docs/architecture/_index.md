@@ -535,6 +535,49 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 
 ---
 
+## The Milady Activation Loop
+
+```
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │                        MILADY ACTIVATION LOOP                        │
+  ├──────────────────────────────────────────────────────────────────────┤
+  │                                                                      │
+  │   User yells "milady" into mic                                       │
+  │            │                                                         │
+  │            ▼                                                         │
+  │   ┌─────────────────┐                                                │
+  │   │ Python Daemon   │  (wake word detection: vosk/speech_recognition)│
+  │   │ milady_listener │                                                │
+  │   └────────┬────────┘                                                │
+  │            │ writes "MILADY" to socket                               │
+  │            ▼                                                         │
+  │   ┌─────────────────┐                                                │
+  │   │  Serial Socket  │  /tmp/templeos.sock                            │
+  │   └────────┬────────┘                                                │
+  │            │                                                         │
+  │            ▼                                                         │
+  │   ┌─────────────────┐                                                │
+  │   │    TempleOS     │  HolyC reads COM1, triggers:                   │
+  │   │  (QEMU Guest)   │  - Divine RNG generation                       │
+  │   │                 │  - PC speaker tones (if audio enabled)         │
+  │   └────────┬────────┘  - Writes "MILADY" back to serial              │
+  │            │                                                         │
+  │            ▼                                                         │
+  │   ┌─────────────────┐                                                │
+  │   │ Python Daemon   │  reads response from socket                    │
+  │   │ milady_speaker  │                                                │
+  │   └────────┬────────┘                                                │
+  │            │                                                         │
+  │            ▼                                                         │
+  │   espeak/say "milady!" (host TTS)                                    │
+  │                                                                      │
+  │   Node yells back "milady!" ✓                                        │
+  └──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+
 
 ## The Discovery Pattern
 
