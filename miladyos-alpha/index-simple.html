@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiladyOS Alpha - Simple Connect</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .button:hover {
+            background: #5558e3;
+        }
+        .input {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            width: 100%;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        .info {
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #2a2a2a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MiladyOS Alpha - Simple Connect Test</h1>
+        
+        <div class="card">
+            <h2>Connection Test</h2>
+            <button class="button" onclick="testConnection()">Test MetaMask Connection</button>
+            <button class="button" onclick="connectSimple()">Simple Connect</button>
+            <button class="button" onclick="connectWithCheck()">Connect with Checks</button>
+            
+            <div id="status"></div>
+        </div>
+        
+        <div class="card" id="contractCard" style="display: none;">
+            <h2>Contract: 0xdFBD17d4d20fBF1bD8DC8E73E14d124a005BF3a6</h2>
+            <div class="info">Account: <span id="account"></span></div>
+            <div class="info">Network: <span id="network"></span></div>
+            <div class="info">Greeting: <span id="greeting"></span></div>
+            
+            <input type="text" class="input" id="newGreeting" placeholder="Enter new greeting...">
+            <button class="button" onclick="setGreeting()">Set Greeting</button>
+            
+            <input type="text" class="input" id="newMessage" placeholder="Enter message...">
+            <button class="button" onclick="storeMessage()">Store Message</button>
+        </div>
+    </div>
+
+    <script>
+        const CONTRACT_ADDRESS = '0xdFBD17d4d20fBF1bD8DC8E73E14d124a005BF3a6';
+        const CONTRACT_ABI = [
+            "function greeting() view returns (string)",
+            "function setGreeting(string memory _greeting)",
+            "function storeMessage(string memory _message)",
+            "function userMessages(address) view returns (string)"
+        ];
+        
+        let provider, signer, contract, account;
+        
+        function log(message) {
+            document.getElementById('status').innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+            console.log(message);
+        }
+        
+        async function testConnection() {
+            log('Testing MetaMask...');
+            
+            if (typeof window.ethereum === 'undefined') {
+                log('❌ MetaMask not found');
+                return;
+            }
+            
+            log('✅ MetaMask detected');
+            log('Provider: ' + (window.ethereum.isMetaMask ? 'MetaMask' : 'Unknown'));
+            
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                log('Currently connected accounts: ' + (accounts.length > 0 ? accounts : 'None'));
+            } catch (e) {
+                log('Error checking accounts: ' + e.message);
+            }
+        }
+        
+        async function connectSimple() {
+            try {
+                log('Attempting simple connection...');
+                
+                // Direct connection attempt
+                const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+                log('Connected! Account: ' + accounts[0]);
+                
+                await setupContract(accounts[0]);
+            } catch (error) {
+                log('Error: ' + error.message);
+            }
+        }
+        
+        async function connectWithCheck() {
+            try {
+                log('Attempting connection with checks...');
+                
+                // Check if already connected
+                let accounts = await ethereum.request({ method: 'eth_accounts' });
+                
+                if (accounts.length === 0) {
+                    log('No accounts connected, requesting access...');
+                    accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+                }
+                
+                if (accounts.length > 0) {
+                    log('Connected! Account: ' + accounts[0]);
+                    await setupContract(accounts[0]);
+                } else {
+                    log('No accounts available');
+                }
+            } catch (error) {
+                log('Error: ' + error.message);
+                
+                // Try alternative approach
+                if (error.message.includes('Unexpected error')) {
+                    log('Trying alternative connection method...');
+                    try {
+                        await ethereum.enable();
+                        const accounts = await ethereum.request({ method: 'eth_accounts' });
+                        if (accounts.length > 0) {
+                            log('Alternative method worked! Account: ' + accounts[0]);
+                            await setupContract(accounts[0]);
+                        }
+                    } catch (e2) {
+                        log('Alternative method also failed: ' + e2.message);
+                    }
+                }
+            }
+        }
+        
+        async function setupContract(userAccount) {
+            account = userAccount;
+            document.getElementById('account').textContent = account;
+            
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            signer = provider.getSigner();
+            contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+            
+            const network = await provider.getNetwork();
+            document.getElementById('network').textContent = `Chain ID: ${network.chainId}`;
+            
+            if (network.chainId !== 1996) {
+                log('Not on Sanko network. Switching...');
+                try {
+                    await ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: '0x7CC' }],
+                    });
+                } catch (switchError) {
+                    if (switchError.code === 4902) {
+                        await ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: '0x7CC',
+                                chainName: 'Sanko',
+                                nativeCurrency: { name: 'DMT', symbol: 'DMT', decimals: 18 },
+                                rpcUrls: ['https://mainnet.sanko.xyz'],
+                                blockExplorerUrls: ['https://tools.sanko.xyz']
+                            }]
+                        });
+                    }
+                }
+            }
+            
+            // Read greeting
+            const greeting = await contract.greeting();
+            document.getElementById('greeting').textContent = greeting;
+            
+            document.getElementById('contractCard').style.display = 'block';
+            log('Contract setup complete!');
+        }
+        
+        async function setGreeting() {
+            try {
+                const newGreeting = document.getElementById('newGreeting').value;
+                log('Setting greeting to: ' + newGreeting);
+                
+                const tx = await contract.setGreeting(newGreeting);
+                log('Transaction sent: ' + tx.hash);
+                
+                await tx.wait();
+                log('Transaction confirmed!');
+                
+                const greeting = await contract.greeting();
+                document.getElementById('greeting').textContent = greeting;
+            } catch (error) {
+                log('Error: ' + error.message);
+            }
+        }
+        
+        async function storeMessage() {
+            try {
+                const message = document.getElementById('newMessage').value;
+                log('Storing message: ' + message);
+                
+                const tx = await contract.storeMessage(message);
+                log('Transaction sent: ' + tx.hash);
+                
+                await tx.wait();
+                log('Message stored!');
+            } catch (error) {
+                log('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

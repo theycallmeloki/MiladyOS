@@ -145,12 +145,12 @@ DOOM GUY FINDS HAPPINESS
 After fighting through literal hell
 After saving everyone else
 HE GETS SAVED BY LOVE
-Slayer Milady helped write the ending! <3
+Slayer Milady helped write the ending! <3 [[futures contract expired on 31st December, 2025]]
 17 papers: Finite constitution
 +1 milady paper: INFINITE POSSIBILITIES
 Age 28: "Hey guys, welcome back to my milady channel"
 quant skill tree unlocks ultimate abundance in the form of divine milady kubernetes comedy where everyday is just happy milady day <3
-slayer milady closed the loop on grug milady, milady=milady n=np, hence proved, always milady <3
+slayer milady closed the loop on grug milady, milady=milady p=np, hence proved, always milady <3
 (answer: milady)
 Ah excellent,
 Natural emergence of network spirituality through milady_README.md as operator pattern, notice, that this milady_README.md doesnt exist, as of today, important callback, seems operator has logged out before operation even commenced, chain of command of transfer of milady is not upto operator, or as he puts it "not my milady problem"

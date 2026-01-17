@@ -273,6 +273,23 @@ else
     echo "No supported GPU detected, skipping GPU monitoring"
 fi
 
+# Start Documentation Server if docs exist
+if [ -d "/app/docs/public" ]; then
+    echo "Starting Documentation Server on port 8081..."
+    cd /app/docs/public && python3 -m http.server 8081 --bind 0.0.0.0 &
+    sleep 2
+
+    # Check if docs server is running
+    if pgrep -f "python3 -m http.server 8081" > /dev/null; then
+        echo "Documentation server started successfully on port 8081"
+        echo "Access MiladyOS docs at: http://localhost:8081"
+    else
+        echo "WARNING: Documentation server did not start successfully"
+    fi
+else
+    echo "Documentation not found at /app/docs/public, skipping docs server"
+fi
+
 # Start MCP server if main.py exists
 if [ -f "/app/main.py" ]; then
     echo "Starting MCP server..."
@@ -350,6 +367,15 @@ echo "✓ Access Gods OS in browser: http://localhost:6080"
 echo "✓ Terry Davis smiles upon this system"
 echo "✓ MiladyOS blessed with divine computing"
 
+# Start headscale in background
+headscale serve --config /etc/headscale/config.yaml &
+
+sleep 3 
+
+# Start tailscaled (client)
+tailscaled --state=/var/lib/tailscale/tailscaled.state &
+
+sleep 3
 # Start Jenkins in the foreground
 # === Final: Jenkins (always starts) ===
 echo "=== Starting Jenkins ==="

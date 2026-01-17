@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest  # Use GitHub-hosted runner instead of self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - name: Check Out Repo

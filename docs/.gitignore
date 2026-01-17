@@ -1,0 +1,40 @@
+# Hugo build artifacts
+/public/
+/node_modules/
+/resources/_gen/
+/assets/jsconfig.json
+hugo_stats.json
+
+# Hugo build lock file
+.hugo_build.lock
+
+# Hugo modules cache (go.sum is kept for reproducible builds)
+/_vendor/
+
+# Theme files (we use Hugo modules)
+/themes/
+
+# Local Hugo binary downloads
+hugo_extended*
+hugo.tar.gz
+hugo.zip
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*~
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp

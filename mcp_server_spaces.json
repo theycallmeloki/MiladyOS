@@ -1,0 +1,483 @@
+{
+  "timestamp": "2025-05-28T02:11:26.494370",
+  "search_term": "mcp-server",
+  "total_count": 30,
+  "docker_spaces_count": 14,
+  "spaces": [
+    {
+      "_id": "6833dfb5a012120ba6e66edb",
+      "id": "viktor-hu/parakeet-asr-mcp-server",
+      "likes": 2,
+      "trendingScore": 2,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-26T03:27:49.000Z"
+    },
+    {
+      "_id": "67d991cbb733b15b7c6186ee",
+      "id": "okanyav/mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-03-18T15:31:23.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/okanyav-mcp-server:latest"
+      }
+    },
+    {
+      "_id": "67f69016aae8425bd194a94f",
+      "id": "albertvillanova/mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-04-09T15:19:50.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/albertvillanova-mcp-server:latest"
+      }
+    },
+    {
+      "_id": "680779c6a8ae0fc1b4eff03d",
+      "id": "AIRabbitHole/mcp-server-editor-safe",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "static",
+      "tags": [
+        "static",
+        "region:us"
+      ],
+      "createdAt": "2025-04-22T11:13:10.000Z"
+    },
+    {
+      "_id": "68126f42d15a54be4e03e75c",
+      "id": "pharma-IA/MCP_Public_Server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-04-30T18:43:14.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/pharma-IA-MCP_Public_Server:latest"
+      }
+    },
+    {
+      "_id": "6812b8d4de624fb6f58ea979",
+      "id": "Gyaneshere/MCPServer",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-04-30T23:57:08.000Z"
+    },
+    {
+      "_id": "68152ceb406973bf3b4e68aa",
+      "id": "kokluch/tempo-edf-mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-02T20:36:59.000Z"
+    },
+    {
+      "_id": "681a028bc268f020044c69c6",
+      "id": "Jofthomas/MCP_Server_Template",
+      "likes": 1,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "MCP",
+        "region:us"
+      ],
+      "createdAt": "2025-05-06T12:37:31.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/Jofthomas-MCP_Server_Template:latest"
+      }
+    },
+    {
+      "_id": "681a43f9c6eed6d87d46b710",
+      "id": "evalstate/hf-mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-06T17:16:41.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/evalstate-hf-mcp-server:latest"
+      }
+    },
+    {
+      "_id": "681b8756a0109f0e5550c182",
+      "id": "pharma-IA/Demo_MCP_Server_MIT",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-07T16:16:22.000Z"
+    },
+    {
+      "_id": "682229693b7392637eac2702",
+      "id": "saqibkareem/mcp_server_tool",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-12T17:01:29.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/saqibkareem-mcp_server_tool:latest"
+      }
+    },
+    {
+      "_id": "682302bbe2358be41002915b",
+      "id": "evalstate/hf-mcp-server-sse",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-13T08:28:43.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/evalstate-hf-mcp-server-sse:latest"
+      }
+    },
+    {
+      "_id": "68249b30b5080c9c2aa4a6f9",
+      "id": "AtPeak/mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-14T13:31:28.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/AtPeak-mcp-server:latest"
+      }
+    },
+    {
+      "_id": "6825a25c9eeee537168ced2b",
+      "id": "lausayag/jira-mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-15T08:14:20.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/lausayag-jira-mcp-server:latest"
+      }
+    },
+    {
+      "_id": "68274fdcbbb3be40ea95af0e",
+      "id": "jowwii/mcpservertest",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-16T14:46:52.000Z"
+    },
+    {
+      "_id": "682899b9ed52910b9fc4fb4c",
+      "id": "alexcpn/mcpserver-demo",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-17T14:14:17.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/alexcpn-mcpserver-demo:latest"
+      }
+    },
+    {
+      "_id": "6828dbba565d6bb7a798edc8",
+      "id": "jarisko/mcp_server_deployment_sample",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-17T18:55:54.000Z"
+    },
+    {
+      "_id": "6829e97badebc060dca71e12",
+      "id": "vermgau/hf-sentiment-mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "region:us"
+      ],
+      "createdAt": "2025-05-18T14:06:51.000Z"
+    },
+    {
+      "_id": "682a02e44cd344b234bb1bda",
+      "id": "ashish-soni08/sentiment-mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-18T15:55:16.000Z"
+    },
+    {
+      "_id": "682afe45a1e58954acf52912",
+      "id": "frascuchon/mcp-server-test",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-19T09:47:49.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/frascuchon-mcp-server-test:latest"
+      }
+    },
+    {
+      "_id": "682c9d62b900b74a1afcd522",
+      "id": "punkojose/mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-20T15:18:58.000Z"
+    },
+    {
+      "_id": "682e5e7faf308e542aa0eee4",
+      "id": "patagucci/mcp-server-course",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-21T23:15:11.000Z"
+    },
+    {
+      "_id": "682efae59c1b77a50325a3d1",
+      "id": "C3P/mcp-sentiment-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-22T10:22:29.000Z"
+    },
+    {
+      "_id": "682f6b1661dc22f697057dba",
+      "id": "hongdnn/mcp_server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-22T18:21:10.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/hongdnn-mcp_server:latest"
+      }
+    },
+    {
+      "_id": "682f90cf14c3c4496aa674d2",
+      "id": "thecodemaiden/mcp-course-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-22T21:02:07.000Z"
+    },
+    {
+      "_id": "6832f2adae081f9e44a5bbf9",
+      "id": "serverdaun/mcp-sentiment-test",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-25T10:36:29.000Z"
+    },
+    {
+      "_id": "68345bfbfe87d9433d20d346",
+      "id": "alexcpn/code-review-mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "region:us"
+      ],
+      "createdAt": "2025-05-26T12:18:03.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/alexcpn-code-review-mcp-server:latest"
+      }
+    },
+    {
+      "_id": "683479afb26c2d79da7db427",
+      "id": "selinazarzour/MCP_Research_Server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "region:us"
+      ],
+      "createdAt": "2025-05-26T14:24:47.000Z"
+    },
+    {
+      "_id": "6834d853c5629846d4b7cd13",
+      "id": "imrashi/mcp-server-sentiment-analysis",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "docker",
+      "tags": [
+        "docker",
+        "streamlit",
+        "region:us"
+      ],
+      "createdAt": "2025-05-26T21:08:35.000Z",
+      "docker_info": {
+        "is_docker_space": true,
+        "requires_gpu": false,
+        "docker_image": "registry.hf.space/imrashi-mcp-server-sentiment-analysis:latest"
+      }
+    },
+    {
+      "_id": "6835ac61edd607715395d318",
+      "id": "slimaneMakh/mcp-server",
+      "likes": 0,
+      "trendingScore": 0,
+      "private": false,
+      "sdk": "gradio",
+      "tags": [
+        "gradio",
+        "mcp-server",
+        "region:us"
+      ],
+      "createdAt": "2025-05-27T12:13:21.000Z"
+    }
+  ]
+}
