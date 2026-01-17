@@ -41,7 +41,7 @@ pygmentsUseClasses = false
 pygmentsUseClassic = false
 #pygmentsOptions = "linenos=table"
 # See https://help.farbox.com/pygments.html
-pygmentsStyle = "github-dark"
+pygmentsStyle = "monokai"
 
 # Configure how URLs look like per section.
 [permalinks]

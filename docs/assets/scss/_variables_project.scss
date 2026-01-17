@@ -1,0 +1,115 @@
+// MiladyOS Matrix Theme Variables
+// Override Docsy default variables for the Matrix aesthetic
+
+// ============================================================================
+// MATRIX COLOR DEFINITIONS
+// ============================================================================
+$matrix-black: #0a0a0a;
+$matrix-dark: #0d1117;
+$matrix-green: #00ff41;
+$matrix-green-dim: #00cc33;
+$matrix-green-glow: rgba(0, 255, 65, 0.5);
+$matrix-cyan: #00d4ff;
+$matrix-pink: #ff6b9d;
+$matrix-purple: #c44569;
+$matrix-text: #c9d1d9;
+$matrix-text-dim: #8b949e;
+
+// ============================================================================
+// BOOTSTRAP/DOCSY COLOR OVERRIDES
+// ============================================================================
+
+// Primary colors - Matrix Green
+$primary: $matrix-green;
+$secondary: $matrix-cyan;
+$success: $matrix-green;
+$info: $matrix-cyan;
+$warning: #ffc107;
+$danger: #dc3545;
+$light: $matrix-text;
+$dark: $matrix-dark;
+
+// Body
+$body-bg: $matrix-dark;
+$body-color: $matrix-text;
+
+// Links
+$link-color: $matrix-cyan;
+$link-hover-color: $matrix-green;
+
+// ============================================================================
+// TYPOGRAPHY
+// ============================================================================
+
+// Use monospace fonts for that terminal feel
+$font-family-sans-serif: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+$font-family-monospace: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+$font-family-base: $font-family-sans-serif;
+
+$headings-font-family: $font-family-monospace;
+$headings-color: $matrix-green;
+
+// ============================================================================
+// NAVBAR
+// ============================================================================
+$navbar-dark-color: $matrix-text;
+$navbar-dark-hover-color: $matrix-green;
+$navbar-dark-active-color: $matrix-green;
+$navbar-dark-brand-color: $matrix-green;
+$navbar-dark-brand-hover-color: $matrix-cyan;
+
+// ============================================================================
+// CODE BLOCKS
+// ============================================================================
+$code-color: $matrix-green;
+$code-bg: rgba($matrix-green, 0.1);
+
+$pre-color: $matrix-green;
+$pre-bg: $matrix-black;
+
+// ============================================================================
+// TABLES
+// ============================================================================
+$table-color: $matrix-text;
+$table-bg: rgba($matrix-black, 0.8);
+$table-border-color: rgba($matrix-green, 0.3);
+$table-striped-bg: rgba($matrix-green, 0.05);
+$table-hover-bg: rgba($matrix-green, 0.1);
+
+// ============================================================================
+// BORDERS & SHADOWS
+// ============================================================================
+$border-color: rgba($matrix-green, 0.3);
+$border-radius: 8px;
+$border-radius-sm: 4px;
+$border-radius-lg: 12px;
+
+$box-shadow: 0 0 20px $matrix-green-glow;
+$box-shadow-sm: 0 0 10px $matrix-green-glow;
+$box-shadow-lg: 0 0 30px $matrix-green-glow;
+
+// ============================================================================
+// DOCSY SPECIFIC OVERRIDES
+// ============================================================================
+
+// Sidebar
+$td-sidebar-bg-color: $matrix-black;
+$td-sidebar-border-color: rgba($matrix-green, 0.3);
+
+// Footer
+$td-footer-bg-color: $matrix-black;
+
+// Search
+$td-search-input-color: $matrix-green;
+
+// ============================================================================
+// CUSTOM PROPERTIES FOR CSS VARIABLES
+// ============================================================================
+:root {
+  --matrix-green: #{$matrix-green};
+  --matrix-green-glow: #{$matrix-green-glow};
+  --matrix-cyan: #{$matrix-cyan};
+  --matrix-pink: #{$matrix-pink};
+  --matrix-dark: #{$matrix-dark};
+  --matrix-black: #{$matrix-black};
+}
