@@ -245,7 +245,9 @@ class QMPController:
 
 class VoiceListener:
     """
-    Wake word detector using Vosk for offline speech recognition.
+    Wake word detector supporting multiple backends:
+    - Vosk (offline, Linux only)
+    - SpeechRecognition (cross-platform, uses Google API by default)
 
     Listens for "milady" and triggers callbacks.
     """
@@ -257,33 +259,64 @@ class VoiceListener:
         self._running = False
         self._callbacks: list[Callable[[], None]] = []
         self._thread: Optional[threading.Thread] = None
+        self._backend = None  # 'vosk' or 'speech_recognition'
 
     def initialize(self) -> bool:
-        """Initialize the Vosk speech recognition model"""
+        """Initialize speech recognition - tries vosk first, falls back to SpeechRecognition"""
+
+        # Try vosk first (offline, but Linux only)
+        if self._init_vosk():
+            self._backend = 'vosk'
+            return True
+
+        # Fall back to SpeechRecognition (cross-platform)
+        if self._init_speech_recognition():
+            self._backend = 'speech_recognition'
+            return True
+
+        logger.warning("No speech recognition backend available")
+        return False
+
+    def _init_vosk(self) -> bool:
+        """Try to initialize Vosk (offline recognition)"""
         try:
             from vosk import Model, KaldiRecognizer
-            import sounddevice as sd
-        except ImportError as e:
-            logger.error(f"Voice dependencies not installed: {e}")
-            logger.info("Install with: pip install vosk sounddevice")
+        except ImportError:
+            logger.debug("Vosk not available (no macOS ARM64 wheels)")
             return False
 
         model_path = self.config.vosk_model_path
-
-        # Check if model exists, download if not
         if not os.path.exists(model_path):
-            logger.info(f"Vosk model not found at {model_path}")
-            logger.info("Download from: https://alphacephei.com/vosk/models")
-            logger.info("Or run: python -c \"import vosk; vosk.Model(model_name='vosk-model-small-en-us-0.15')\"")
+            logger.debug(f"Vosk model not found at {model_path}")
             return False
 
         try:
             self.model = Model(model_path)
             self.recognizer = KaldiRecognizer(self.model, self.config.sample_rate)
-            logger.info("✓ Vosk speech recognition initialized")
+            logger.info("✓ Vosk speech recognition initialized (offline)")
             return True
         except Exception as e:
-            logger.error(f"Failed to initialize Vosk: {e}")
+            logger.debug(f"Vosk init failed: {e}")
+            return False
+
+    def _init_speech_recognition(self) -> bool:
+        """Initialize SpeechRecognition library (cross-platform)"""
+        try:
+            import speech_recognition as sr
+            self.recognizer = sr.Recognizer()
+            # Test microphone access
+            with sr.Microphone() as source:
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            logger.info("✓ SpeechRecognition initialized (uses Google API)")
+            return True
+        except ImportError:
+            logger.debug("SpeechRecognition not installed")
+            return False
+        except OSError as e:
+            logger.warning(f"No microphone available: {e}")
+            return False
+        except Exception as e:
+            logger.debug(f"SpeechRecognition init failed: {e}")
             return False
 
     def on_wake_word(self, callback: Callable[[], None]):
@@ -293,7 +326,7 @@ class VoiceListener:
     def start(self):
         """Start listening for the wake word"""
         if not self.recognizer:
-            logger.error("Cannot start: Vosk not initialized")
+            logger.error("Cannot start: speech recognition not initialized")
             return
 
         self._running = True
@@ -307,12 +340,29 @@ class VoiceListener:
         if self._thread:
             self._thread.join(timeout=2.0)
 
+    def _trigger_callbacks(self, text: str):
+        """Trigger all registered callbacks"""
+        logger.info(f"🎯 Wake word detected in: '{text}'")
+        for callback in self._callbacks:
+            try:
+                callback()
+            except Exception as e:
+                logger.error(f"Wake word callback error: {e}")
+
     def _listen_loop(self):
         """Background thread for continuous listening"""
+        if self._backend == 'vosk':
+            self._listen_vosk()
+        else:
+            self._listen_speech_recognition()
+
+    def _listen_vosk(self):
+        """Vosk-based listening loop"""
         try:
             import sounddevice as sd
+            from vosk import KaldiRecognizer
         except ImportError:
-            logger.error("sounddevice not installed")
+            logger.error("Vosk/sounddevice not available")
             return
 
         def audio_callback(indata, frames, time_info, status):
@@ -323,12 +373,7 @@ class VoiceListener:
                     result = json.loads(self.recognizer.Result())
                     text = result.get('text', '').lower()
                     if self.config.wake_word.lower() in text:
-                        logger.info(f"🎯 Wake word detected: '{text}'")
-                        for callback in self._callbacks:
-                            try:
-                                callback()
-                            except Exception as e:
-                                logger.error(f"Wake word callback error: {e}")
+                        self._trigger_callbacks(text)
 
         try:
             with sd.RawInputStream(
@@ -341,7 +386,55 @@ class VoiceListener:
                 while self._running:
                     time.sleep(0.1)
         except Exception as e:
-            logger.error(f"Audio stream error: {e}")
+            logger.error(f"Vosk audio stream error: {e}")
+
+    def _listen_speech_recognition(self):
+        """SpeechRecognition-based listening loop"""
+        try:
+            import speech_recognition as sr
+        except ImportError:
+            logger.error("SpeechRecognition not installed")
+            return
+
+        mic = sr.Microphone()
+
+        while self._running:
+            try:
+                with mic as source:
+                    # Listen for audio with timeout
+                    audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=3)
+
+                try:
+                    # Use Google's free API for recognition
+                    text = self.recognizer.recognize_google(audio).lower()
+                    logger.debug(f"Heard: {text}")
+
+                    # Fuzzy matching for "milady" - Google doesn't know this word well
+                    # It often hears: "my lady", "melody", "mail id", "mill lady", etc.
+                    milady_variants = [
+                        'milady', 'my lady', 'melody', 'mill lady', 'moolady',
+                        'me lady', 'mail lady', 'mail id', 'malady', 'm lady',
+                        'lady'  # If they just say "lady" close enough!
+                    ]
+                    wake_word = self.config.wake_word.lower()
+
+                    if wake_word in text or any(v in text for v in milady_variants):
+                        self._trigger_callbacks(text)
+
+                except sr.UnknownValueError:
+                    # Couldn't understand audio - that's fine
+                    pass
+                except sr.RequestError as e:
+                    logger.warning(f"Google API error: {e}")
+                    time.sleep(1)
+
+            except sr.WaitTimeoutError:
+                # No speech detected in timeout - that's fine
+                pass
+            except Exception as e:
+                if self._running:
+                    logger.error(f"Listen error: {e}")
+                    time.sleep(0.5)
 
 
 class MiladySpeaker:
