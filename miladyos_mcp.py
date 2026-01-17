@@ -131,7 +131,12 @@ class Config:
         "execute_command",
         "read_query",
         "list_db_tables",
-        "describe_db_table"
+        "describe_db_table",
+        # AlphaEvolve tools
+        "evolve_template",
+        "evolution_status",
+        "list_evolution_goals",
+        "list_evolved_templates"
     ]
 
     # Jenkins credentials - loaded from environment with sensible defaults
@@ -1033,6 +1038,78 @@ class MiladyOSToolServer:
                         }
                     },
                     "required": ["table_name"]
+                }
+            },
+            # ===== AlphaEvolve Tools =====
+            "evolve_template": {
+                "name": "Evolve Template",
+                "description": "Start evolutionary optimization of a Jenkins pipeline template using AlphaEvolve. Uses LLM-powered mutations and quality-diversity algorithms to find optimal pipeline configurations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "template_name": {
+                            "type": "string",
+                            "description": "Name of the template to evolve (without .Jenkinsfile extension)"
+                        },
+                        "goal": {
+                            "type": "string",
+                            "description": "Evolution goal: speed, reliability, resources, security, or observability",
+                            "enum": ["speed", "reliability", "resources", "security", "observability"]
+                        },
+                        "max_generations": {
+                            "type": "integer",
+                            "description": "Maximum number of evolution generations (default: 50)",
+                            "default": 50
+                        },
+                        "population_size": {
+                            "type": "integer",
+                            "description": "Population size for evolution (default: 20)",
+                            "default": 20
+                        },
+                        "run_async": {
+                            "type": "boolean",
+                            "description": "Run evolution in background (default: true for long evolutions)",
+                            "default": True
+                        }
+                    },
+                    "required": ["template_name", "goal"]
+                }
+            },
+            "evolution_status": {
+                "name": "Evolution Status",
+                "description": "Check the status of an ongoing or completed evolution run",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "evolution_id": {
+                            "type": "string",
+                            "description": "ID of the evolution to check"
+                        }
+                    },
+                    "required": ["evolution_id"]
+                }
+            },
+            "list_evolution_goals": {
+                "name": "List Evolution Goals",
+                "description": "List all available evolution optimization goals with their descriptions and hints",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            "list_evolved_templates": {
+                "name": "List Evolved Templates",
+                "description": "List all evolved template versions in the evolved_templates directory",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "template_name": {
+                            "type": "string",
+                            "description": "Optional: filter by original template name"
+                        }
+                    },
+                    "required": []
                 }
             }
         }
@@ -2220,7 +2297,251 @@ class MiladyOSToolServer:
                         "status": "error",
                         "table_name": table_name
                     }
-                
+
+            # ===== AlphaEvolve Tool Handlers =====
+            elif tool_id == "evolve_template":
+                template_name = arguments.get("template_name")
+                goal = arguments.get("goal", "reliability")
+                max_generations = arguments.get("max_generations", 50)
+                population_size = arguments.get("population_size", 20)
+                run_async = arguments.get("run_async", True)
+
+                if not template_name:
+                    return {
+                        "success": False,
+                        "error": "template_name is required",
+                        "status": "error"
+                    }
+
+                try:
+                    # Import AlphaEvolve engine
+                    from alpha_evolve import AlphaEvolveEngine, EVOLUTION_GOALS, load_config
+                    from pathlib import Path
+
+                    # Check template exists
+                    template_path = Path(Config.TEMPLATES_DIR) / f"{template_name}.Jenkinsfile"
+                    if not template_path.exists():
+                        return {
+                            "success": False,
+                            "error": f"Template not found: {template_name}",
+                            "status": "error"
+                        }
+
+                    # Validate goal
+                    if goal not in EVOLUTION_GOALS:
+                        return {
+                            "success": False,
+                            "error": f"Unknown goal: {goal}. Available: {list(EVOLUTION_GOALS.keys())}",
+                            "status": "error"
+                        }
+
+                    # Load config and create engine
+                    config = load_config()
+                    config["evolution"]["max_generations"] = max_generations
+                    config["evolution"]["population_size"] = population_size
+
+                    engine = AlphaEvolveEngine(config)
+
+                    if run_async:
+                        # Start evolution in background
+                        evolution_id = str(uuid.uuid4())
+
+                        async def run_evolution():
+                            return await engine.evolve(str(template_path), goal)
+
+                        # Store task for later status check
+                        task = asyncio.create_task(run_evolution())
+
+                        # Store in Redis for status tracking
+                        if REDIS_AVAILABLE:
+                            try:
+                                redis_host, redis_port = get_redis_config()
+                                r = redis.Redis(host=redis_host, port=redis_port)
+                                r.hset(f"miladyos:evolve:running:{evolution_id}", mapping={
+                                    "template_name": template_name,
+                                    "goal": goal,
+                                    "status": "running",
+                                    "started_at": time.time()
+                                })
+                                r.expire(f"miladyos:evolve:running:{evolution_id}", 86400)
+                            except Exception as redis_err:
+                                logger.warning(f"Could not store evolution status in Redis: {redis_err}")
+
+                        return {
+                            "success": True,
+                            "evolution_id": evolution_id,
+                            "template_name": template_name,
+                            "goal": goal,
+                            "status": "started",
+                            "message": f"Evolution started in background. Use evolution_status to check progress."
+                        }
+                    else:
+                        # Run synchronously (blocking)
+                        results = await engine.evolve(str(template_path), goal)
+                        return {
+                            "success": True,
+                            "status": "completed",
+                            **results
+                        }
+
+                except ImportError as ie:
+                    logger.error(f"AlphaEvolve not available: {ie}")
+                    return {
+                        "success": False,
+                        "error": "AlphaEvolve module not available. Ensure alpha_evolve.py exists.",
+                        "status": "error"
+                    }
+                except Exception as e:
+                    logger.error(f"Evolution error: {e}")
+                    import traceback
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "traceback": traceback.format_exc(),
+                        "status": "error"
+                    }
+
+            elif tool_id == "evolution_status":
+                evolution_id = arguments.get("evolution_id")
+
+                if not evolution_id:
+                    return {
+                        "success": False,
+                        "error": "evolution_id is required",
+                        "status": "error"
+                    }
+
+                try:
+                    if REDIS_AVAILABLE:
+                        redis_host, redis_port = get_redis_config()
+                        r = redis.Redis(host=redis_host, port=redis_port)
+
+                        # Check running evolutions
+                        running_key = f"miladyos:evolve:running:{evolution_id}"
+                        state_key = f"miladyos:evolve:state:{evolution_id}"
+
+                        running_data = r.hgetall(running_key)
+                        state_data = r.get(state_key)
+
+                        if running_data:
+                            # Decode bytes to strings
+                            running_info = {k.decode(): v.decode() for k, v in running_data.items()}
+                            return {
+                                "success": True,
+                                "evolution_id": evolution_id,
+                                "status": running_info.get("status", "unknown"),
+                                "template_name": running_info.get("template_name"),
+                                "goal": running_info.get("goal"),
+                                "started_at": running_info.get("started_at")
+                            }
+                        elif state_data:
+                            return {
+                                "success": True,
+                                "evolution_id": evolution_id,
+                                "state": json.loads(state_data)
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "error": f"Evolution {evolution_id} not found",
+                                "status": "not_found"
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": "Redis not available for status tracking",
+                            "status": "error"
+                        }
+                except Exception as e:
+                    logger.error(f"Error checking evolution status: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error"
+                    }
+
+            elif tool_id == "list_evolution_goals":
+                try:
+                    from alpha_evolve import EVOLUTION_GOALS
+
+                    goals_info = []
+                    for name, goal in EVOLUTION_GOALS.items():
+                        goals_info.append({
+                            "name": name,
+                            "description": goal.description,
+                            "fitness_weights": goal.fitness_weights,
+                            "optimization_hints": goal.prompt_hints[:3]  # First 3 hints
+                        })
+
+                    return {
+                        "success": True,
+                        "goals": goals_info,
+                        "count": len(goals_info),
+                        "status": "success"
+                    }
+                except ImportError:
+                    return {
+                        "success": False,
+                        "error": "AlphaEvolve module not available",
+                        "status": "error"
+                    }
+
+            elif tool_id == "list_evolved_templates":
+                template_filter = arguments.get("template_name")
+
+                try:
+                    from pathlib import Path
+
+                    evolved_dir = Path("evolved_templates")
+                    if not evolved_dir.exists():
+                        return {
+                            "success": True,
+                            "templates": [],
+                            "count": 0,
+                            "message": "No evolved templates yet"
+                        }
+
+                    templates = []
+                    for f in evolved_dir.glob("*.Jenkinsfile"):
+                        # Parse filename: {name}_evolved_{goal}_{timestamp}.Jenkinsfile
+                        parts = f.stem.split("_evolved_")
+                        if len(parts) >= 2:
+                            original_name = parts[0]
+
+                            # Filter if specified
+                            if template_filter and template_filter not in original_name:
+                                continue
+
+                            # Read header for metadata
+                            content = f.read_text()
+                            metadata = {}
+                            for line in content.split("\n")[:10]:
+                                if line.startswith("// "):
+                                    if ": " in line:
+                                        key, val = line[3:].split(": ", 1)
+                                        metadata[key.lower().replace(" ", "_")] = val
+
+                            templates.append({
+                                "filename": f.name,
+                                "original_template": original_name,
+                                "path": str(f),
+                                "metadata": metadata
+                            })
+
+                    return {
+                        "success": True,
+                        "templates": templates,
+                        "count": len(templates),
+                        "status": "success"
+                    }
+                except Exception as e:
+                    logger.error(f"Error listing evolved templates: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error"
+                    }
+
             else:
                 logger.error(f"Unknown tool: {tool_id}")
                 return {

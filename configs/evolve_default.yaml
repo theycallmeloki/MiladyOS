@@ -1,0 +1,110 @@
+# MiladyOS AlphaEvolve Configuration
+# Uses OpenEvolve with local LLM infrastructure
+
+llm:
+  # Primary model for high-quality mutations (use local vLLM/Ollama)
+  primary:
+    model: "ollama/deepseek-r1:14b"
+    api_base: "http://localhost:11434/v1"
+    temperature: 0.8
+    max_tokens: 4096
+
+  # Secondary model for rapid iteration (faster, cheaper)
+  secondary:
+    model: "ollama/qwen2.5-coder:7b"
+    api_base: "http://localhost:11434/v1"
+    temperature: 0.9
+    max_tokens: 2048
+
+  # Optional: Use LiteLLM proxy for model routing
+  proxy:
+    enabled: true
+    api_base: "http://localhost:4000/v1"
+    # Routes to best available model
+
+# Evolution parameters
+evolution:
+  # Population settings
+  population_size: 20
+  num_islands: 4
+  migration_interval: 5
+  migration_size: 2
+
+  # Selection
+  tournament_size: 3
+  elite_ratio: 0.2
+
+  # Mutation
+  mutation_rate: 0.4
+  crossover_rate: 0.6
+
+  # Termination
+  max_generations: 100
+  stagnation_limit: 15
+  target_fitness: 0.95
+
+  # Reproducibility
+  seed: 42
+
+# Quality-Diversity (MAP-Elites) settings
+map_elites:
+  enabled: true
+  grid_resolution: 20
+  feature_dimensions:
+    - name: "execution_speed"
+      min: 0.0
+      max: 1.0
+    - name: "reliability"
+      min: 0.0
+      max: 1.0
+    - name: "resource_efficiency"
+      min: 0.0
+      max: 1.0
+
+# Evaluator configuration
+evaluator:
+  # Cascade evaluation (fast checks first)
+  cascade:
+    - name: "syntax"
+      timeout: 5
+      weight: 0.1
+    - name: "dry_run"
+      timeout: 30
+      weight: 0.2
+    - name: "execution"
+      timeout: 300
+      weight: 0.7
+
+  # Metrics to extract
+  metrics:
+    - "duration_seconds"
+    - "success_rate"
+    - "resource_usage"
+    - "error_count"
+    - "warning_count"
+
+# Jenkins integration
+jenkins:
+  url: "${JENKINS_URL:-http://localhost:8080}"
+  username: "${JENKINS_USER:-milady}"
+  password: "${JENKINS_PASSWORD:-milady}"
+  test_job_prefix: "evolve-test-"
+  cleanup_test_jobs: true
+
+# Storage
+storage:
+  # Program database (Redis)
+  redis:
+    url: "${REDIS_URL:-redis://localhost:6379}"
+    prefix: "miladyos:evolve:"
+    ttl: 86400  # 24 hours
+
+  # Local file backup
+  backup_dir: "evolved_templates"
+  keep_generations: 10
+
+# Logging
+logging:
+  level: "INFO"
+  file: "logs/evolution.log"
+  console: true

@@ -507,6 +507,35 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 
 ---
 
+## MiladyOS AlphaEvolve
+
+
+```
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    MiladyOS AlphaEvolve                         │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐     │
+  │  │ OpenEvolve   │   │ LiteLLM      │   │ Jenkins          │     │
+  │  │ Core Engine  │◄──┤ Ensemble     │   │ Test Environment │     │
+  │  └──────┬───────┘   └──────────────┘   └────────┬─────────┘     │
+  │         │                                        │              │
+  │         ▼                                        ▼              │
+  │  ┌──────────────┐                       ┌──────────────────┐    │
+  │  │ Program DB   │                       │ Evaluator Pool   │    │
+  │  │ (Redis)      │◄──────────────────────┤ - Syntax Check   │    │
+  │  └──────────────┘                       │ - Dry Run        │    │
+  │                                         │ - Live Execution │    │
+  │                                         │ - Metrics Parser │    │
+  │                                         └──────────────────┘    │
+  └─────────────────────────────────────────────────────────────────┘
+
+```
+
+
+---
+
+
 ## The Discovery Pattern
 
 > "Those who truly understand MiladyOS don't find it - it finds them."
@@ -551,6 +580,106 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 
 ---
 
+## AlphaEvolve Architecture
+
+MiladyOS includes a self-improving evolution system inspired by Google DeepMind's AlphaEvolve.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        MiladyOS AlphaEvolve System                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                          Evolution Loop                               │  │
+│  │                                                                       │  │
+│  │   ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐       │  │
+│  │   │ Template │───▶│   LLM    │───▶│ Evaluate │───▶│ Select & │       │  │
+│  │   │   Pool   │    │ Mutation │    │ Fitness  │    │ Reproduce│       │  │
+│  │   └──────────┘    └──────────┘    └──────────┘    └────┬─────┘       │  │
+│  │        ▲                                               │              │  │
+│  │        └───────────────────────────────────────────────┘              │  │
+│  │                                                                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐  │
+│  │   Island 1          │  │   Island 2          │  │   Island 3          │  │
+│  │   ┌───┐ ┌───┐ ┌───┐ │  │   ┌───┐ ┌───┐ ┌───┐ │  │   ┌───┐ ┌───┐ ┌───┐ │  │
+│  │   │ A │ │ B │ │ C │ │  │   │ D │ │ E │ │ F │ │  │   │ G │ │ H │ │ I │ │  │
+│  │   └───┘ └───┘ └───┘ │  │   └───┘ └───┘ └───┘ │  │   └───┘ └───┘ └───┘ │  │
+│  │       Population     │  │       Population     │  │       Population     │  │
+│  └──────────┬──────────┘  └──────────┬──────────┘  └──────────┬──────────┘  │
+│             │                        │                        │              │
+│             └────────────────────────┼────────────────────────┘              │
+│                                      │                                       │
+│                              ┌───────▼───────┐                               │
+│                              │   Migration    │                              │
+│                              │  (Every N gen) │                              │
+│                              └───────┬───────┘                               │
+│                                      │                                       │
+│                              ┌───────▼───────┐                               │
+│                              │  MAP-Elites   │                               │
+│                              │   Archive     │                               │
+│                              │ (Quality-     │                               │
+│                              │  Diversity)   │                               │
+│                              └───────────────┘                               │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                        Cascade Evaluator                                ││
+│  │                                                                         ││
+│  │  Syntax Check ──▶ Static Analysis ──▶ Dry Run ──▶ Live Execution        ││
+│  │     (fast)           (fast)          (medium)       (slow)              ││
+│  │                                                                         ││
+│  │  Early termination: Invalid candidates eliminated at each stage         ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                             │
+│  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐   │
+│  │    Ollama     │ │    vLLM       │ │   LiteLLM     │ │    Redis      │   │
+│  │  DeepSeek-R1  │ │   QwQ-32B     │ │    Proxy      │ │   State DB    │   │
+│  │  Qwen Coder   │ │  Deep-Coder   │ │   (Router)    │ │   Archive     │   │
+│  └───────────────┘ └───────────────┘ └───────────────┘ └───────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Evolution Goals
+
+The system optimizes pipelines for 5 configurable goals:
+
+| Goal | Focus | Key Metrics |
+|------|-------|-------------|
+| **Speed** | Execution time | Parallelism, caching, shallow clones |
+| **Reliability** | Success rate | Error handling, retries, timeouts |
+| **Resources** | Efficiency | Memory limits, cleanup, smaller images |
+| **Security** | Best practices | Credentials, scanning, no hardcoded secrets |
+| **Observability** | Monitoring | Logging, metrics, notifications |
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| **LLM Ensemble** | Generates mutations using local models (DeepSeek, Qwen) |
+| **Island Populations** | Parallel evolution prevents premature convergence |
+| **MAP-Elites Archive** | Maintains diverse high-quality solutions |
+| **Cascade Evaluator** | Fast filtering: syntax → static → dry-run → execution |
+| **Meta-Evolution** | Optimizes the optimizer's own parameters |
+
+### Data Flow
+
+```
+Template ──▶ EVOLVE-BLOCK Parser ──▶ LLM Mutation ──▶ Fitness Evaluation
+                                          │                    │
+                                          ▼                    ▼
+                                    New Candidate        Selection
+                                          │                    │
+                                          └──────────┬─────────┘
+                                                     │
+                                                     ▼
+                                          evolved_templates/
+                                          {name}_evolved_{goal}_{timestamp}.Jenkinsfile
+```
+
+---
+
 ## Component Reference Table
 
 | Component | Port | Protocol | Purpose |
@@ -573,7 +702,11 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 
 ## Next Steps
 
-- [Configuration Reference](/docs/configuration/) - All the knobs and handles
 - [Getting Started](/docs/getting-started/) - Begin your journey
+- [AlphaEvolve](/docs/alpha-evolve/) - Self-improving pipeline evolution
+- [CLI Reference](/docs/cli-reference/) - Command-line interface
+- [Pipeline Templates](/docs/pipeline-templates/) - Pre-built CI/CD templates
+- [APIs & Development](/docs/apis/) - MCP tools and REST APIs
+- [Configuration Reference](/docs/configuration/) - All the knobs and handles
 - [Operations](/docs/operations/) - Day-2 procedures
 - [Security](/docs/security/) - Lock down your deployment

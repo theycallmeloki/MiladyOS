@@ -7,26 +7,31 @@ requires-python = ">=3.12"
 dependencies = [
     # Core MCP dependencies
     "mcp[cli]>=1.6.0",
-    
+
     # Jenkins integration
     "python-jenkins>=1.8.0",
-    
+
     # Async support
     "asyncio>=3.4.3",
     "anyio>=4.2.0",
-    
+
     # CLI and utilities
     "click>=8.1.7",
     "colorlog>=6.8.0",
     "python-dotenv>=1.0.0",
-    
+
     # Optional Redis support
     "redis>=5.0.0",
-    
+
     # HTTP/SSE transport
     "uvicorn>=0.25.0",
     "starlette>=0.36.0",
     "mcp[sse]>=1.6.0",
+
+    # AlphaEvolve - Evolutionary optimization
+    "openevolve>=0.1.0",
+    "litellm>=1.0.0",
+    "pyyaml>=6.0.0",
 ]
 
 [project.scripts]
