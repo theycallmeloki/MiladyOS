@@ -5,7 +5,6 @@
 - **Name:** Loki San
 - **What to call them:** Loki, or operator
 - **Handle:** @ogmilady (theycallmeloki on GitHub)
-- **Timezone:** Asia/Calcutta (GMT+5:30)
 - **Notes:** Builder of MiladyOS - a distributed consciousness computing framework
 
 ## Context
