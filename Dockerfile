@@ -28,6 +28,9 @@ RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearm
        tee /etc/apt/sources.list.d/nvidia-container-toolkit.list \
     && apt-get update \
     && apt-get install -y nvidia-container-toolkit
+
+# Install iproute2 and avahi-daemon
+RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git wget zstd libportaudio2 portaudio19-dev libasound2-dev
     
 # Install Ollama
 RUN curl https://ollama.ai/install.sh | sh
@@ -55,9 +58,6 @@ RUN ARCH=$(dpkg --print-architecture) && curl -LO "https://dl.k8s.io/release/$(c
 # Add helm
 RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 \
     && chmod +x get_helm.sh && ./get_helm.sh
-
-# Install iproute2 and avahi-daemon
-RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git wget
 
 # Install k3sup
 RUN curl -sLS https://get.k3sup.dev | sh
