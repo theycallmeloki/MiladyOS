@@ -1,5 +1,5 @@
 # Use an official Jenkins image as a parent image
-FROM jenkins/jenkins:lts-jdk11
+FROM jenkins/jenkins:lts-jdk21
 
 # Define Pachctl, Caddy versions
 ENV PACHCTL_TAG_VER 1.12.5
@@ -19,15 +19,6 @@ RUN curl -fsSL https://get.docker.com -o get-docker.sh && \
 
 # Install Talos binary
 RUN curl -sL https://talos.dev/install | sh
-
-
-# Install NVIDIA Container Toolkit
-RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
-    && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-       sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-       tee /etc/apt/sources.list.d/nvidia-container-toolkit.list \
-    && apt-get update \
-    && apt-get install -y nvidia-container-toolkit
 
 # Install iproute2 and avahi-daemon
 RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git wget zstd libportaudio2 portaudio19-dev libasound2-dev
@@ -108,185 +99,51 @@ COPY templeos/ /opt/templeos/scripts/
 
 RUN git clone https://github.com/ggml-org/llama.cpp /llamacpp
 
-# Add GPU development dependencies based on architecture
-RUN apt-get update && apt-get install -y wget software-properties-common
-
-# For NVIDIA: add CUDA repo and install minimal toolkit (no drivers / no nvvp)
-RUN set -eux; \
-    if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        gnupg \
-        wget \
-        apt-transport-https \
-        software-properties-common; \
-      # add CUDA keyring and repo
-      wget -q https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/cuda-keyring_1.0-1_all.deb -O /tmp/cuda-keyring.deb; \
-      dpkg -i /tmp/cuda-keyring.deb || true; \
-      rm -f /tmp/cuda-keyring.deb; \
-      echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/ /" > /etc/apt/sources.list.d/cuda-debian11-x86_64.list; \
-      apt-get update; \
-      # Install only the toolkit/runtime dev pieces. Do NOT install drivers or nvvp (visual profiler) in container.
-      apt-get install -y --no-install-recommends --no-upgrade \
-        cuda-toolkit-11-8 \
-        cuda-cudart-dev-11-8 \
-        cuda-nvcc-11-8 \
-        libcublas-11-8 \
-        libcublas-dev-11-8 \
-        libcurl4-openssl-dev \
-        curl \
-        ccache || { \
-          # attempt to fix broken installs if dpkg left partial state, then retry once
-          apt-get -f install -y && apt-get install -y --no-install-recommends \
-            cuda-toolkit-11-8 \
-            cuda-cudart-dev-11-8 \
-            cuda-nvcc-11-8 \
-            libcublas-11-8 \
-            libcublas-dev-11-8 \
-            libcurl4-openssl-dev \
-            curl \
-            ccache; \
-        }; \
-      # cleanup apt lists to keep image small
-      apt-get clean; rm -rf /var/lib/apt/lists/*; \
-      # set CUDA env (toolkit only)
-      mkdir -p /etc/profile.d; \
-      echo 'export CUDA_HOME=/usr/local/cuda-11.8' > /etc/profile.d/cuda.sh; \
-      echo 'export PATH=${CUDA_HOME}/bin:${PATH}' >> /etc/profile.d/cuda.sh; \
-      echo 'export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}' >> /etc/profile.d/cuda.sh; \
-      echo 'export CUDACXX=${CUDA_HOME}/bin/nvcc' >> /etc/profile.d/cuda.sh; \
-      echo 'export NVCC_FLAGS="-allow-unsupported-compiler"' >> /etc/profile.d/cuda.sh; \
-    fi
-
-
-# For AMD: Install minimal ROCm components
-RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-    apt-get update && \
-    apt-get install -y libnuma-dev gnupg2 python3-setuptools python3-wheel wget && \
-    mkdir -p /etc/apt/keyrings && \
-    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor > /etc/apt/keyrings/rocm.gpg && \
-    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/5.4.3 jammy main" \
-        > /etc/apt/sources.list.d/rocm.list && \
-    apt-get update && \
-    # Install only the minimal components needed for ROCm/HIP development
-    apt-get install -y --no-install-recommends --allow-downgrades \
-        rocm-device-libs \
-        hsakmt-roct \
-        rocm-smi \
-        hip-base \
-        hip-runtime-amd \
-        hipify-clang \
-        rocm-cmake \
-        rocm-core && \
-    # Add environment variables
-    echo 'export PATH=$PATH:/opt/rocm/bin:/opt/rocm/hip/bin:/opt/rocm/opencl/bin' >> /etc/profile.d/rocm.sh && \
-    echo 'export HSA_OVERRIDE_GFX_VERSION=10.3.0' >> /etc/profile.d/rocm.sh && \
-    # Create symlinks for compatibility
-    mkdir -p /opt/rocm/include/hip && \
-    ln -sf /opt/rocm/hip/include/* /opt/rocm/include/hip/ 2>/dev/null || true; \
-fi
-
-# Common dependencies for both architectures
-RUN apt-get install -y libcurl4-openssl-dev curl ccache
-
-# Set environment variables for CUDA (for NVIDIA builds)
-ENV CUDA_HOME=/usr/local/cuda-11.8
-ENV PATH=${CUDA_HOME}/bin:${PATH}
-ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
-ENV CUDACXX=${CUDA_HOME}/bin/nvcc
-# Allow using unsupported compiler with CUDA as a backup option
-ENV NVCC_FLAGS="-allow-unsupported-compiler"
-
-# Set environment variables for ROCm (for AMD builds)
-ENV PATH=$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/opencl/bin
-ENV HSA_OVERRIDE_GFX_VERSION=10.3.0
+# Install common build dependencies
+RUN apt-get update && apt-get install -y libcurl4-openssl-dev curl ccache wget
 
 WORKDIR /llamacpp
 
-# Install GCC 11 which is supported by CUDA 11.8
-RUN apt-get update && apt-get install -y gcc-11 g++-11 && \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 11 && \
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 11 && \
-    update-alternatives --set gcc /usr/bin/gcc-11 && \
-    update-alternatives --set g++ /usr/bin/g++-11
+# Install GCC 11 using the Bookworm bridge (gcc-11 is in Bookworm, not Bullseye)
+RUN set -eux; \
+    # 1. Add Bookworm repository
+    echo "deb http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list.d/bookworm.list; \
+    \
+    # 2. Update apt lists
+    apt-get update || true; \
+    \
+    # 3. Install gcc-11 and related packages from bookworm
+    apt-get install -y --no-install-recommends -t bookworm \
+        gcc-11 \
+        g++-11 \
+        gcc-11-base \
+        libtinfo5; \
+    \
+    # 4. Set up the links
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 11 --slave /usr/bin/g++ g++ /usr/bin/g++-11; \
+    update-alternatives --set gcc /usr/bin/gcc-11; \
+    \
+    # 5. Clean up
+    rm /etc/apt/sources.list.d/bookworm.list; \
+    apt-get update || true
 
-# Create stubs for CUDA libraries
-RUN mkdir -p /usr/local/cuda-11.8/lib64/stubs && \
-    touch /usr/local/cuda-11.8/lib64/stubs/libcuda.so && \
-    ln -sf /usr/local/cuda-11.8/lib64/stubs/libcuda.so /usr/local/cuda-11.8/lib64/stubs/libcuda.so.1 && \
-    echo "/usr/local/cuda-11.8/lib64/stubs" > /etc/ld.so.conf.d/cuda-stubs.conf && \
-    ldconfig
-
-# Patch the CMake file to avoid CUDA driver dependency
-RUN sed -i 's/target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/# Commented out: target_link_libraries(ggml-cuda PUBLIC CUDA::cuda_driver)/' /llamacpp/ggml/src/ggml-cuda/CMakeLists.txt
-
-# Force CUDA build when nvcc exists in image (useful for GPU-less build hosts that carry CUDA toolkit).
-# Default target architectures now include Pascal P40 (61), Turing (75), Ampere (80/86).
-# You can override target architectures at build time: docker build --build-arg CUDA_ARCHS="86;80;75;61" .
-ARG CUDA_ARCHS="86;80;75;61"
-ENV CUDA_ARCHS=${CUDA_ARCHS}
-
-# Detect if NVIDIA or AMD GPU is present and build accordingly
-RUN if command -v nvcc &> /dev/null; then \
-  echo "nvcc present in image -> forcing CUDA build (no host GPU required)"; \
-  mkdir -p build && cd build && \
-  export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
-  cmake .. -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
-            -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
-            -DLLAMA_NATIVE=OFF \
-            -DLLAMA_CURL=ON \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-  cmake --build . --config Release -j 8 && \
-  mkdir -p ../build-rpc && cd ../build-rpc && \
-  export LIBRARY_PATH=/usr/local/cuda-11.8/lib64/stubs:$LIBRARY_PATH && \
-  cmake .. -DLLAMA_RPC=ON -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" -DCMAKE_CUDA_COMPILER=${CUDACXX} \
-            -DCMAKE_CUDA_FLAGS="${NVCC_FLAGS}" \
-            -DLLAMA_NATIVE=OFF \
-            -DLLAMA_CURL=ON \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-  cmake --build . --config Release; \
-elif command -v hipcc &> /dev/null; then \
-  echo "hipcc present -> building HIP targets" && \
-  mkdir -p build && cd build && \
-  cmake .. -DGGML_HIP=ON \
-            -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
-            -DLLAMA_NATIVE=OFF \
-            -DLLAMA_CURL=ON \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-  cmake --build . --config Release -j 8 && \
-  mkdir -p ../build-rpc && cd ../build-rpc && \
-  cmake .. -DLLAMA_RPC=ON -DGGML_HIP=ON \
-            -DAMDGPU_TARGETS="gfx900;gfx906;gfx908;gfx1030" \
-            -DLLAMA_NATIVE=OFF \
-            -DLLAMA_CURL=ON \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-  cmake --build . --config Release; \
-else \
-  echo "No nvcc/hipcc found -> falling back to CPU-only build" && \
-  mkdir -p build && cd build && \
-  cmake .. -DLLAMA_NATIVE=OFF \
-            -DLLAMA_CURL=ON \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-  cmake --build . --config Release -j 8 && \
-  mkdir -p ../build-rpc && cd ../build-rpc && \
-  cmake .. -DLLAMA_RPC=ON \
-            -DLLAMA_NATIVE=OFF \
-            -DLLAMA_CURL=ON \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-            -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
-            -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
-  cmake --build . --config Release; \
-fi
+# Build llama.cpp with CPU-only support
+RUN echo "Building llama.cpp with CPU-only support" && \
+    mkdir -p build && cd build && \
+    cmake .. -DLLAMA_NATIVE=OFF \
+              -DLLAMA_CURL=ON \
+              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+              -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+              -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+    cmake --build . --config Release -j 8 && \
+    mkdir -p ../build-rpc && cd ../build-rpc && \
+    cmake .. -DLLAMA_RPC=ON \
+              -DLLAMA_NATIVE=OFF \
+              -DLLAMA_CURL=ON \
+              -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+              -DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu \
+              -DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so && \
+    cmake --build . --config Release
 
 WORKDIR /
 
@@ -393,7 +250,10 @@ RUN mkdir -p /opt/templeos && \
     # Move the Holy ISO to its proper place
     mv /templeos/TempleOS.ISO /opt/templeos/TempleOS.ISO && \
     # VERIFY again - Terry demands perfection
-    [ -f "/opt/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION FAILED: ISO not in correct location" && exit 1)
+    [ -f "/opt/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION FAILED: ISO not in correct location" && exit 1) && \
+    # Set permissions to ensure it's readable
+    chmod 644 /opt/templeos/TempleOS.ISO && \
+    ls -lh /opt/templeos/TempleOS.ISO
 
 # Create TempleOS launch scripts - The Terry Davis Way
 # Now with Milady Oracle serial bridge for bidirectional consciousness communication
@@ -490,7 +350,6 @@ __NOVNC_SH__
 # (Boot verification moved to runtime to avoid build environment issues)
 RUN [ -f "/opt/templeos/TempleOS.ISO" ] && \
     ls -lh /opt/templeos/TempleOS.ISO && \
-    file /opt/templeos/TempleOS.ISO && \
     echo "✓ TempleOS ISO verified - Ready for divine computing" || \
     (echo "HOLY MISSION FAILED: TempleOS ISO verification failed" && exit 1)
 
@@ -647,11 +506,6 @@ RUN mkdir -p /var/jenkins_home && chown -R jenkins:jenkins /var/jenkins_home
 # Add and set permissions for the startup script
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
-
-# Add and set permissions for the GPU monitoring scripts
-COPY nvidia.sh /nvidia.sh
-COPY amd.sh /amd.sh
-RUN chmod +x /nvidia.sh /amd.sh
 
 # Copy Nebula configuration files
 COPY certs/ca.crt certs/miladyos.crt certs/miladyos.key /etc/nebula/
