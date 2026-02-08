@@ -388,6 +388,15 @@ RUN set -eux; \
 # Install filebrowser
 RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
+# Install GoTTY for interactive web terminal
+RUN GOTTY_VERSION="1.5.0" && \
+    ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then GOTTY_ARCH="amd64"; \
+    elif [ "$ARCH" = "arm64" ]; then GOTTY_ARCH="arm64"; \
+    else GOTTY_ARCH="amd64"; fi && \
+    curl -sL "https://github.com/sorenisanerd/gotty/releases/download/v${GOTTY_VERSION}/gotty_v${GOTTY_VERSION}_linux_${GOTTY_ARCH}.tar.gz" | tar xz -C /usr/local/bin && \
+    chmod +x /usr/local/bin/gotty
+
 # Create a directory for filebrowser database and config
 RUN mkdir -p /etc/filebrowser-metrics
 RUN mkdir -p /etc/filebrowser-models
@@ -496,6 +505,9 @@ ENV JAVA_OPTS -Djenkins.install.runSetupWizard=false
 
 # Add JCasC configuration file
 COPY casc.yaml /usr/share/jenkins/ref/casc.yaml
+
+# Add custom Jenkins theme (Milady logo) - served via docs server
+COPY jenkins-theme/milady-theme.css /app/docs/public/theme/milady-theme.css
 ENV CASC_JENKINS_CONFIG /usr/share/jenkins/ref/casc.yaml
 COPY Caddyfile /etc/caddy/Caddyfile
 

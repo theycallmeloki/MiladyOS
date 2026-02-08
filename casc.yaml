@@ -36,6 +36,13 @@ security:
     authenticators:
     - global:
         strategy: triggeringUsersAuthorizationStrategy
+
+appearance:
+  simpleTheme:
+    elements:
+      - cssUrl:
+          url: "http://localhost:8081/theme/milady-theme.css"
+
 groovy:
   - script: >
       import hudson.model.User;

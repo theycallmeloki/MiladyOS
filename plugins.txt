@@ -174,7 +174,7 @@ simple-parameterized-builds-report
 slack
 slack-uploader
 snakeyaml-api
-sse-gateway
+sse-gateway:1.29
 ssh-credentials
 sshd
 ssh-slaves

@@ -290,6 +290,7 @@ else
     echo "Documentation not found at /app/docs/public, skipping docs server"
 fi
 
+
 # Start MCP server if main.py exists
 if [ -f "/app/main.py" ]; then
     echo "Starting MCP server..."
@@ -395,12 +396,37 @@ fi
 # Start headscale in background
 headscale serve --config /etc/headscale/config.yaml &
 
-sleep 3 
+sleep 3
 
 # Start tailscaled (client)
 tailscaled --state=/var/lib/tailscale/tailscaled.state &
 
 sleep 3
+
+# Start GoTTY web terminal if available
+if command -v gotty > /dev/null 2>&1; then
+    echo "Starting GoTTY web terminal on port 8088..."
+    # --permit-write allows input (interactive)
+    # --reconnect attempts to reconnect on disconnect
+    # --title-format sets the browser tab title
+    gotty --port 8088 \
+          --address 0.0.0.0 \
+          --permit-write \
+          --reconnect \
+          --title-format "MiladyOS Terminal" \
+          /bin/bash &
+    sleep 2
+
+    if pgrep -x "gotty" > /dev/null; then
+        echo "✓ GoTTY web terminal started on port 8088"
+        echo "✓ Access interactive terminal at: http://localhost:8088"
+    else
+        echo "WARNING: GoTTY did not start successfully"
+    fi
+else
+    echo "GoTTY not available, skipping web terminal"
+fi
+
 # Start Jenkins in the foreground
 # === Final: Jenkins (always starts) ===
 echo "=== Starting Jenkins ==="
