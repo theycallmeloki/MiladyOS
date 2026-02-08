@@ -9,3 +9,10 @@ yourfancydomain.com {
 localhost {
     reverse_proxy localhost:8080
 }
+
+# GoTTY interactive web terminal
+# Access via: http://localhost:8088 directly
+# Or via subdomain if DNS configured:
+terminal.yourfancydomain.com {
+    reverse_proxy localhost:8088
+}
