@@ -427,6 +427,30 @@ else
     echo "GoTTY not available, skipping web terminal"
 fi
 
+# Start Agentboard (web GUI for tmux - agent terminal interface)
+if command -v agentboard > /dev/null 2>&1; then
+    echo "Starting Agentboard on port 4040..."
+
+    # Initialize tmux session for agentboard (if not exists)
+    TMUX_SESSION="${TMUX_SESSION:-miladyos}"
+    if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+        echo "Creating tmux session: $TMUX_SESSION"
+        tmux new-session -d -s "$TMUX_SESSION"
+    fi
+
+    HOSTNAME=0.0.0.0 agentboard &
+    sleep 3
+
+    if pgrep -f "agentboard" > /dev/null || lsof -i:4040 > /dev/null 2>&1; then
+        echo "✓ Agentboard started on port 4040"
+        echo "✓ Access agent terminal interface at: http://localhost:4040"
+    else
+        echo "WARNING: Agentboard may not have started successfully"
+    fi
+else
+    echo "Agentboard not installed, skipping"
+fi
+
 # Start Jenkins in the foreground
 # === Final: Jenkins (always starts) ===
 echo "=== Starting Jenkins ==="

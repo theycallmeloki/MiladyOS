@@ -21,7 +21,7 @@ RUN curl -fsSL https://get.docker.com -o get-docker.sh && \
 RUN curl -sL https://talos.dev/install | sh
 
 # Install iproute2 and avahi-daemon
-RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git wget zstd libportaudio2 portaudio19-dev libasound2-dev
+RUN apt-get update && apt-get install -y iproute2 avahi-daemon cmake git wget zstd libportaudio2 portaudio19-dev libasound2-dev tmux
     
 # Install Ollama
 RUN curl https://ollama.ai/install.sh | sh
@@ -149,6 +149,16 @@ WORKDIR /
 
 # Node.js and npm are still needed for other parts
 RUN apt-get update && apt-get install -y nodejs npm
+
+# Install Agentboard
+# node-pty requires node-gyp compilation; Debian's node-gyp is broken (missing gyp module)
+# Fix: install gyp Python module and use system Python (not venv)
+RUN pip3 install gyp-next --break-system-packages && \
+    npm install -g @gbasin/agentboard --python=/usr/bin/python3
+
+# Agentboard environment - pipe-pane mode works in docker without TTY
+ENV TERMINAL_MODE=pipe-pane
+ENV TMUX_SESSION=miladyos
 
 # Install Go 1.22
 RUN apt-get update && \
@@ -496,6 +506,9 @@ RUN hugo mod get github.com/google/docsy@v0.8.0 && \
     hugo mod get && \
     npm i && \
     hugo --gc --minify
+
+# Reset working directory to /app
+WORKDIR /app
 
 # Switch back to the jenkins user
 USER jenkins
