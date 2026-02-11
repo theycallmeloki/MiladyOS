@@ -451,6 +451,13 @@ else
     echo "Agentboard not installed, skipping"
 fi
 
+# Ensure custom theme is in Jenkins userContent (survives persistent volumes)
+if [ -f /opt/jenkins-theme/milady-theme.css ]; then
+    mkdir -p /var/jenkins_home/userContent/theme
+    cp /opt/jenkins-theme/milady-theme.css /var/jenkins_home/userContent/theme/milady-theme.css
+    echo "✓ Milady theme installed to Jenkins userContent"
+fi
+
 # Start Jenkins in the foreground
 # === Final: Jenkins (always starts) ===
 echo "=== Starting Jenkins ==="

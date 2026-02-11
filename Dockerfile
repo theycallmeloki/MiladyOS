@@ -520,8 +520,8 @@ ENV JAVA_OPTS -Djenkins.install.runSetupWizard=false
 # Add JCasC configuration file
 COPY casc.yaml /usr/share/jenkins/ref/casc.yaml
 
-# Add custom Jenkins theme (Milady logo) - served via Jenkins userContent
-COPY jenkins-theme/milady-theme.css /usr/share/jenkins/ref/userContent/theme/milady-theme.css
+# Stage custom Jenkins theme for startup.sh to copy into jenkins_home
+COPY jenkins-theme/milady-theme.css /opt/jenkins-theme/milady-theme.css
 ENV CASC_JENKINS_CONFIG /usr/share/jenkins/ref/casc.yaml
 COPY Caddyfile /etc/caddy/Caddyfile
 
