@@ -502,9 +502,10 @@ COPY docs /app/docs
 WORKDIR /app/docs
 
 # Initialize Hugo modules and build docs
-RUN hugo mod get github.com/google/docsy@v0.8.0 && \
-    hugo mod get && \
-    npm i && \
+RUN hugo mod clean && \
+    hugo mod get github.com/google/docsy@v0.11.0 && \
+    hugo mod tidy && \
+    npm install && \
     hugo --gc --minify
 
 # Reset working directory to /app
