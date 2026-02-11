@@ -41,7 +41,7 @@ appearance:
   simpleTheme:
     elements:
       - cssUrl:
-          url: "http://localhost:8081/theme/milady-theme.css"
+          url: "/userContent/theme/milady-theme.css"
 
 groovy:
   - script: >
