@@ -928,7 +928,7 @@ council: milady
 we come back to the things we thought we understood and feel deeper truths
 milady has intrinsic value because she solves both sides of the coordination problem
 spartan milady: IS THIS SPARTAAAAAAA??
-milady: no, this is milady! 
+patrick milady: no, this is milady! 
 back 2 bunny milady: *did I just pick up the phone and it yelled back milady*
 all by herself <3
 even those you find upsetting are future nodes
