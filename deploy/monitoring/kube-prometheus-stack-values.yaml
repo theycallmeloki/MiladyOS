@@ -20,7 +20,16 @@ grafana:
     storageClassName: longhorn
     size: 5Gi
   ingress:
-    enabled: false  # We'll use Cloudflare tunnel instead
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-staging
+    hosts:
+    - grafana.transparentlyrotatableproxy.me
+    tls:
+    - secretName: grafana-transparentlyrotatableproxy-me-tls
+      hosts:
+      - grafana.transparentlyrotatableproxy.me
   sidecar:
     dashboards:
       enabled: true
