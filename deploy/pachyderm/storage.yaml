@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: etcd-storage
+  namespace: pachyderm
+  labels:
+    app: etcd
+    suite: pachyderm
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pachd-storage
+  namespace: pachyderm
+  labels:
+    app: pachd
+    suite: pachyderm
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pachyderm-storage-secret
+  namespace: pachyderm
+  labels:
+    suite: pachyderm
