@@ -14,13 +14,22 @@ The components must be installed in this specific order due to dependencies:
 
 1. **Longhorn** (Storage provider)
 2. **ArgoCD** (GitOps operator)
-3. **Monitoring Stack** (via ArgoCD app)
+3. **MetalLB + NGINX Ingress** (LAN-accessible ingress)
+4. **App of Apps** (deploys everything else via ArgoCD)
+5. **Monitoring Stack** (via ArgoCD app)
 
 ## Step 1: Install Longhorn Storage
 
 Longhorn provides distributed storage for all persistent volumes in the cluster.
 
 ```bash
+# Create namespace with privileged PSA (required for Longhorn's hostPath and privileged containers)
+kubectl create namespace longhorn-system
+kubectl label namespace longhorn-system \
+  pod-security.kubernetes.io/enforce=privileged \
+  pod-security.kubernetes.io/audit=privileged \
+  pod-security.kubernetes.io/warn=privileged
+
 # Add Longhorn Helm repository
 helm repo add longhorn https://charts.longhorn.io
 helm repo update
@@ -28,7 +37,6 @@ helm repo update
 # Install Longhorn with custom values
 helm install longhorn longhorn/longhorn \
   --namespace longhorn-system \
-  --create-namespace \
   --values deploy/longhorn-values.yaml
 
 # Wait for Longhorn to be ready
@@ -57,7 +65,82 @@ kubectl -n argocd wait --for=condition=ready pod -l app.kubernetes.io/name=argoc
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 ```
 
-## Step 3: Deploy App of Apps
+## Step 3: Install MetalLB + NGINX Ingress Controller
+
+For bare-metal/homelab clusters, MetalLB provides LoadBalancer IPs on your LAN and NGINX Ingress Controller routes traffic to services.
+
+### 3a: Install MetalLB
+
+MetalLB assigns real LAN IPs to LoadBalancer services using ARP advertisement.
+
+```bash
+# Add MetalLB Helm repository
+helm repo add metallb https://metallb.github.io/metallb
+helm repo update
+
+# Create namespace with privileged PSA (MetalLB speaker needs host networking)
+kubectl create namespace metallb-system
+kubectl label namespace metallb-system \
+  pod-security.kubernetes.io/enforce=privileged \
+  pod-security.kubernetes.io/audit=privileged \
+  pod-security.kubernetes.io/warn=privileged
+
+# Install MetalLB
+helm install metallb metallb/metallb \
+  --namespace metallb-system
+
+# Wait for MetalLB to be ready
+kubectl -n metallb-system wait --for=condition=ready pod -l app.kubernetes.io/name=metallb --timeout=300s
+```
+
+After MetalLB is running, configure an IP address pool and L2 advertisement.
+Pick a range on your LAN subnet that is **outside your DHCP range** and not used by any other hosts:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: lan-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 192.168.1.200-192.168.1.210  # Adjust to a free range on your LAN
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: lan-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - lan-pool
+EOF
+```
+
+### 3b: Install NGINX Ingress Controller
+
+```bash
+# Add ingress-nginx Helm repository
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+# Install NGINX Ingress Controller
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace
+
+# Wait for the controller to be ready
+kubectl -n ingress-nginx wait --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=300s
+
+# Verify it got an external IP from MetalLB
+kubectl -n ingress-nginx get svc ingress-nginx-controller
+```
+
+The ingress controller should receive an EXTERNAL-IP from your MetalLB pool (e.g. `192.168.1.200`).
+You can then access any Ingress resource from your LAN by pointing DNS or `/etc/hosts` entries to that IP.
+
+## Step 4: Deploy App of Apps
 
 Deploy the main application that manages all other apps:
 
@@ -67,13 +150,21 @@ kubectl apply -f deploy/argocd-apps/app-of-apps.yaml
 
 This will automatically deploy all applications defined in `deploy/argocd-apps/apps/`.
 
-## Step 4: Configure Ingress (Optional)
+## Step 5: Post-Deploy PSA Labeling
 
-If you have an ingress controller installed:
+Several namespaces created by the App of Apps require privileged Pod Security Admission labels.
+Without these, daemonsets and privileged pods will fail to schedule.
 
 ```bash
-kubectl apply -f deploy/cloudflare-ingress.yaml
+# Monitoring namespace (required for node-exporter hostPath and privileged containers)
+kubectl label namespace monitoring \
+  pod-security.kubernetes.io/enforce=privileged \
+  pod-security.kubernetes.io/audit=privileged \
+  pod-security.kubernetes.io/warn=privileged
 ```
+
+Any namespace that runs pods with hostPath volumes, host networking, or privileged containers
+will need these labels. Common examples: monitoring, GPU operators, storage drivers.
 
 ## Monitoring Stack
 
@@ -81,8 +172,13 @@ The monitoring stack (Prometheus, Grafana, Alertmanager) is deployed automatical
 
 ### Access Grafana
 
-Once deployed, Grafana can be accessed at:
-- URL: `http://monitoring.miladyos.net` (if ingress is configured)
+Once deployed, Grafana can be accessed via a MetalLB LoadBalancer IP:
+```bash
+# Create a LoadBalancer service for Grafana
+kubectl -n monitoring expose service monitoring-grafana --type=LoadBalancer --name=grafana-lb --port=80 --target-port=3000
+# Check the assigned IP
+kubectl -n monitoring get svc grafana-lb
+```
 - No login required (anonymous admin access is enabled)
 
 ## Values Files Reference
@@ -97,15 +193,44 @@ Once deployed, Grafana can be accessed at:
 - Sets 3-way replication for high availability
 - Configures Longhorn as default storage class
 - Allows 200% over-provisioning for flexibility
-- Uses worker nodes with `longhorn.io/node=true` label
+- Schedules on all worker nodes automatically (control-plane nodes excluded via taints)
 
 ### `monitoring/kube-prometheus-stack-values.yaml`
 - Enables Grafana with anonymous admin access
-- Configures 30-day retention for Prometheus
+- Configures 365-day retention for Prometheus (150Gi storage)
 - Uses Longhorn for persistent storage
 - Auto-discovers all ServiceMonitors in the cluster
+- Disables etcd/controller-manager/scheduler/kube-proxy metrics (Talos-specific)
+
+## Talos Prerequisites
+
+Talos worker nodes must have the following system extensions installed for Longhorn storage:
+- `iscsi-tools` — required for Longhorn volume attachment
+- `util-linux-tools` — required for block device operations
+
+These can be added via the Talos machine config or Image Factory schematic.
 
 ## Troubleshooting
+
+### Pod Security Admission (PSA)
+
+If daemonset pods show 0/N ready or pods fail with `violates PodSecurity "baseline:latest"`,
+the namespace needs privileged PSA labels:
+```bash
+kubectl label namespace <namespace> \
+  pod-security.kubernetes.io/enforce=privileged \
+  pod-security.kubernetes.io/audit=privileged \
+  pod-security.kubernetes.io/warn=privileged
+```
+
+### MetalLB Speakers Not Joining
+
+MetalLB speakers use memberlist (port 7946) for leader election. If speakers show
+`connection refused` errors on startup, restart the daemonset — this is a race condition
+during initial deployment:
+```bash
+kubectl -n metallb-system rollout restart daemonset metallb-speaker
+```
 
 ### Check Longhorn Status
 ```bash
