@@ -28,10 +28,6 @@ persistence:
   defaultClass: true
   defaultClassReplicaCount: 3
 
-# Node scheduling - use our existing worker node labels
-nodeSelector:
-  longhorn.io/node: "true"
-
 # UI service configuration
 service:
   ui:
@@ -39,3 +35,10 @@ service:
 
 # Disable PSP (deprecated in modern Kubernetes)
 enablePSP: false
+
+# NOTE: Before installing, the longhorn-system namespace must be labeled with privileged PSA:
+#   kubectl create namespace longhorn-system
+#   kubectl label namespace longhorn-system \
+#     pod-security.kubernetes.io/enforce=privileged \
+#     pod-security.kubernetes.io/audit=privileged \
+#     pod-security.kubernetes.io/warn=privileged
