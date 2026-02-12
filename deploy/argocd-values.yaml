@@ -17,7 +17,18 @@ server:
     type: ClusterIP
 
   ingress:
-    enabled: false
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-staging
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    hosts:
+    - argocd.transparentlyrotatableproxy.me
+    tls:
+    - secretName: argocd-transparentlyrotatableproxy-me-tls
+      hosts:
+      - argocd.transparentlyrotatableproxy.me
 
 ## Application Controller - handles GitOps reconciliation
 controller:

@@ -140,7 +140,17 @@ kubectl -n ingress-nginx get svc ingress-nginx-controller
 The ingress controller should receive an EXTERNAL-IP from your MetalLB pool (e.g. `192.168.1.200`).
 You can then access any Ingress resource from your LAN by pointing DNS or `/etc/hosts` entries to that IP.
 
-## Step 4: Deploy App of Apps
+## Step 4: Port Forwarding / DMZ
+
+For internet-accessible ingress with Let's Encrypt TLS, forward ports 80 and 443 from your ISP-facing router through to the MetalLB NGINX Ingress IP (e.g. `192.168.1.200`).
+
+If you have a double-NAT setup (two routers):
+- **Router 1** (ISP-facing): DMZ to Router 2's WAN IP
+- **Router 2** (LAN-facing): DMZ to `192.168.1.200` (or port forward 80+443)
+
+cert-manager is deployed as part of the App of Apps and automatically provisions Let's Encrypt certificates using HTTP-01 challenges through the NGINX ingress.
+
+## Step 5: Deploy App of Apps
 
 Deploy the main application that manages all other apps:
 
@@ -150,7 +160,7 @@ kubectl apply -f deploy/argocd-apps/app-of-apps.yaml
 
 This will automatically deploy all applications defined in `deploy/argocd-apps/apps/`.
 
-## Step 5: Post-Deploy PSA Labeling
+## Step 6: Post-Deploy PSA Labeling
 
 Several namespaces created by the App of Apps require privileged Pod Security Admission labels.
 Without these, daemonsets and privileged pods will fail to schedule.
@@ -172,13 +182,7 @@ The monitoring stack (Prometheus, Grafana, Alertmanager) is deployed automatical
 
 ### Access Grafana
 
-Once deployed, Grafana can be accessed via a MetalLB LoadBalancer IP:
-```bash
-# Create a LoadBalancer service for Grafana
-kubectl -n monitoring expose service monitoring-grafana --type=LoadBalancer --name=grafana-lb --port=80 --target-port=3000
-# Check the assigned IP
-kubectl -n monitoring get svc grafana-lb
-```
+Grafana is available via ingress at `grafana.transparentlyrotatableproxy.me`.
 - No login required (anonymous admin access is enabled)
 
 ## Values Files Reference
@@ -249,10 +253,40 @@ kubectl -n argocd logs -l app.kubernetes.io/name=argocd-server
 kubectl -n argocd logs -l app.kubernetes.io/name=argocd-application-controller
 ```
 
+## TLS Certificates
+
+cert-manager is deployed via ArgoCD and uses Let's Encrypt HTTP-01 challenges.
+
+- **Staging issuer** (`letsencrypt-staging`): Active by default. Issues fake certs for testing — browsers will show warnings but the ACME flow is validated.
+- **Production issuer** (`letsencrypt-prod`): Uncomment in `deploy/cert-manager/cluster-issuer.yaml` and update ingress annotations once staging is confirmed working.
+
+All ingress resources use the `cert-manager.io/cluster-issuer` annotation to auto-provision TLS certificates.
+
+### Domains
+
+All domains have `@` and `*` A records pointing to the static ISP IP:
+- basedjourney.com
+- generalpurposetransformer.com
+- matrixmilady.com
+- milady.api
+- miladyos.com
+- miladyos.net
+- radbrocorp.com
+- theycallmeloki.site
+- tiniercorp.com
+- transparentlyrotatableproxy.me
+
+Service subdomains use `transparentlyrotatableproxy.me`:
+- `argocd.transparentlyrotatableproxy.me` — ArgoCD
+- `grafana.transparentlyrotatableproxy.me` — Grafana
+- `ha.transparentlyrotatableproxy.me` — Home Assistant
+- `litellm.transparentlyrotatableproxy.me` — LiteLLM Proxy
+- `pachd.transparentlyrotatableproxy.me` — Pachyderm
+
 ## Next Steps
 
 After bootstrap:
-1. Configure DNS to point to your ingress controller
-2. Set up SSL certificates (cert-manager or Cloudflare)
+1. Verify staging certs are issued: `kubectl get certificates -A`
+2. Switch to production Let's Encrypt once confirmed
 3. Customize application configurations in their respective folders
 4. Add more applications by creating new files in `deploy/argocd-apps/apps/`
