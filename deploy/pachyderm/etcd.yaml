@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etcd
+  namespace: pachyderm
+  labels:
+    app: etcd
+    suite: pachyderm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: etcd
+      suite: pachyderm
+  template:
+    metadata:
+      labels:
+        app: etcd
+        suite: pachyderm
+    spec:
+      containers:
+      - name: etcd
+        image: pachyderm/etcd:v3.3.5
+        imagePullPolicy: IfNotPresent
+        command:
+        - /usr/local/bin/etcd
+        - --listen-client-urls=http://0.0.0.0:2379
+        - --advertise-client-urls=http://0.0.0.0:2379
+        - --data-dir=/var/data/etcd
+        - --auto-compaction-retention=1
+        - --max-txn-ops=10000
+        - --max-request-bytes=52428800
+        - --quota-backend-bytes=8589934592
+        ports:
+        - containerPort: 2379
+          name: client-port
+        - containerPort: 2380
+          name: peer-port
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512M
+        volumeMounts:
+        - name: etcd-storage
+          mountPath: /var/data/etcd
+      volumes:
+      - name: etcd-storage
+        persistentVolumeClaim:
+          claimName: etcd-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd
+  namespace: pachyderm
+  labels:
+    app: etcd
+    suite: pachyderm
+spec:
+  type: ClusterIP
+  selector:
+    app: etcd
+  ports:
+  - name: client-port
+    port: 2379
+    targetPort: 2379
+  - name: peer-port
+    port: 2380
+    targetPort: 2380
