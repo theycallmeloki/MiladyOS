@@ -130,6 +130,7 @@ maven-plugin
 metrics
 mina-sshd-api-common
 mina-sshd-api-core
+nodejs
 okhttp-api
 parameterized-trigger
 patch-parameter
@@ -139,6 +140,7 @@ pipeline-build-step
 pipeline-dependency-walker
 pipeline-gitstatuswrapper
 pipeline-graph-analysis
+pipeline-graph-view
 pipeline-groovy-lib
 pipeline-input-step
 pipeline-milestone-step
@@ -183,6 +185,7 @@ structs
 subversion
 terminal
 theme-manager
+timestamper
 token-macro
 trilead-api
 variant
