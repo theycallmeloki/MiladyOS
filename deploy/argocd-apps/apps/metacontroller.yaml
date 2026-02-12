@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metacontroller
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/metacontroller/metacontroller
+    targetRevision: HEAD
+    path: manifests/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metacontroller
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/audit: privileged
+        pod-security.kubernetes.io/warn: privileged
