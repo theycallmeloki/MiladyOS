@@ -19,16 +19,12 @@ server:
   ingress:
     enabled: true
     ingressClassName: nginx
+    hostname: argocd.transparentlyrotatableproxy.me
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-staging
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
       nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    hosts:
-    - argocd.transparentlyrotatableproxy.me
-    tls:
-    - secretName: argocd-transparentlyrotatableproxy-me-tls
-      hosts:
-      - argocd.transparentlyrotatableproxy.me
+    tls: true
 
 ## Application Controller - handles GitOps reconciliation
 controller:
