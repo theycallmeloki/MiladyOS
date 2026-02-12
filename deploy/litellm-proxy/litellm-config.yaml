@@ -5,43 +5,21 @@ metadata:
   namespace: default
 data:
   config.yaml: |
-    model_list:
-      # - model_name: "Quickpanda/deepcoder-14b-preview-awq" # How clients refer to this model via LiteLLM
+    model_list: []
+      # Add llama.cpp RPC models here, e.g.:
+      # - model_name: "my-model"
       #   litellm_params:
-      #     model: "openai/Quickpanda/deepcoder-14b-preview-awq" # Add openai/ prefix to make LiteLLM recognize the provider
-      #     api_base: "http://deep-coder-14b-svc.default.svc.cluster.local:8000/v1" # Use full service DNS name for robustness
-      #     api_key: "sk-fake" # Keep if vLLM needs it, otherwise remove or leave empty ""
-      #   model_info:
-      #     description: "DeepCoder 14B - A code optimization and generation model"
-
-      - model_name: "deepseek-r1:1.5b" # How clients refer to this model via LiteLLM
-        litellm_params:
-          model: "ollama/deepseek-r1:1.5b" # Use ollama/ prefix for LiteLLM Ollama integration
-          api_base: "http://miladyos.default.svc.cluster.local:11434/v1" # MiladyOS service with Ollama port
-          api_key: "not-needed" # Ollama doesn't require API key
-        model_info:
-          description: "DeepSeek-R1 1.5B - A lightweight reasoning model"
-
-      - model_name: "Qwen/QwQ-32B-AWQ" # How clients refer to this model via LiteLLM
-        litellm_params:
-          model: "openai/Qwen/QwQ-32B-AWQ" # Add openai/ prefix to make LiteLLM recognize the provider  
-          api_base: "http://qwq-32b-svc.default.svc.cluster.local:8000/v1" # Use full service DNS name for robustness
-          api_key: "sk-fake" # Keep if vLLM needs it, otherwise remove or leave empty ""
-        model_info:
-          description: "QwQ 32B - A high-performance language model for diverse tasks"
+      #     model: "openai/my-model"
+      #     api_base: "http://llama-cpp-svc.default.svc.cluster.local:8080/v1"
+      #     api_key: "not-needed"
 
     litellm_settings:
       drop_params: true
-      verbose: true
       telemetry: false
       callbacks: "custom_callbacks.proxy_handler_instance"
 
-    general_settings:
-      completion_model: "Qwen/QwQ-32B-AWQ"
-    
+    general_settings: {}
+
     router_settings:
-      num_retries: 3 # Added basic retries
+      num_retries: 3
       timeout: 600
-      default_model: "Qwen/QwQ-32B-AWQ"
-      # model_group_alias: {"default": ["Qwen/QwQ-32B-AWQ", "Quickpanda/deepcoder-14b-preview-awq"]}
-      model_group_alias: {"default": ["Qwen/QwQ-32B-AWQ"]}
