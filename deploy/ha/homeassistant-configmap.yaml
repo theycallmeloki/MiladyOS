@@ -11,15 +11,7 @@ data:
     # Text to speech
     tts:
       - platform: google_translate
-    
-    # WiZ Smart Plug integration
-    wiz:
-      discovery: true
-    
-    # Power monitoring sensors
-    sensor:
-      - platform: wiz_power_monitoring
-    
+
     # Enhanced HTTP configuration
     http:
       use_x_forwarded_for: true
