@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattermost-postgres
+  namespace: mattermost
+  labels:
+    app.kubernetes.io/name: mattermost-postgres
+    app.kubernetes.io/part-of: miladyos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mattermost-postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mattermost-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: mattermost-postgres-secret
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: mattermost-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost-postgres
+  namespace: mattermost
+  labels:
+    app.kubernetes.io/name: mattermost-postgres
+    app.kubernetes.io/part-of: miladyos
+spec:
+  selector:
+    app: mattermost-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
