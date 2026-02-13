@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-server
+  namespace: llama-cpp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-server
+  template:
+    metadata:
+      labels:
+        app: llama-server
+    spec:
+      initContainers:
+      - name: model-download
+        image: python:3.11-slim
+        command:
+        - sh
+        - -c
+        - |
+          if [ -f /models/Qwen3-Coder-Next-Q8_0.gguf ]; then
+            echo "Model already exists, skipping download"
+            exit 0
+          fi
+          pip install --no-cache-dir huggingface-hub && \
+          python -c "
+          from huggingface_hub import hf_hub_download
+          hf_hub_download(
+            repo_id='Qwen/Qwen3-Coder-Next-GGUF',
+            filename='Qwen3-Coder-Next-Q8_0.gguf',
+            local_dir='/models',
+            local_dir_use_symlinks=False,
+          )
+          "
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+      containers:
+      - name: llama-server
+        image: ghcr.io/ggml-org/llama.cpp:full
+        command: ["llama-server"]
+        args:
+        - "-m"
+        - "/models/Qwen3-Coder-Next-Q8_0.gguf"
+        - "--port"
+        - "8080"
+        - "-ngl"
+        - "99"
+        - "--rpc"
+        - "rpc-worker-0.llama-cpp:50052,rpc-worker-1.llama-cpp:50052,rpc-worker-2.llama-cpp:50052,rpc-worker-3.llama-cpp:50052,rpc-worker-4.llama-cpp:50052,rpc-worker-5.llama-cpp:50052"
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-storage
