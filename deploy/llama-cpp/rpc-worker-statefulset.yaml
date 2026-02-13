@@ -39,6 +39,7 @@ spec:
       containers:
       - name: rpc-server
         image: ogmiladyloki/llama-cpp-rpc-server:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 50052
           name: rpc
