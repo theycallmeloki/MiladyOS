@@ -18,7 +18,24 @@ spec:
       labels:
         app: mattermost
     spec:
+      securityContext:
+        fsGroup: 2000
+        runAsUser: 2000
+        runAsGroup: 2000
       initContainers:
+        - name: fix-permissions
+          image: busybox:1.36
+          securityContext:
+            runAsUser: 0
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /mnt/data /mnt/data/logs /mnt/data/plugins /mnt/data/client-plugins /mnt/data/config
+              chown -R 2000:2000 /mnt/data
+          volumeMounts:
+            - name: mattermost-data
+              mountPath: /mnt/data
         - name: wait-for-postgres
           image: busybox:1.36
           command:
