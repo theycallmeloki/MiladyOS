@@ -20,18 +20,17 @@ spec:
         - sh
         - -c
         - |
-          if [ -f /models/Qwen3-Coder-Next-Q8_0.gguf ]; then
+          if [ -f /models/Qwen3-Coder-Next-Q8_0/Qwen3-Coder-Next-Q8_0-00001-of-00004.gguf ]; then
             echo "Model already exists, skipping download"
             exit 0
           fi
           pip install --no-cache-dir huggingface-hub && \
           python -c "
-          from huggingface_hub import hf_hub_download
-          hf_hub_download(
+          from huggingface_hub import snapshot_download
+          snapshot_download(
             repo_id='Qwen/Qwen3-Coder-Next-GGUF',
-            filename='Qwen3-Coder-Next-Q8_0.gguf',
+            allow_patterns='Qwen3-Coder-Next-Q8_0/*',
             local_dir='/models',
-            local_dir_use_symlinks=False,
           )
           "
         volumeMounts:
@@ -43,7 +42,7 @@ spec:
         command: ["llama-server"]
         args:
         - "-m"
-        - "/models/Qwen3-Coder-Next-Q8_0.gguf"
+        - "/models/Qwen3-Coder-Next-Q8_0/Qwen3-Coder-Next-Q8_0-00001-of-00004.gguf"
         - "--port"
         - "8080"
         - "-ngl"

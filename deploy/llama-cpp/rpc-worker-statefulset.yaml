@@ -28,7 +28,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: rpc-server
-        image: ghcr.io/ggml-org/llama.cpp:full
+        image: ghcr.io/ggml-org/llama.cpp:rpc
         command: ["rpc-server"]
         args:
         - "-p"
