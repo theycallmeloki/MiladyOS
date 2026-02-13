@@ -15,7 +15,7 @@ spec:
     spec:
       initContainers:
       - name: model-download
-        image: python:3.11-slim
+        image: amikos/hf-model-downloader:latest
         env:
         - name: HF_TOKEN
           valueFrom:
@@ -23,14 +23,13 @@ spec:
               name: hf-token
               key: token
         command:
-        - sh
+        - bash
         - -c
         - |
           if [ -f /models/Qwen3-Coder-Next-Q8_0/Qwen3-Coder-Next-Q8_0-00001-of-00004.gguf ]; then
             echo "Model already exists, skipping download"
             exit 0
           fi
-          pip install --no-cache-dir huggingface-hub && \
           hf download Qwen/Qwen3-Coder-Next-GGUF --include "Qwen3-Coder-Next-Q8_0/*" --local-dir /models
         volumeMounts:
         - name: model-storage
