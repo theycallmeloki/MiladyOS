@@ -31,7 +31,7 @@ spec:
             exit 0
           fi
           pip install --no-cache-dir huggingface-hub && \
-          huggingface-cli download Qwen/Qwen3-Coder-Next-GGUF --include "Qwen3-Coder-Next-Q8_0/*" --local-dir /models
+          hf download Qwen/Qwen3-Coder-Next-GGUF --include "Qwen3-Coder-Next-Q8_0/*" --local-dir /models
         volumeMounts:
         - name: model-storage
           mountPath: /models
