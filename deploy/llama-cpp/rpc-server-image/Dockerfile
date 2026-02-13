@@ -12,6 +12,9 @@ RUN cmake -B build -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Rele
     cmake --build build --config Release --target rpc-server -j$(nproc)
 
 FROM debian:bookworm-slim
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/build/bin/rpc-server /usr/local/bin/rpc-server
 ENTRYPOINT ["rpc-server"]
 CMD ["-H", "0.0.0.0", "-p", "50052"]
