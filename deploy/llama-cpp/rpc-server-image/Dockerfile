@@ -23,12 +23,11 @@ RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_FLAGS="-march=x86-64" \
     -DCMAKE_CXX_FLAGS="-march=x86-64" && \
-    cmake --build build --config Release --target rpc-server -j$(nproc)
+    cmake --build build --config Release --target rpc-server --target llama-server -j$(nproc)
 
 FROM debian:bookworm-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/build/bin/rpc-server /usr/local/bin/rpc-server
-ENTRYPOINT ["rpc-server"]
-CMD ["-H", "0.0.0.0", "-p", "50052"]
+COPY --from=build /src/build/bin/llama-server /usr/local/bin/llama-server
