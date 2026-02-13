@@ -7,8 +7,6 @@ resources:
 - server-deployment.yaml
 - server-service.yaml
 - model-pvc.yaml
-- modelstash-deployment.yaml
-- modelstash-service.yaml
 - service-per-pod/decorator-controller.yaml
 
 configMapGenerator:
