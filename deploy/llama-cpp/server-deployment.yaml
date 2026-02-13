@@ -22,6 +22,10 @@ spec:
             secretKeyRef:
               name: hf-token
               key: token
+        - name: HF_HUB_ENABLE_HF_TRANSFER
+          value: "0"
+        - name: PYTHONUNBUFFERED
+          value: "1"
         command:
         - sh
         - -c
@@ -31,7 +35,8 @@ spec:
             exit 0
           fi
           pip install --no-cache-dir huggingface-hub && \
-          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-Coder-Next-GGUF', allow_patterns='Qwen3-Coder-Next-Q8_0/*', local_dir='/models')"
+          echo "Starting model download..." && \
+          python -c "import logging,sys; logging.basicConfig(level=logging.INFO,stream=sys.stderr); from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-Coder-Next-GGUF',allow_patterns='Qwen3-Coder-Next-Q8_0/*',local_dir='/models'); print('Download complete!',flush=True)"
         volumeMounts:
         - name: model-storage
           mountPath: /models
