@@ -31,14 +31,7 @@ spec:
             exit 0
           fi
           pip install --no-cache-dir huggingface-hub && \
-          python -c "
-          from huggingface_hub import snapshot_download
-          snapshot_download(
-            repo_id='Qwen/Qwen3-Coder-Next-GGUF',
-            allow_patterns='Qwen3-Coder-Next-Q8_0/*',
-            local_dir='/models',
-          )
-          "
+          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-Coder-Next-GGUF', allow_patterns='Qwen3-Coder-Next-Q8_0/*', local_dir='/models')"
         volumeMounts:
         - name: model-storage
           mountPath: /models
@@ -54,7 +47,7 @@ spec:
         - "-ngl"
         - "99"
         - "--rpc"
-        - "rpc-worker-0.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-1.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-2.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-3.rpc-worker-headless.llama-cpp.svc.cluster.local:50052"
+        - "rpc-worker-0.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-1.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-2.rpc-worker-headless.llama-cpp.svc.cluster.local:50052"
         ports:
         - containerPort: 8080
           name: http

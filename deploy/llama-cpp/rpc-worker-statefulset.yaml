@@ -8,7 +8,7 @@ metadata:
     service-per-pod-ports: "50052"
 spec:
   serviceName: rpc-worker-headless
-  replicas: 4
+  replicas: 3
   selector:
     matchLabels:
       app: rpc-worker
@@ -25,7 +25,6 @@ spec:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                - talos-8wt-vwg
                 - talos-0u4-tjd
                 - talos-8do-z37
                 - talos-k3d-suh
