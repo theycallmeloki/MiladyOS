@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattermost
+  namespace: mattermost
+  labels:
+    app.kubernetes.io/name: mattermost
+    app.kubernetes.io/part-of: miladyos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mattermost
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mattermost
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z mattermost-postgres.mattermost.svc.cluster.local 5432; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready"
+      containers:
+        - name: mattermost
+          image: mattermost/mattermost-team-edition:9.11
+          ports:
+            - containerPort: 8065
+              name: http
+            - containerPort: 8443
+              name: calls
+          env:
+            - name: TZ
+              value: UTC
+            - name: MM_SQLSETTINGS_DRIVERNAME
+              value: postgres
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-postgres-secret
+                  key: POSTGRES_DB
+            - name: MM_SQLSETTINGS_DATASOURCE
+              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@mattermost-postgres.mattermost.svc.cluster.local:5432/$(POSTGRES_DB)?sslmode=disable&connect_timeout=10
+            - name: MM_SERVICESETTINGS_SITEURL
+              value: https://mattermost.transparentlyrotatableproxy.me
+            - name: MM_SERVICESETTINGS_ENABLELOCALMODE
+              value: "false"
+            - name: MM_PLUGINSETTINGS_ENABLEUPLOADS
+              value: "true"
+          volumeMounts:
+            - name: mattermost-data
+              mountPath: /mattermost/data
+            - name: mattermost-data
+              mountPath: /mattermost/logs
+              subPath: logs
+            - name: mattermost-data
+              mountPath: /mattermost/plugins
+              subPath: plugins
+            - name: mattermost-data
+              mountPath: /mattermost/client/plugins
+              subPath: client-plugins
+            - name: mattermost-data
+              mountPath: /mattermost/config
+              subPath: config
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /api/v4/system/ping
+              port: 8065
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/v4/system/ping
+              port: 8065
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: mattermost-data
+          persistentVolumeClaim:
+            claimName: mattermost-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost
+  namespace: mattermost
+  labels:
+    app.kubernetes.io/name: mattermost
+    app.kubernetes.io/part-of: miladyos
+spec:
+  selector:
+    app: mattermost
+  ports:
+    - name: http
+      port: 8065
+      targetPort: 8065
+    - name: calls
+      port: 8443
+      targetPort: 8443
