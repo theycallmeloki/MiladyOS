@@ -54,7 +54,7 @@ spec:
         - "-ngl"
         - "99"
         - "--rpc"
-        - "rpc-worker-0.llama-cpp:50052,rpc-worker-1.llama-cpp:50052,rpc-worker-2.llama-cpp:50052,rpc-worker-3.llama-cpp:50052,rpc-worker-4.llama-cpp:50052,rpc-worker-5.llama-cpp:50052"
+        - "rpc-worker-0.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-1.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-2.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-3.rpc-worker-headless.llama-cpp.svc.cluster.local:50052"
         ports:
         - containerPort: 8080
           name: http

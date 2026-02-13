@@ -8,7 +8,7 @@ metadata:
     service-per-pod-ports: "50052"
 spec:
   serviceName: rpc-worker-headless
-  replicas: 6
+  replicas: 4
   selector:
     matchLabels:
       app: rpc-worker
@@ -28,12 +28,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: rpc-server
-        image: evilfreelancer/llama.cpp-rpc:latest
-        env:
-        - name: APP_MODE
-          value: backend
-        - name: LD_LIBRARY_PATH
-          value: /app
+        image: ogmiladyloki/llama-cpp-rpc-server:latest
         ports:
         - containerPort: 50052
           name: rpc
