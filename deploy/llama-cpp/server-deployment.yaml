@@ -13,27 +13,6 @@ spec:
       labels:
         app: llama-server
     spec:
-      initContainers:
-      - name: model-download
-        image: amikos/hf-model-downloader:latest
-        env:
-        - name: HF_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: hf-token
-              key: token
-        command:
-        - sh
-        - -c
-        - |
-          if [ -f /models/Qwen3-Coder-Next-Q8_0/Qwen3-Coder-Next-Q8_0-00001-of-00004.gguf ]; then
-            echo "Model already exists, skipping download"
-            exit 0
-          fi
-          hf download Qwen/Qwen3-Coder-Next-GGUF --include "Qwen3-Coder-Next-Q8_0/*" --local-dir /models
-        volumeMounts:
-        - name: model-storage
-          mountPath: /models
       containers:
       - name: llama-server
         image: ghcr.io/ggml-org/llama.cpp:full
