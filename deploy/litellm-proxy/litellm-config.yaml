@@ -5,13 +5,12 @@ metadata:
   namespace: default
 data:
   config.yaml: |
-    model_list: []
-      # Add llama.cpp RPC models here, e.g.:
-      # - model_name: "my-model"
-      #   litellm_params:
-      #     model: "openai/my-model"
-      #     api_base: "http://llama-cpp-svc.default.svc.cluster.local:8080/v1"
-      #     api_key: "not-needed"
+    model_list:
+      - model_name: "qwen3-coder-next"
+        litellm_params:
+          model: "openai/qwen3-coder-next"
+          api_base: "http://llama-server.llama-cpp.svc.cluster.local:8080/v1"
+          api_key: "not-needed"
 
     litellm_settings:
       drop_params: true

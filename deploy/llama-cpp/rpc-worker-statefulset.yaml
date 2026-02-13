@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rpc-worker
+  namespace: llama-cpp
+  annotations:
+    service-per-pod-label: statefulset.kubernetes.io/pod-name
+    service-per-pod-ports: "50052"
+spec:
+  serviceName: rpc-worker-headless
+  replicas: 6
+  selector:
+    matchLabels:
+      app: rpc-worker
+  template:
+    metadata:
+      labels:
+        app: rpc-worker
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: rpc-worker
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: rpc-server
+        image: ghcr.io/ggml-org/llama.cpp:full
+        command: ["rpc-server"]
+        args:
+        - "-p"
+        - "50052"
+        - "-H"
+        - "0.0.0.0"
+        ports:
+        - containerPort: 50052
+          name: rpc
+        resources:
+          requests:
+            cpu: "6"
+            memory: 24Gi
+          limits:
+            memory: 28Gi

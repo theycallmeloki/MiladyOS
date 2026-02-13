@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- rpc-worker-statefulset.yaml
+- rpc-worker-headless-service.yaml
+- server-deployment.yaml
+- server-service.yaml
+- model-pvc.yaml
+- service-per-pod/decorator-controller.yaml
+
+configMapGenerator:
+- name: service-per-pod-controller
+  namespace: metacontroller
+  files:
+  - service-per-pod/sync.jsonnet
+
+generatorOptions:
+  disableNameSuffixHash: true

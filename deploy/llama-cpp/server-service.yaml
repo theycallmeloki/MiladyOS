@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-server
+  namespace: llama-cpp
+spec:
+  selector:
+    app: llama-server
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
