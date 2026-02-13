@@ -18,6 +18,17 @@ spec:
         app: rpc-worker
     spec:
       affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - talos-8wt-vwg
+                - talos-0u4-tjd
+                - talos-8do-z37
+                - talos-k3d-suh
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
           - weight: 100
@@ -34,7 +45,7 @@ spec:
           name: rpc
         resources:
           requests:
-            cpu: "6"
-            memory: 24Gi
+            cpu: "1"
+            memory: 2Gi
           limits:
             memory: 28Gi
