@@ -28,13 +28,10 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: rpc-server
-        image: ghcr.io/ggml-org/llama.cpp:rpc
-        command: ["rpc-server"]
-        args:
-        - "-p"
-        - "50052"
-        - "-H"
-        - "0.0.0.0"
+        image: evilfreelancer/llama.cpp-rpc:latest
+        env:
+        - name: APP_MODE
+          value: backend
         ports:
         - containerPort: 50052
           name: rpc

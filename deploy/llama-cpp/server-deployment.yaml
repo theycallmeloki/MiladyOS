@@ -39,7 +39,7 @@ spec:
       containers:
       - name: llama-server
         image: ghcr.io/ggml-org/llama.cpp:full
-        command: ["llama-server"]
+        command: ["/app/llama-server"]
         args:
         - "-m"
         - "/models/Qwen3-Coder-Next-Q8_0/Qwen3-Coder-Next-Q8_0-00001-of-00004.gguf"
