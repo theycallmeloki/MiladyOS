@@ -8,7 +8,21 @@ RUN apt-get update && \
 RUN git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /src
 
 WORKDIR /src
-RUN cmake -B build -DGGML_RPC=ON -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DCMAKE_BUILD_TYPE=Release && \
+RUN cmake -B build \
+    -DGGML_RPC=ON \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DGGML_NATIVE=OFF \
+    -DGGML_AVX=OFF \
+    -DGGML_AVX2=OFF \
+    -DGGML_AVX512=OFF \
+    -DGGML_AVX_VNNI=OFF \
+    -DGGML_FMA=OFF \
+    -DGGML_F16C=OFF \
+    -DGGML_SSE42=OFF \
+    -DGGML_BMI2=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS="-march=x86-64" \
+    -DCMAKE_CXX_FLAGS="-march=x86-64" && \
     cmake --build build --config Release --target rpc-server -j$(nproc)
 
 FROM debian:bookworm-slim
