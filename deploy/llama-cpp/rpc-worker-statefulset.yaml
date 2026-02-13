@@ -32,6 +32,8 @@ spec:
         env:
         - name: APP_MODE
           value: backend
+        - name: LD_LIBRARY_PATH
+          value: /app
         ports:
         - containerPort: 50052
           name: rpc
