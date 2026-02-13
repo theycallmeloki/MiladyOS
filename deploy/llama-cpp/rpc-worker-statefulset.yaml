@@ -40,6 +40,7 @@ spec:
       - name: rpc-server
         image: ogmiladyloki/llama-cpp-rpc-server:latest
         imagePullPolicy: Always
+        command: ["rpc-server", "-H", "0.0.0.0", "-p", "50052"]
         ports:
         - containerPort: 50052
           name: rpc
