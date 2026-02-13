@@ -16,6 +16,12 @@ spec:
       initContainers:
       - name: model-download
         image: python:3.11-slim
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
         command:
         - sh
         - -c
