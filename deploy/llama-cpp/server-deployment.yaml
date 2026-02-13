@@ -23,7 +23,7 @@ spec:
               name: hf-token
               key: token
         command:
-        - bash
+        - sh
         - -c
         - |
           if [ -f /models/Qwen3-Coder-Next-Q8_0/Qwen3-Coder-Next-Q8_0-00001-of-00004.gguf ]; then
