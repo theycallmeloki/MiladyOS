@@ -13,6 +13,22 @@ spec:
       labels:
         app: llama-server
     spec:
+      initContainers:
+      - name: model-fetch
+        image: busybox:stable
+        command:
+        - sh
+        - -c
+        - |
+          if [ -f /models/Qwen3-Coder-Next-Q8_0-merged.gguf ]; then
+            echo "Model already cached, skipping"
+            exit 0
+          fi
+          echo "Downloading model from modelstash..."
+          wget -O /models/Qwen3-Coder-Next-Q8_0-merged.gguf http://modelstash:8000/Qwen3-Coder-Next-Q8_0-merged.gguf
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models
       containers:
       - name: llama-server
         image: ogmiladyloki/llama-cpp-rpc-server:latest
@@ -31,7 +47,7 @@ spec:
         - containerPort: 8080
           name: http
         volumeMounts:
-        - name: model-storage
+        - name: model-cache
           mountPath: /models
         readinessProbe:
           httpGet:
@@ -46,6 +62,6 @@ spec:
           initialDelaySeconds: 60
           periodSeconds: 30
       volumes:
-      - name: model-storage
+      - name: model-cache
         persistentVolumeClaim:
-          claimName: model-storage
+          claimName: model-cache

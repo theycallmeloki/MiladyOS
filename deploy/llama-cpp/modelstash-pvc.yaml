@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: model-storage
+  name: modelstash-storage
   namespace: llama-cpp
 spec:
   accessModes:
-  - ReadWriteMany
+  - ReadWriteOnce
   storageClassName: longhorn
   resources:
     requests:

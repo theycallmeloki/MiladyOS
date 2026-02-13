@@ -6,7 +6,10 @@ resources:
 - rpc-worker-headless-service.yaml
 - server-deployment.yaml
 - server-service.yaml
-- model-pvc.yaml
+- modelstash-pvc.yaml
+- model-cache-pvc.yaml
+- modelstash-deployment.yaml
+- modelstash-service.yaml
 - service-per-pod/decorator-controller.yaml
 
 configMapGenerator:
