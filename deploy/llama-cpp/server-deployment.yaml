@@ -20,14 +20,14 @@ spec:
         - sh
         - -c
         - |
-          if [ -f /models/Qwen3-Coder-Next-Q8_0-merged.gguf ]; then
+          if [ -f /models/GLM-4.7-Flash-Q8_0.gguf ]; then
             echo "Model already cached, skipping"
             exit 0
           fi
-          rm -f /models/Qwen3-Coder-Next-Q8_0-merged.gguf.tmp
+          rm -f /models/GLM-4.7-Flash-Q8_0.gguf.tmp
           echo "Downloading model from modelstash..."
-          wget -O /models/Qwen3-Coder-Next-Q8_0-merged.gguf.tmp http://modelstash:8000/Qwen3-Coder-Next-Q8_0-merged.gguf && \
-          mv /models/Qwen3-Coder-Next-Q8_0-merged.gguf.tmp /models/Qwen3-Coder-Next-Q8_0-merged.gguf
+          wget -O /models/GLM-4.7-Flash-Q8_0.gguf.tmp http://modelstash:8000/GLM-4.7-Flash-Q8_0.gguf && \
+          mv /models/GLM-4.7-Flash-Q8_0.gguf.tmp /models/GLM-4.7-Flash-Q8_0.gguf
         volumeMounts:
         - name: model-cache
           mountPath: /models
@@ -38,7 +38,7 @@ spec:
         command: ["llama-server"]
         args:
         - "-m"
-        - "/models/Qwen3-Coder-Next-Q8_0-merged.gguf"
+        - "/models/GLM-4.7-Flash-Q8_0.gguf"
         - "--port"
         - "8080"
         - "-ngl"
