@@ -29,13 +29,11 @@ spec:
                 - talos-8do-z37
                 - talos-k3d-suh
         podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  app: rpc-worker
-              topologyKey: kubernetes.io/hostname
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: rpc-worker
+            topologyKey: kubernetes.io/hostname
       containers:
       - name: rpc-server
         image: ogmiladyloki/llama-cpp-rpc-server:latest
