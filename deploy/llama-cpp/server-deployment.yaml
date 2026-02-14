@@ -24,8 +24,10 @@ spec:
             echo "Model already cached, skipping"
             exit 0
           fi
+          rm -f /models/Qwen3-Coder-Next-Q8_0-merged.gguf.tmp
           echo "Downloading model from modelstash..."
-          wget -O /models/Qwen3-Coder-Next-Q8_0-merged.gguf http://modelstash:8000/Qwen3-Coder-Next-Q8_0-merged.gguf
+          wget -O /models/Qwen3-Coder-Next-Q8_0-merged.gguf.tmp http://modelstash:8000/Qwen3-Coder-Next-Q8_0-merged.gguf && \
+          mv /models/Qwen3-Coder-Next-Q8_0-merged.gguf.tmp /models/Qwen3-Coder-Next-Q8_0-merged.gguf
         volumeMounts:
         - name: model-cache
           mountPath: /models
