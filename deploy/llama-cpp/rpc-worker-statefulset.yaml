@@ -26,8 +26,8 @@ spec:
                 operator: In
                 values:
                 - talos-0u4-tjd
-                - talos-8do-z37
-                - talos-k3d-suh
+                - talos-q0c-o34
+                - talos-u79-gei
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
