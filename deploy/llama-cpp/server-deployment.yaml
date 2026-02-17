@@ -20,14 +20,14 @@ spec:
         - sh
         - -c
         - |
-          if [ -f /models/GLM-4.7-Flash-Q8_0.gguf ]; then
+          if [ -f /models/Nanbeige.Nanbeige4.1-3B.f16.gguf ]; then
             echo "Model already cached, skipping"
             exit 0
           fi
-          rm -f /models/GLM-4.7-Flash-Q8_0.gguf.tmp
+          rm -f /models/Nanbeige.Nanbeige4.1-3B.f16.gguf.tmp
           echo "Downloading model from modelstash..."
-          wget -O /models/GLM-4.7-Flash-Q8_0.gguf.tmp http://modelstash:8000/GLM-4.7-Flash-Q8_0.gguf && \
-          mv /models/GLM-4.7-Flash-Q8_0.gguf.tmp /models/GLM-4.7-Flash-Q8_0.gguf
+          wget -O /models/Nanbeige.Nanbeige4.1-3B.f16.gguf.tmp http://modelstash:8000/Nanbeige.Nanbeige4.1-3B.f16.gguf && \
+          mv /models/Nanbeige.Nanbeige4.1-3B.f16.gguf.tmp /models/Nanbeige.Nanbeige4.1-3B.f16.gguf
         volumeMounts:
         - name: model-cache
           mountPath: /models
@@ -38,7 +38,7 @@ spec:
         command: ["llama-server"]
         args:
         - "-m"
-        - "/models/GLM-4.7-Flash-Q8_0.gguf"
+        - "/models/Nanbeige.Nanbeige4.1-3B.f16.gguf"
         - "--port"
         - "8080"
         - "-ngl"
