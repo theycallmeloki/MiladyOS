@@ -16,7 +16,7 @@ spec:
       runtimeClassName: nvidia
       containers:
       - name: vllm
-        image: ghcr.io/sasha0552/vllm:v0.9.1
+        image: ghcr.io/sasha0552/vllm:v0.8.5.post1
         args:
         - "--model"
         - "Nanbeige/Nanbeige4.1-3B"
