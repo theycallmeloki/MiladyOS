@@ -1,0 +1,36 @@
+# Promtail Values - Log shipper DaemonSet for MiladyOS
+config:
+  clients:
+    - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+  snippets:
+    pipelineStages:
+      - cri: {}
+    extraScrapeConfigs: |
+      # Add kubernetes namespace and pod labels
+      - job_name: kubernetes-pods
+        pipeline_stages:
+          - cri: {}
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+# Tolerate all taints so promtail runs on every node
+tolerations:
+  - operator: Exists
+    effect: NoSchedule
+  - operator: Exists
+    effect: NoExecute
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
