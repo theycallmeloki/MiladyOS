@@ -13,45 +13,29 @@ spec:
       labels:
         app: llama-server
     spec:
-      initContainers:
-      - name: model-fetch
-        image: busybox:stable
-        command:
-        - sh
-        - -c
-        - |
-          if [ -f /models/Nanbeige.Nanbeige4.1-3B.f16.gguf ]; then
-            echo "Model already cached, skipping"
-            exit 0
-          fi
-          rm -f /models/Nanbeige.Nanbeige4.1-3B.f16.gguf.tmp
-          echo "Downloading model from modelstash..."
-          wget -O /models/Nanbeige.Nanbeige4.1-3B.f16.gguf.tmp http://modelstash:8000/Nanbeige.Nanbeige4.1-3B.f16.gguf && \
-          mv /models/Nanbeige.Nanbeige4.1-3B.f16.gguf.tmp /models/Nanbeige.Nanbeige4.1-3B.f16.gguf
-        volumeMounts:
-        - name: model-cache
-          mountPath: /models
+      runtimeClassName: nvidia
       containers:
-      - name: llama-server
-        image: ogmiladyloki/llama-cpp-rpc-server:latest
-        imagePullPolicy: Always
-        command: ["llama-server"]
+      - name: vllm
+        image: ghcr.io/sasha0552/vllm:v0.10.0
         args:
-        - "-m"
-        - "/models/Nanbeige.Nanbeige4.1-3B.f16.gguf"
+        - "--model"
+        - "Nanbeige/Nanbeige4.1-3B"
         - "--host"
         - "0.0.0.0"
         - "--port"
         - "8080"
-        - "-ngl"
-        - "99"
-        - "--ctx-size"
+        - "--dtype"
+        - "float16"
+        - "--max-model-len"
         - "32768"
-        - "--rpc"
-        - "rpc-worker-0.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-1.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-2.rpc-worker-headless.llama-cpp.svc.cluster.local:50052"
+        - "--download-dir"
+        - "/models"
         ports:
         - containerPort: 8080
           name: http
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
         volumeMounts:
         - name: model-cache
           mountPath: /models
