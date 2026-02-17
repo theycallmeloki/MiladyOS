@@ -1,63 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: nvidia-gpu-operator
+  name: nvidia-device-plugin
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: https://helm.ngc.nvidia.com/nvidia
-    targetRevision: v25.3.0
-    chart: gpu-operator
+    repoURL: https://nvidia.github.io/k8s-device-plugin
+    targetRevision: 0.18.2
+    chart: nvidia-device-plugin
     helm:
       values: |
-        # Node Feature Discovery - runs on all nodes to find GPUs
-        nfd:
-          enabled: true
-          worker:
-            securityContext:
-              privileged: true
-
-        # Pin operator controller to GPU node once discovered
-        operator:
-          defaultRuntime: containerd
-
-        # GPU Feature Discovery for auto-labeling
-        gfd:
-          enabled: true
-          securityContext:
-            privileged: true
-
-        # Device plugin for GPU scheduling
-        devicePlugin:
-          enabled: true
-          securityContext:
-            privileged: true
-
-        # Container runtime integration
-        toolkit:
-          enabled: true
-          env:
-            - name: CONTAINERD_CONFIG
-              value: /etc/containerd/config.toml
-            - name: CONTAINERD_SOCKET
-              value: /run/containerd/containerd.sock
-            - name: CONTAINERD_RUNTIME_CLASS
-              value: nvidia
-            - name: CONTAINERD_SET_AS_DEFAULT
-              value: "true"
-          securityContext:
-            privileged: true
-
-        # DCGM metrics exporter
-        dcgmExporter:
-          enabled: true
-          securityContext:
-            privileged: true
-
-        # Driver disabled - Talos has pre-installed drivers
-        driver:
-          enabled: false
+        runtimeClassName: nvidia
   destination:
     server: https://kubernetes.default.svc
     namespace: gpu-operator
@@ -67,7 +21,6 @@ spec:
       selfHeal: true
     syncOptions:
     - CreateNamespace=true
-    - ServerSideApply=true
     managedNamespaceMetadata:
       labels:
         pod-security.kubernetes.io/enforce: privileged
