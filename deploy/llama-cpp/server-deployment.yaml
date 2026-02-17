@@ -45,6 +45,8 @@ spec:
         - "8080"
         - "-ngl"
         - "99"
+        - "--ctx-size"
+        - "32768"
         - "--rpc"
         - "rpc-worker-0.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-1.rpc-worker-headless.llama-cpp.svc.cluster.local:50052,rpc-worker-2.rpc-worker-headless.llama-cpp.svc.cluster.local:50052"
         ports:
