@@ -28,6 +28,7 @@ spec:
         - "float16"
         - "--max-model-len"
         - "131072"
+        - "--enforce-eager"
         - "--download-dir"
         - "/models"
         ports:
