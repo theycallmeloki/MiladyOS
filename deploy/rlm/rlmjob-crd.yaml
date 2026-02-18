@@ -1,0 +1,99 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: rlmjobs.rlm.io
+spec:
+  group: rlm.io
+  names:
+    kind: RLMJob
+    listKind: RLMJobList
+    plural: rlmjobs
+    singular: rlmjob
+    shortNames:
+      - rlm
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["prompt", "backend", "backendKwargs", "backendSecret"]
+              properties:
+                prompt:
+                  type: string
+                  description: "The prompt to send to the RLM."
+                backend:
+                  type: string
+                  enum: ["openai", "anthropic", "portkey", "openrouter", "vercel", "vllm", "litellm", "azure_openai", "gemini"]
+                  description: "LLM backend to use."
+                backendKwargs:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: "Backend configuration (model_name, etc.)."
+                backendSecret:
+                  type: string
+                  description: "Name of Kubernetes Secret containing API keys (e.g., OPENAI_API_KEY)."
+                image:
+                  type: string
+                  default: "python:3.11-slim"
+                  description: "Container image for worker pods."
+                numWorkers:
+                  type: integer
+                  default: 1
+                  minimum: 1
+                  description: "Number of worker pods."
+                maxIterations:
+                  type: integer
+                  default: 30
+                  minimum: 1
+                  description: "Maximum RLM iterations."
+                maxDepth:
+                  type: integer
+                  default: 1
+                  minimum: 1
+                  description: "Maximum recursion depth."
+                resourceRequests:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: "Resource requests for worker pods."
+                resourceLimits:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: "Resource limits for worker pods."
+                timeout:
+                  type: integer
+                  default: 600
+                  description: "Timeout in seconds for the job."
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: ["Pending", "Running", "Completed", "Failed"]
+                result:
+                  type: string
+                  description: "Final answer from the RLM completion."
+                iterations:
+                  type: integer
+                  description: "Number of iterations completed."
+                error:
+                  type: string
+                  description: "Error message if the job failed."
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Iterations
+          type: integer
+          jsonPath: .status.iterations
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rlmjob-webhook
+  namespace: rlm-system
+  labels:
+    app: rlmjob-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rlmjob-webhook
+  template:
+    metadata:
+      labels:
+        app: rlmjob-webhook
+    spec:
+      containers:
+        - name: webhook
+          image: ogmiladyloki/rlmjob-webhook:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RLM_IMAGE
+              value: "ogmiladyloki/rlm:latest"
+          readinessProbe:
+            httpGet:
+              path: /sync
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /sync
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rlmjob-webhook
+  namespace: rlm-system
+  labels:
+    app: rlmjob-webhook
+spec:
+  type: ClusterIP
+  selector:
+    app: rlmjob-webhook
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
