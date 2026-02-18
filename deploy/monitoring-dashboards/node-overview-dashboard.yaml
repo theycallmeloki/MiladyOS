@@ -212,13 +212,13 @@ data:
         },
         {
           "id": 7,
-          "title": "Root Disk Used %",
+          "title": "Disk Used % (/var)",
           "type": "timeseries",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "100 - (node_filesystem_avail_bytes{job=\"node-exporter\",mountpoint=\"/\",fstype!=\"tmpfs\",node=~\"$node\"} / node_filesystem_size_bytes{job=\"node-exporter\",mountpoint=\"/\",fstype!=\"tmpfs\",node=~\"$node\"}) * 100",
-              "legendFormat": "{{node}}",
+              "expr": "100 - (node_filesystem_avail_bytes{job=\"node-exporter\",mountpoint=\"/var\",fstype=\"xfs\"} / node_filesystem_size_bytes{job=\"node-exporter\",mountpoint=\"/var\",fstype=\"xfs\"}) * 100",
+              "legendFormat": "{{instance}}",
               "refId": "A"
             }
           ],
@@ -274,35 +274,31 @@ data:
         },
         {
           "id": 10,
-          "title": "VRAM Usage",
+          "title": "VRAM Used %",
           "type": "timeseries",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "nvidia_smi_memory_used_bytes",
-              "legendFormat": "{{node}} used",
+              "expr": "nvidia_smi_memory_used_bytes / nvidia_smi_memory_total_bytes * 100",
+              "legendFormat": "{{node}}",
               "refId": "A"
-            },
-            {
-              "expr": "nvidia_smi_memory_total_bytes",
-              "legendFormat": "{{node}} total",
-              "refId": "B"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "bytes",
-              "custom": { "lineWidth": 1, "fillOpacity": 10 }
-            },
-            "overrides": [
-              {
-                "matcher": { "id": "byNamePattern", "options": ".*total" },
-                "properties": [
-                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 4] } },
-                  { "id": "custom.fillOpacity", "value": 0 }
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "custom": { "lineWidth": 2, "fillOpacity": 15 },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": 0 },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
                 ]
               }
-            ]
+            }
           },
           "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] } },
           "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 }
