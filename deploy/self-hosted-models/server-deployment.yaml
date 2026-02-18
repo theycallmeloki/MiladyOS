@@ -27,7 +27,7 @@ spec:
         - "--dtype"
         - "float16"
         - "--max-model-len"
-        - "262144"
+        - "131072"
         - "--download-dir"
         - "/models"
         ports:
