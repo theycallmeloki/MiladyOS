@@ -52,6 +52,16 @@ spec:
           value: "3000"
         - name: GOTTY_POD_NAMESPACE
           value: "gotty-dev"
+        - name: MATTERMOST_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: mattermost-bot-secret
+              key: MATTERMOST_BOT_TOKEN
+        - name: MATTERMOST_URL
+          valueFrom:
+            secretKeyRef:
+              name: mattermost-bot-secret
+              key: MATTERMOST_URL
         resources:
           requests:
             cpu: 100m

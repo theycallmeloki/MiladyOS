@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webhook-bridge
+  namespace: fleet-agent
+data:
+  bridge.py: |
+    #!/usr/bin/env python3
+    """
+    Mattermost → fleet-agent queue bridge.
+
+    Receives Mattermost outgoing webhooks (application/x-www-form-urlencoded)
+    from #fleet-ops and appends them to /data/queue/queue.jsonl so pi-mom
+    picks them up and runs an agent loop.
+
+    Outgoing webhook token is validated if OUTGOING_WEBHOOK_TOKEN is set.
+    """
+    import json, os, datetime
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    from urllib.parse import parse_qs
+
+    QUEUE     = '/data/queue/queue.jsonl'
+    PORT      = int(os.environ.get('PORT', '9000'))
+    WH_TOKEN  = os.environ.get('OUTGOING_WEBHOOK_TOKEN', '')
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            ts = datetime.datetime.utcnow().isoformat()
+            print(f"[{ts}] {fmt % args}", flush=True)
+
+        def do_GET(self):
+            if self.path == '/health':
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status":"ok"}')
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def do_POST(self):
+            length = int(self.headers.get('Content-Length', 0))
+            body   = self.rfile.read(length).decode('utf-8', errors='replace')
+
+            try:
+                fields  = parse_qs(body, keep_blank_values=True)
+                token   = fields.get('token',        [''])[0]
+                text    = fields.get('text',         [''])[0].strip()
+                user    = fields.get('user_name',    ['unknown'])[0]
+                channel = fields.get('channel_name', ['unknown'])[0]
+                user_id = fields.get('user_id',      [''])[0]
+            except Exception as e:
+                print(f"Parse error: {e}", flush=True)
+                self.send_response(400)
+                self.end_headers()
+                return
+
+            # Validate webhook token if configured
+            if WH_TOKEN and token != WH_TOKEN:
+                self.send_response(403)
+                self.end_headers()
+                return
+
+            # Skip messages from the bot itself to prevent loops
+            bot_user = os.environ.get('BOT_USERNAME', 'fleet-agent')
+            if user == bot_user:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'')
+                return
+
+            if text:
+                entry = {
+                    "type":        "mattermost",
+                    "channel":     channel,
+                    "user":        user,
+                    "user_id":     user_id,
+                    "text":        text,
+                    "ts":          datetime.datetime.utcnow().isoformat() + "Z",
+                    "instruction": text,
+                }
+                os.makedirs(os.path.dirname(QUEUE), exist_ok=True)
+                with open(QUEUE, 'a') as f:
+                    f.write(json.dumps(entry) + '\n')
+                print(f"Queued from @{user} in #{channel}: {text[:120]}", flush=True)
+
+            # Empty response = no reply to Mattermost channel
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'')
+
+    if __name__ == '__main__':
+        print(f"Mattermost webhook bridge listening on :{PORT}", flush=True)
+        print(f"Queue file: {QUEUE}", flush=True)
+        HTTPServer(('', PORT), Handler).serve_forever()

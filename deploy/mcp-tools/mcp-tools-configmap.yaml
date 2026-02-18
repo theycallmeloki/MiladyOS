@@ -14,11 +14,14 @@ data:
 
     const { execSync, exec } = require('child_process');
     const http = require('http');
+    const https = require('https');
     const { URL } = require('url');
 
     const PORT = parseInt(process.env.PORT || '3000');
     const GOTTY_NS = process.env.GOTTY_POD_NAMESPACE || 'gotty-dev';
     const TMUX_SESSION = 'milady';
+    const MM_URL   = process.env.MATTERMOST_URL || 'http://mattermost.mattermost.svc.cluster.local:8065';
+    const MM_TOKEN = process.env.MATTERMOST_BOT_TOKEN || '';
 
     // --- Tool definitions (MCP schema) ---
     const TOOLS = [
@@ -131,8 +134,65 @@ data:
           },
           required: ['resource', 'name']
         }
+      },
+      {
+        name: 'mattermost_post',
+        description: 'Post a message to a Mattermost channel by channel name (e.g. fleet-ops, heartbeat, alerts). Uses the fleet-agent bot account.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            channel: { type: 'string', description: 'Channel name (without #), e.g. fleet-ops, heartbeat, alerts' },
+            message: { type: 'string', description: 'Message text (Markdown supported)' }
+          },
+          required: ['channel', 'message']
+        }
       }
     ];
+
+    // --- Mattermost API helper ---
+    function mmApi(method, path, body) {
+      return new Promise((resolve, reject) => {
+        const u = new URL(MM_URL + path);
+        const isHttps = u.protocol === 'https:';
+        const payload = body ? JSON.stringify(body) : null;
+        const opts = {
+          hostname: u.hostname,
+          port: u.port || (isHttps ? 443 : 80),
+          path: u.pathname + u.search,
+          method,
+          headers: {
+            'Authorization': `Bearer ${MM_TOKEN}`,
+            'Content-Type': 'application/json',
+            ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+          }
+        };
+        const lib = isHttps ? https : http;
+        const req = lib.request(opts, res => {
+          let data = '';
+          res.on('data', d => data += d);
+          res.on('end', () => {
+            try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+            catch { resolve({ status: res.statusCode, body: data }); }
+          });
+        });
+        req.on('error', reject);
+        if (payload) req.write(payload);
+        req.end();
+      });
+    }
+
+    // Channel name → ID cache
+    const channelCache = {};
+    async function resolveChannel(name) {
+      if (channelCache[name]) return channelCache[name];
+      // Search by name across teams
+      const r = await mmApi('GET', `/api/v4/channels/name/${name}?team_name=milady`);
+      if (r.status === 200 && r.body.id) {
+        channelCache[name] = r.body.id;
+        return r.body.id;
+      }
+      throw new Error(`Channel not found: ${name} (status ${r.status})`);
+    }
 
     // --- Tool execution ---
     function run(cmd, opts = {}) {
@@ -212,6 +272,18 @@ data:
           if (args.namespace) cmd += ` -n ${args.namespace}`;
           const r = run(cmd);
           return r.output;
+        }
+        case 'mattermost_post': {
+          return resolveChannel(args.channel)
+            .then(channelId => mmApi('POST', '/api/v4/posts', {
+              channel_id: channelId,
+              message: args.message
+            }))
+            .then(r => {
+              if (r.status === 201) return `Posted to #${args.channel}`;
+              return `Error ${r.status}: ${JSON.stringify(r.body)}`;
+            })
+            .catch(e => `Error: ${e.message}`);
         }
         default:
           return `Unknown tool: ${name}`;
@@ -302,18 +374,17 @@ data:
             });
           } else if (method === 'tools/call') {
             const { name, arguments: args } = params;
-            let result;
-            try {
-              result = executeTool(name, args || {});
-            } catch (e) {
-              result = `Error: ${e.message}`;
-            }
-            if (clientRes) sendEvent(clientRes, 'message', {
-              jsonrpc: '2.0', id,
-              result: {
-                content: [{ type: 'text', text: String(result) }]
-              }
-            });
+            Promise.resolve()
+              .then(() => executeTool(name, args || {}))
+              .catch(e => `Error: ${e.message}`)
+              .then(result => {
+                if (clientRes) sendEvent(clientRes, 'message', {
+                  jsonrpc: '2.0', id,
+                  result: {
+                    content: [{ type: 'text', text: String(result) }]
+                  }
+                });
+              });
           } else if (method === 'notifications/initialized') {
             // No response needed
           } else {
