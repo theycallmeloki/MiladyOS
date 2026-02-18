@@ -54,12 +54,14 @@ spec:
               }
               APIROUTE
 
-              # Symlink PVC-mounted logs into Next.js public directory
-              mkdir -p public
-              ln -sf /rlm-logs public/logs
-
               npm install
+
+              # Build BEFORE creating the symlink so Next.js doesn't traverse
+              # the symlink into /rlm-logs during build (Turbopack rejects it)
               npm run build
+
+              # Now create symlink so npm start serves /rlm-logs as /logs/*
+              ln -sf /rlm-logs public/logs
 
               echo "[$(date)] RLM visualizer ready at :3001"
               exec npm start -- -p 3001
