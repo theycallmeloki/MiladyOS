@@ -39,8 +39,15 @@ spec:
         - |
           apk add --no-cache bash curl git
 
-          # Install pi-mom from npm
-          npm install -g @mariozechner/pi-mom @mariozechner/pi-coding-agent
+          # Install full pi-mono suite
+          npm install -g \
+            @mariozechner/pi-ai \
+            @mariozechner/pi-agent-core \
+            @mariozechner/pi-coding-agent \
+            @mariozechner/pi-mom \
+            @mariozechner/pi-tui \
+            @mariozechner/pi-web-ui \
+            @mariozechner/pi-pods
 
           # Set up workspace from ConfigMap
           mkdir -p /workspace /data/traces /data/training /data/queue
