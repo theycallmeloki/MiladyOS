@@ -6,9 +6,9 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      - model_name: "qwen3-coder-next"
+      - model_name: "Nanbeige/Nanbeige4.1-3B"
         litellm_params:
-          model: "openai/qwen3-coder-next"
+          model: "openai/Nanbeige/Nanbeige4.1-3B"
           api_base: "http://vllm-server.self-hosted-models.svc.cluster.local:8080/v1"
           api_key: "not-needed"
 
