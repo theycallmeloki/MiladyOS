@@ -29,6 +29,9 @@ spec:
       - name: trace-processor
         configMap:
           name: trace-processor
+      - name: webhook-bridge
+        configMap:
+          name: webhook-bridge
 
       containers:
       # --- pi-mom agent harness ---
@@ -136,6 +139,34 @@ spec:
           limits:
             cpu: 500m
             memory: 512Mi
+
+      # --- Mattermost webhook bridge sidecar ---
+      - name: webhook-bridge
+        image: python:3.12-alpine
+        command: ["python3", "/scripts/bridge.py"]
+        ports:
+        - containerPort: 9000
+          name: webhook
+        env:
+        - name: OUTGOING_WEBHOOK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: mattermost-bot-secret
+              key: MATTERMOST_OUTGOING_WEBHOOK_TOKEN
+        - name: BOT_USERNAME
+          value: fleet-agent
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: webhook-bridge
+          mountPath: /scripts
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
 
       # --- Heartbeat CronJob trigger (queue writer) ---
       # Note: CronJob is defined separately; the heartbeat trigger

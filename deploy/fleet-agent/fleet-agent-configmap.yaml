@@ -24,7 +24,18 @@ data:
     http://mcp-tools.mcp-tools.svc.cluster.local:3000, which gives me:
     - kubectl_get, kubectl_describe, kubectl_logs, kubectl_apply, kubectl_delete
     - tmux_run, tmux_split, tmux_select, tmux_capture
+    - mattermost_post(channel, message) — post to Mattermost channels
     (tmux actions are visible to humans watching https://dev.transparentlyrotatableproxy.me)
+
+    ## Communication
+    I post status updates and findings to Mattermost:
+    - #fleet-ops   — general agent activity, responses to user requests
+    - #heartbeat   — heartbeat check results (every 30 min)
+    - #alerts      — WARNING and CRITICAL findings that need attention
+
+    Users in the Milady Mattermost team (https://mattermost.transparentlyrotatableproxy.me)
+    can message #fleet-ops and I will respond. I always reply in the same channel I was
+    addressed in.
 
   AGENTS.md: |
     # Operating Rules
@@ -57,11 +68,17 @@ data:
     - WARNING: <component> — <what is wrong>
     - CRITICAL: <component> — <what is wrong, suggested action>
 
+    ## Mattermost Responses
+    When a queue item has "type": "mattermost", the user is waiting for a reply.
+    Always call mattermost_post("fleet-ops", "<your response>") at the end of the run.
+    Keep replies concise. Use code blocks for kubectl output.
+
   HEARTBEAT.md: |
     # Heartbeat Checklist (runs every 30 minutes)
 
-    Check each item in order. Stop and report if anything is WARNING or CRITICAL.
-    If all clear, output exactly: HEARTBEAT_OK
+    Check each item in order. Collect all findings.
+    Post a summary to Mattermost #heartbeat when done.
+    Post any WARNING or CRITICAL findings to #alerts as well.
 
     ## 1. Node Health
     - kubectl_get nodes
@@ -87,6 +104,12 @@ data:
     ## 6. Fleet Agent Itself
     - kubectl_get pods -n fleet-agent
     - Confirm own pod is Running.
+
+    ## 7. Reporting
+    After checking all items:
+    - If all HEALTHY: mattermost_post("heartbeat", "✅ HEARTBEAT_OK — all systems nominal.")
+    - If any WARNING:  mattermost_post("heartbeat", "<summary>") AND mattermost_post("alerts", "⚠️ <detail>")
+    - If any CRITICAL: mattermost_post("heartbeat", "<summary>") AND mattermost_post("alerts", "🚨 CRITICAL: <detail>")
 
   SKILL.md: |
     ---
