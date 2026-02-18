@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rlm-coordinator-script
+  namespace: rlm-system
+data:
+  coordinator.py: |
+    """
+    Fixed coordinator: creates its own REPL pod instead of reusing worker pods.
+    The original coordinator.py passes skip_pod_creation=True + pod_ip but omits
+    pod_name, which causes KubernetesREPL._exec_in_pod() to fail.
+    """
+    import json
+    import os
+    import socket
+    import time
+    import traceback
+
+
+    def wait_for_lm_handler(host: str, port: int, timeout: int = 120):
+        """Wait for LMHandler service to be reachable via TCP."""
+        for _ in range(timeout):
+            try:
+                sock = socket.create_connection((host, port), timeout=5)
+                sock.close()
+                return
+            except (ConnectionRefusedError, OSError, socket.timeout):
+                time.sleep(1)
+        raise TimeoutError(f"LMHandler at {host}:{port} not reachable within {timeout}s")
+
+
+    def patch_status(custom_api, namespace: str, job_name: str, status: dict):
+        """Patch the RLMJob status subresource."""
+        custom_api.patch_namespaced_custom_object_status(
+            group="rlm.io",
+            version="v1alpha1",
+            namespace=namespace,
+            plural="rlmjobs",
+            name=job_name,
+            body={"status": status},
+        )
+
+
+    def main():
+        from kubernetes import client, config
+
+        config.load_incluster_config()
+        custom_api = client.CustomObjectsApi()
+
+        job_name = os.environ["RLM_JOB_NAME"]
+        namespace = os.environ["RLM_JOB_NAMESPACE"]
+        prompt = os.environ["RLM_PROMPT"]
+        backend = os.environ["RLM_BACKEND"]
+        backend_kwargs = json.loads(os.environ["BACKEND_KWARGS"])
+        max_iterations = int(os.environ.get("RLM_MAX_ITERATIONS", "30"))
+        max_depth = int(os.environ.get("RLM_MAX_DEPTH", "1"))
+        worker_image = os.environ.get("RLM_WORKER_IMAGE", "python:3.11-slim")
+        timeout = int(os.environ.get("RLM_TIMEOUT", "600"))
+
+        lm_handler_host = f"{job_name}-lm-handler"
+        lm_handler_port = 9090
+
+        try:
+            wait_for_lm_handler(lm_handler_host, lm_handler_port)
+            patch_status(custom_api, namespace, job_name, {"phase": "Running"})
+
+            from rlm.core.rlm import RLM
+
+            # Coordinator creates its own REPL pod (skip_pod_creation=False, the default).
+            # This avoids the pod_name lookup bug in the original coordinator.
+            rlm = RLM(
+                backend=backend,
+                backend_kwargs=backend_kwargs,
+                environment="kubernetes",
+                environment_kwargs={
+                    "namespace": namespace,
+                    "image": worker_image,
+                    "timeout": timeout,
+                },
+                max_iterations=max_iterations,
+                max_depth=max_depth,
+                external_lm_handler_address=(lm_handler_host, lm_handler_port),
+            )
+
+            result = rlm.completion(prompt)
+
+            patch_status(custom_api, namespace, job_name, {
+                "phase": "Completed",
+                "result": result.response,
+                "iterations": max_iterations,
+            })
+
+        except Exception:
+            error_msg = traceback.format_exc()
+            try:
+                patch_status(custom_api, namespace, job_name, {
+                    "phase": "Failed",
+                    "error": error_msg[-1000:],
+                })
+            except Exception:
+                pass
+            raise
+
+
+    if __name__ == "__main__":
+        main()

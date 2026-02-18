@@ -15,6 +15,10 @@ spec:
       labels:
         app: rlmjob-webhook
     spec:
+      volumes:
+        - name: sync-hook
+          configMap:
+            name: rlmjob-sync-hook
       containers:
         - name: webhook
           image: ogmiladyloki/rlmjob-webhook:latest
@@ -23,6 +27,10 @@ spec:
           env:
             - name: RLM_IMAGE
               value: "ogmiladyloki/rlm:latest"
+          volumeMounts:
+            - name: sync-hook
+              mountPath: /app/sync_hook.py
+              subPath: sync_hook.py
           readinessProbe:
             tcpSocket:
               port: 8080
