@@ -58,7 +58,7 @@ data:
                                 f"client = get_client('{backend}', backend_kwargs); "
                                 "handler = LMHandler(client, host='0.0.0.0', port=9090); "
                                 "handler.start(); "
-                                f"time.sleep({timeout})"
+                                f"time.sleep(max({timeout} * 4 + 600, 3600))"
                             ),
                         ],
                         "ports": [{"containerPort": LM_HANDLER_PORT}],
