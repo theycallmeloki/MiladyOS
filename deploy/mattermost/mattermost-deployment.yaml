@@ -75,8 +75,12 @@ spec:
                 secretKeyRef:
                   name: mattermost-postgres-secret
                   key: POSTGRES_DB
-            - name: MM_SQLSETTINGS_DATASOURCE
-              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@mattermost-postgres.mattermost.svc.cluster.local:5432/$(POSTGRES_DB)?sslmode=disable&connect_timeout=10
+            - name: MM_SERVICESETTINGS_SITEURL
+              value: https://mattermost.transparentlyrotatableproxy.me
+            - name: MM_SERVICESETTINGS_ENABLELOCALMODE
+              value: "false"
+            - name: MM_PLUGINSETTINGS_ENABLEUPLOADS
+              value: "true"
           command:
             - sh
             - -c
@@ -84,12 +88,6 @@ spec:
               ENCODED_PW=$(printf '%s' "$POSTGRES_PASSWORD" | sed 's/\//%2F/g; s/+/%2B/g; s/=/%3D/g')
               export MM_SQLSETTINGS_DATASOURCE="postgres://${POSTGRES_USER}:${ENCODED_PW}@mattermost-postgres.mattermost.svc.cluster.local:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10"
               exec mattermost server
-            - name: MM_SERVICESETTINGS_SITEURL
-              value: https://mattermost.transparentlyrotatableproxy.me
-            - name: MM_SERVICESETTINGS_ENABLELOCALMODE
-              value: "false"
-            - name: MM_PLUGINSETTINGS_ENABLEUPLOADS
-              value: "true"
           volumeMounts:
             - name: mattermost-data
               mountPath: /mattermost/data
