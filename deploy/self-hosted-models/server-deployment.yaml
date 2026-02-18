@@ -27,7 +27,7 @@ spec:
         - "--dtype"
         - "float16"
         - "--max-model-len"
-        - "131072"
+        - "65536"
         - "--enforce-eager"
         - "--no-enable-chunked-prefill"
         - "--download-dir"
