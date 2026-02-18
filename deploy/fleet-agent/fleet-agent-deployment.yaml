@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-agent
+  namespace: fleet-agent
+  labels:
+    app: fleet-agent
+    app.kubernetes.io/part-of: miladyos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fleet-agent
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: fleet-agent
+    spec:
+      serviceAccountName: fleet-agent
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: fleet-agent-data
+      - name: workspace
+        configMap:
+          name: fleet-agent-workspace
+      - name: trace-processor
+        configMap:
+          name: trace-processor
+
+      containers:
+      # --- pi-mom agent harness ---
+      - name: fleet-agent
+        image: node:22-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          apk add --no-cache bash curl git
+
+          # Install pi-mom from npm
+          npm install -g @mariozechner/pi-mom @mariozechner/pi-coding-agent
+
+          # Set up workspace from ConfigMap
+          mkdir -p /workspace /data/traces /data/training /data/queue
+          cp /config/SOUL.md /workspace/SOUL.md
+          cp /config/AGENTS.md /workspace/AGENTS.md
+          cp /config/HEARTBEAT.md /workspace/HEARTBEAT.md
+          mkdir -p /workspace/.pi/skills/fleet-management
+          cp /config/SKILL.md /workspace/.pi/skills/fleet-management/SKILL.md
+
+          # Queue file (append-only log of instructions/triggers)
+          touch /data/queue/queue.jsonl
+
+          # pi-mom config
+          mkdir -p /workspace/.pi
+          cat > /workspace/.pi/settings.json << 'EOF'
+          {
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-6",
+            "maxTokens": 8192,
+            "workspaceDir": "/workspace",
+            "tracesDir": "/data/traces",
+            "queueFile": "/data/queue/queue.jsonl",
+            "mcpServers": [
+              {
+                "name": "fleet-tools",
+                "transport": "sse",
+                "url": "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse"
+              }
+            ]
+          }
+          EOF
+
+          echo "[$(date)] Fleet agent starting, watching queue at /data/queue/queue.jsonl"
+
+          # Run pi-mom watching the queue file
+          exec npx pi-mom \
+            --queue /data/queue/queue.jsonl \
+            --workspace /workspace \
+            --traces-dir /data/traces \
+            --heartbeat /workspace/HEARTBEAT.md \
+            --heartbeat-interval 1800
+
+        env:
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fleet-agent-secrets
+              key: ANTHROPIC_API_KEY
+        - name: NODE_ENV
+          value: production
+
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: workspace
+          mountPath: /config
+
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 2Gi
+
+      # --- Trace processor sidecar ---
+      - name: trace-processor
+        image: python:3.12-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          apk add --no-cache inotify-tools
+          pip install --quiet inotify 2>/dev/null || true
+          exec python3 /scripts/processor.py
+
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: trace-processor
+          mountPath: /scripts
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+      # --- Heartbeat CronJob trigger (queue writer) ---
+      # Note: CronJob is defined separately; the heartbeat trigger
+      # writes {"type":"heartbeat","ts":"..."} to /data/queue/queue.jsonl
+---
+# CronJob that writes heartbeat trigger to queue every 30 minutes
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fleet-heartbeat
+  namespace: fleet-agent
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: fleet-agent-data
+          containers:
+          - name: trigger
+            image: alpine:3.19
+            command: ["/bin/sh", "-c"]
+            args:
+            - |
+              TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+              echo "{\"type\":\"heartbeat\",\"ts\":\"$TS\",\"instruction\":\"Run the HEARTBEAT.md checklist. Report any WARNING or CRITICAL findings. Return HEARTBEAT_OK if all clear.\"}" >> /data/queue/queue.jsonl
+              echo "Heartbeat trigger written at $TS"
+            volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
