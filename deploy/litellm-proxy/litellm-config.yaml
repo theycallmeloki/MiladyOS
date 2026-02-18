@@ -17,7 +17,8 @@ data:
       telemetry: false
       callbacks: "custom_callbacks.proxy_handler_instance"
 
-    general_settings: {}
+    general_settings:
+      health_check_interval: 0   # disable background health-check model calls
 
     router_settings:
       num_retries: 3
