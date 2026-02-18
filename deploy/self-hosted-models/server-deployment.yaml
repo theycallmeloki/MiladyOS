@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: llama-server
-  namespace: llama-cpp
+  name: vllm-server
+  namespace: self-hosted-models
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: llama-server
+      app: vllm-server
   template:
     metadata:
       labels:
-        app: llama-server
+        app: vllm-server
     spec:
       runtimeClassName: nvidia
       containers:
