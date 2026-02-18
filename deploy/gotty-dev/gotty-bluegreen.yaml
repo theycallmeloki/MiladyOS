@@ -83,6 +83,13 @@ spec:
       - name: gotty-config
         configMap:
           name: gotty-config
+      - name: emacs-config
+        configMap:
+          name: emacs-mcp-config
+      - name: session-processor-script
+        configMap:
+          name: session-processor-script
+          defaultMode: 0755
 
       containers:
       - name: gotty
@@ -138,6 +145,11 @@ spec:
           # Claude Code
           npm install -g @anthropic-ai/claude-code || true
 
+          # Emacs + MCP filesystem/fetch packages
+          apt-get install -y emacs-nox
+          npm install -g @modelcontextprotocol/server-filesystem
+          npm install -g @modelcontextprotocol/server-fetch
+
           # tmux config
           cat > /root/.tmux.conf << 'TMUXEOF'
           set -g default-terminal "screen-256color"
@@ -180,6 +192,7 @@ spec:
           apt-get clean && rm -rf /var/lib/apt/lists/*
 
           cp /config/.gotty /root/.gotty
+          cp /emacs-config/.emacs /root/.emacs
           cd /workspace
           exec /usr/local/bin/gotty --config /root/.gotty /usr/local/bin/logged-session.sh
 
@@ -194,6 +207,8 @@ spec:
           mountPath: /logs
         - name: gotty-config
           mountPath: /config
+        - name: emacs-config
+          mountPath: /emacs-config
 
         resources:
           requests:
@@ -292,6 +307,36 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "100m"
+
+      - name: session-processor
+        image: ubuntu:24.04
+        command: ["/bin/bash", "/scripts/session-processor.sh"]
+        env:
+        - name: TZ
+          value: "UTC"
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - |
+                apt-get update && apt-get install -y \
+                  python3 gawk inotify-tools coreutils && apt-get clean
+        volumeMounts:
+        - name: session-logs
+          mountPath: /logs
+        - name: dev-storage
+          mountPath: /workspace
+        - name: session-processor-script
+          mountPath: /scripts
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
