@@ -9,3 +9,5 @@ resources:
 - rlm-rbac.yaml
 - webhook-sync-hook-configmap.yaml
 - coordinator-configmap.yaml
+- rlm-logs-pvc.yaml
+- rlm-visualizer-deployment.yaml
