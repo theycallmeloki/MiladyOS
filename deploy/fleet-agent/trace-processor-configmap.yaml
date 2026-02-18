@@ -1,0 +1,194 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trace-processor
+  namespace: fleet-agent
+data:
+  processor.py: |
+    #!/usr/bin/env python3
+    """
+    Trace Processor — converts pi-mom AgentEvent JSON traces into
+    OpenAI chat format JSONL for finetuning Nanbeige 4.1-3B.
+
+    Watches /data/traces/ for new *.json files via inotify,
+    converts each trace to a conversation, appends to
+    /data/training/fleet-ops.jsonl.
+    """
+
+    import json
+    import os
+    import time
+    import subprocess
+    from pathlib import Path
+    from datetime import datetime
+
+    TRACES_DIR = Path('/data/traces')
+    PROCESSED_DIR = Path('/data/traces/processed')
+    TRAINING_FILE = Path('/data/training/fleet-ops.jsonl')
+
+    TRACES_DIR.mkdir(parents=True, exist_ok=True)
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    TRAINING_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+
+    def events_to_conversation(events):
+        """
+        Convert a list of pi-mom AgentEvents into an OpenAI chat conversation.
+
+        Expected event types:
+          { "type": "user_message",     "content": "..." }
+          { "type": "assistant_message","content": "..." }
+          { "type": "tool_start",       "name": "...", "input": {...} }
+          { "type": "tool_end",         "name": "...", "output": "..." }
+        """
+        messages = []
+        pending_tool_calls = []
+        pending_tool_results = []
+
+        for ev in events:
+            t = ev.get('type', '')
+
+            if t == 'user_message':
+                # Flush any pending tool state before new user message
+                if pending_tool_calls:
+                    messages.append({
+                        'role': 'assistant',
+                        'content': None,
+                        'tool_calls': pending_tool_calls
+                    })
+                    for r in pending_tool_results:
+                        messages.append(r)
+                    pending_tool_calls = []
+                    pending_tool_results = []
+                messages.append({'role': 'user', 'content': ev.get('content', '')})
+
+            elif t == 'tool_start':
+                call_id = f"call_{len(pending_tool_calls)}"
+                pending_tool_calls.append({
+                    'id': call_id,
+                    'type': 'function',
+                    'function': {
+                        'name': ev.get('name', ''),
+                        'arguments': json.dumps(ev.get('input', {}))
+                    }
+                })
+
+            elif t == 'tool_end':
+                call_id = f"call_{len(pending_tool_results)}"
+                pending_tool_results.append({
+                    'role': 'tool',
+                    'tool_call_id': call_id,
+                    'content': str(ev.get('output', ''))[:4096]  # truncate long outputs
+                })
+
+            elif t == 'assistant_message':
+                content = ev.get('content', '')
+                if pending_tool_calls:
+                    messages.append({
+                        'role': 'assistant',
+                        'content': None,
+                        'tool_calls': pending_tool_calls
+                    })
+                    for r in pending_tool_results:
+                        messages.append(r)
+                    pending_tool_calls = []
+                    pending_tool_results = []
+                if content:
+                    messages.append({'role': 'assistant', 'content': content})
+
+        # Flush anything remaining
+        if pending_tool_calls:
+            messages.append({
+                'role': 'assistant',
+                'content': None,
+                'tool_calls': pending_tool_calls
+            })
+            for r in pending_tool_results:
+                messages.append(r)
+
+        return messages
+
+
+    def process_trace(trace_path):
+        print(f"[{datetime.now().isoformat()}] Processing: {trace_path}")
+        try:
+            with open(trace_path, 'r') as f:
+                data = json.load(f)
+
+            # pi-mom traces are either a list of events or wrapped in {"events": [...]}
+            if isinstance(data, list):
+                events = data
+            elif isinstance(data, dict):
+                events = data.get('events', [data])
+            else:
+                print(f"  Unexpected format, skipping")
+                return False
+
+            messages = events_to_conversation(events)
+
+            # Need at least user + assistant exchange to be useful
+            if len(messages) < 2:
+                print(f"  Too few messages ({len(messages)}), skipping")
+                return False
+
+            example = {'messages': messages}
+
+            with open(TRAINING_FILE, 'a') as f:
+                f.write(json.dumps(example) + '\n')
+
+            # Archive processed trace
+            dest = PROCESSED_DIR / trace_path.name
+            trace_path.rename(dest)
+
+            total = sum(1 for _ in open(TRAINING_FILE))
+            print(f"  OK — {len(messages)} messages → fleet-ops.jsonl ({total} total examples)")
+            return True
+
+        except Exception as e:
+            print(f"  Error processing {trace_path}: {e}")
+            return False
+
+
+    def watch_with_inotify():
+        """Use inotifywait for efficient file watching."""
+        print(f"[{datetime.now().isoformat()}] Watching {TRACES_DIR} with inotify")
+        proc = subprocess.Popen(
+            ['inotifywait', '-m', '-e', 'close_write', '-e', 'moved_to',
+             str(TRACES_DIR), '--format', '%w%f'],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+        )
+        for line in proc.stdout:
+            path = Path(line.decode().strip())
+            if path.suffix == '.json' and path.exists():
+                time.sleep(0.5)  # let write settle
+                process_trace(path)
+
+
+    def watch_polling():
+        """Fallback polling when inotify is unavailable."""
+        print(f"[{datetime.now().isoformat()}] Watching {TRACES_DIR} (polling)")
+        seen = set()
+        while True:
+            for p in TRACES_DIR.glob('*.json'):
+                if p not in seen:
+                    seen.add(p)
+                    # Check file is stable
+                    size1 = p.stat().st_size
+                    time.sleep(2)
+                    if p.exists() and p.stat().st_size == size1 and size1 > 10:
+                        process_trace(p)
+            time.sleep(10)
+
+
+    # Process any existing unprocessed traces on startup
+    print(f"[{datetime.now().isoformat()}] Trace processor starting")
+    for existing in TRACES_DIR.glob('*.json'):
+        process_trace(existing)
+
+    # Watch for new traces
+    try:
+        import subprocess
+        subprocess.run(['which', 'inotifywait'], check=True, capture_output=True)
+        watch_with_inotify()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        watch_polling()

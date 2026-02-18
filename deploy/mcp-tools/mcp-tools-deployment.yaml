@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-tools
+  namespace: mcp-tools
+  labels:
+    app: mcp-tools
+    app.kubernetes.io/part-of: miladyos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-tools
+  template:
+    metadata:
+      labels:
+        app: mcp-tools
+    spec:
+      serviceAccountName: mcp-tools
+      volumes:
+      - name: server-script
+        configMap:
+          name: mcp-tools-server
+      containers:
+      - name: mcp-tools
+        image: node:22-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # Install kubectl
+          apk add --no-cache curl bash
+          curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+          chmod +x kubectl && mv kubectl /usr/local/bin/
+
+          # Install tmux
+          apk add --no-cache tmux
+
+          # Install Node deps
+          cd /app
+          npm init -y
+          npm install @modelcontextprotocol/sdk express
+
+          exec node /scripts/server.js
+        ports:
+        - containerPort: 3000
+          name: http
+        volumeMounts:
+        - name: server-script
+          mountPath: /scripts
+        env:
+        - name: PORT
+          value: "3000"
+        - name: GOTTY_POD_NAMESPACE
+          value: "gotty-dev"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 15
