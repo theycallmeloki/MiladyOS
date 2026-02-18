@@ -48,22 +48,22 @@ spec:
         - "/etc/litellm/config.yaml"
         readinessProbe:
           httpGet:
-            path: /health
+            path: /health/liveliness
             port: 4000
-          initialDelaySeconds: 120
-          periodSeconds: 30
+          initialDelaySeconds: 30
+          periodSeconds: 10
           successThreshold: 1
-          failureThreshold: 10
-          timeoutSeconds: 20
+          failureThreshold: 6
+          timeoutSeconds: 5
         livenessProbe:
           httpGet:
-            path: /health
+            path: /health/liveliness
             port: 4000
-          initialDelaySeconds: 120
+          initialDelaySeconds: 60
           periodSeconds: 30
           successThreshold: 1
-          failureThreshold: 10
-          timeoutSeconds: 20
+          failureThreshold: 5
+          timeoutSeconds: 5
         volumeMounts:
         - name: shared-config-volume
           mountPath: /etc/litellm
