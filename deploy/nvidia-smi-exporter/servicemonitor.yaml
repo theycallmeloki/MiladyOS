@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nvidia-smi-exporter
+  namespace: monitoring
+  labels:
+    app: nvidia-smi-exporter
+spec:
+  selector:
+    matchLabels:
+      app: nvidia-smi-exporter
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: node
