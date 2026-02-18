@@ -209,7 +209,11 @@ data:
                     {
                         "name": "coordinator-script",
                         "configMap": {"name": "rlm-coordinator-script"},
-                    }
+                    },
+                    {
+                        "name": "rlm-logs",
+                        "persistentVolumeClaim": {"claimName": "rlm-logs"},
+                    },
                 ],
                 "containers": [
                     {
@@ -230,6 +234,7 @@ data:
                             {"name": "RLM_MAX_DEPTH", "value": str(max_depth)},
                             {"name": "RLM_WORKER_IMAGE", "value": image},
                             {"name": "RLM_TIMEOUT", "value": str(timeout)},
+                            {"name": "RLM_LOG_DIR", "value": "/rlm-logs"},
                         ],
                         "envFrom": [
                             {
@@ -241,7 +246,11 @@ data:
                                 "name": "coordinator-script",
                                 "mountPath": "/app/coordinator.py",
                                 "subPath": "coordinator.py",
-                            }
+                            },
+                            {
+                                "name": "rlm-logs",
+                                "mountPath": "/rlm-logs",
+                            },
                         ],
                     },
                 ],

@@ -56,6 +56,7 @@ data:
         max_depth = int(os.environ.get("RLM_MAX_DEPTH", "1"))
         worker_image = os.environ.get("RLM_WORKER_IMAGE", "python:3.11-slim")
         timeout = int(os.environ.get("RLM_TIMEOUT", "600"))
+        log_dir = os.environ.get("RLM_LOG_DIR", "/tmp/rlm-logs")
 
         lm_handler_host = f"{job_name}-lm-handler"
         lm_handler_port = 9090
@@ -65,6 +66,10 @@ data:
             patch_status(custom_api, namespace, job_name, {"phase": "Running"})
 
             from rlm.core.rlm import RLM
+            from rlm.logger import RLMLogger
+
+            os.makedirs(log_dir, exist_ok=True)
+            logger = RLMLogger(log_dir=log_dir, file_name=job_name)
 
             # Coordinator creates its own REPL pod (skip_pod_creation=False, the default).
             # This avoids the pod_name lookup bug in the original coordinator.
@@ -80,6 +85,7 @@ data:
                 max_iterations=max_iterations,
                 max_depth=max_depth,
                 external_lm_handler_address=(lm_handler_host, lm_handler_port),
+                logger=logger,
             )
 
             result = rlm.completion(prompt)
