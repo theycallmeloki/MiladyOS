@@ -67,9 +67,9 @@ spec:
           mkdir -p /workspace/.pi
           cat > /workspace/.pi/settings.json << 'EOF'
           {
-            "provider": "anthropic",
-            "model": "claude-sonnet-4-6",
-            "maxTokens": 8192,
+            "provider": "openai",
+            "model": "Nanbeige/Nanbeige4.1-3B",
+            "maxTokens": 4096,
             "workspaceDir": "/workspace",
             "tracesDir": "/data/traces",
             "queueFile": "/data/queue/queue.jsonl",
@@ -94,11 +94,10 @@ spec:
             --heartbeat-interval 1800
 
         env:
-        - name: ANTHROPIC_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: fleet-agent-secrets
-              key: ANTHROPIC_API_KEY
+        - name: OPENAI_API_KEY
+          value: "not-required"
+        - name: OPENAI_BASE_URL
+          value: "http://litellm-proxy.default.svc.cluster.local:4000/v1"
         - name: NODE_ENV
           value: production
 
