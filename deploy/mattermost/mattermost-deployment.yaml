@@ -81,6 +81,10 @@ spec:
               value: "false"
             - name: MM_PLUGINSETTINGS_ENABLEUPLOADS
               value: "true"
+            - name: MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS
+              value: "true"
+            - name: MM_SERVICESETTINGS_ENABLEOUTGOINGWEBHOOKS
+              value: "true"
           command:
             - sh
             - -c
