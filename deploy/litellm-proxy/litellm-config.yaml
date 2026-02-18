@@ -6,11 +6,23 @@ metadata:
 data:
   config.yaml: |
     model_list:
+      # Primary: bare-metal RTX 3080 Ti node (AWQ 4-bit, lower latency, no k8s overhead)
       - model_name: "Nanbeige/Nanbeige4.1-3B"
+        litellm_params:
+          model: "openai/cyankiwi/Nanbeige4.1-3B-AWQ-4bit"
+          api_base: "http://192.168.1.19:8000/v1"
+          api_key: "not-needed"
+        model_info:
+          id: "nanbeige-bare-metal"
+
+      # Fallback: in-cluster vLLM (used when bare-metal is unavailable)
+      - model_name: "Nanbeige/Nanbeige4.1-3B-fallback"
         litellm_params:
           model: "openai/Nanbeige/Nanbeige4.1-3B"
           api_base: "http://vllm-server.self-hosted-models.svc.cluster.local:8080/v1"
           api_key: "not-needed"
+        model_info:
+          id: "nanbeige-incluster"
 
     litellm_settings:
       drop_params: true
@@ -23,3 +35,5 @@ data:
     router_settings:
       num_retries: 3
       timeout: 600
+      fallbacks:
+        - "Nanbeige/Nanbeige4.1-3B": ["Nanbeige/Nanbeige4.1-3B-fallback"]
