@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: llama-cpp
+  name: self-hosted-models
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: HEAD
-    path: deploy/llama-cpp
+    path: deploy/self-hosted-models
   destination:
     server: https://kubernetes.default.svc
-    namespace: llama-cpp
+    namespace: self-hosted-models
   syncPolicy:
     automated:
       prune: true

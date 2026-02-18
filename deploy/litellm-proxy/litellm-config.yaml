@@ -9,7 +9,7 @@ data:
       - model_name: "qwen3-coder-next"
         litellm_params:
           model: "openai/qwen3-coder-next"
-          api_base: "http://llama-server.llama-cpp.svc.cluster.local:8080/v1"
+          api_base: "http://vllm-server.self-hosted-models.svc.cluster.local:8080/v1"
           api_key: "not-needed"
 
     litellm_settings:
