@@ -29,7 +29,7 @@ spec:
         - "--max-model-len"
         - "131072"
         - "--enforce-eager"
-        - "--disable-chunked-prefill"
+        - "--no-enable-chunked-prefill"
         - "--download-dir"
         - "/models"
         ports:
