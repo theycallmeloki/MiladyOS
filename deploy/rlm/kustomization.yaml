@@ -6,3 +6,6 @@ resources:
 - rlmjob-crd.yaml
 - composite-controller.yaml
 - webhook-deployment.yaml
+- rlm-rbac.yaml
+- webhook-sync-hook-configmap.yaml
+- coordinator-configmap.yaml
