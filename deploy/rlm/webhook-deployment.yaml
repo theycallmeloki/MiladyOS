@@ -24,14 +24,12 @@ spec:
             - name: RLM_IMAGE
               value: "ogmiladyloki/rlm:latest"
           readinessProbe:
-            httpGet:
-              path: /sync
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /sync
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 30
