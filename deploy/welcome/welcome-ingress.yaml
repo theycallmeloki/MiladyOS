@@ -4,7 +4,7 @@ metadata:
   name: welcome-basedjourney
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -29,7 +29,7 @@ metadata:
   name: welcome-generalpurposetransformer
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -54,7 +54,7 @@ metadata:
   name: welcome-matrixmilady
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -100,7 +100,7 @@ metadata:
   name: welcome-miladyos-com
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -125,7 +125,7 @@ metadata:
   name: welcome-miladyos-net
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -150,7 +150,7 @@ metadata:
   name: welcome-radbrocorp
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -175,7 +175,7 @@ metadata:
   name: welcome-theycallmeloki
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -200,7 +200,7 @@ metadata:
   name: welcome-tiniercorp
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
@@ -225,7 +225,7 @@ metadata:
   name: welcome-transparentlyrotatableproxy
   namespace: default
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
   rules:
