@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-gpu-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  nvidia-gpu.json: |
+    {
+      "title": "NVIDIA GPU",
+      "tags": ["nvidia", "gpu"],
+      "timezone": "browser",
+      "refresh": "15s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "title": "GPU Utilization",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "nvidia_smi_utilization_gpu_ratio * 100",
+              "legendFormat": "{{node}} GPU %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "steps": [
+                  { "color": "green", "value": 0 },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+        },
+        {
+          "id": 2,
+          "title": "Memory Utilization",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "nvidia_smi_utilization_memory_ratio * 100",
+              "legendFormat": "{{node}} Mem %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+        },
+        {
+          "id": 3,
+          "title": "VRAM Used",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "nvidia_smi_memory_used_bytes",
+              "legendFormat": "{{node}} used"
+            },
+            {
+              "expr": "nvidia_smi_memory_total_bytes",
+              "legendFormat": "{{node}} total"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "bytes" } },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+        },
+        {
+          "id": 4,
+          "title": "Temperature",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "nvidia_smi_temperature_gpu",
+              "legendFormat": "{{node}} °C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "thresholds": {
+                "steps": [
+                  { "color": "green", "value": 0 },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 85 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+        },
+        {
+          "id": 5,
+          "title": "Power Draw",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "nvidia_smi_power_draw_watts",
+              "legendFormat": "{{node}} W"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "watt" } },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+        },
+        {
+          "id": 6,
+          "title": "GPU Clock",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "nvidia_smi_clocks_current_graphics_clock_hz / 1e6",
+              "legendFormat": "{{node}} MHz"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "MHz" } },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+        }
+      ]
+    }
