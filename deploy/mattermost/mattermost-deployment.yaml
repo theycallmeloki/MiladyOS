@@ -78,7 +78,7 @@ spec:
             - name: MM_SERVICESETTINGS_SITEURL
               value: https://mattermost.transparentlyrotatableproxy.me
             - name: MM_SERVICESETTINGS_ENABLELOCALMODE
-              value: "false"
+              value: "true"
             - name: MM_PLUGINSETTINGS_ENABLEUPLOADS
               value: "true"
           command:
