@@ -96,6 +96,8 @@ data:
     - kubectl_get pods -n self-hosted-models
     - vllm-server pod should be Running 1/1.
     - kubectl_logs vllm-server -n self-hosted-models (last 20 lines)
+    - Check bare-metal vLLM (primary LLM): GET http://192.168.1.19:8000/health via tmux_run curl
+    - If bare-metal unreachable: WARNING — in-cluster fallback active
 
     ## 5. Storage
     - kubectl_get pvc --all-namespaces

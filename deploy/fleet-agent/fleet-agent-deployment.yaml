@@ -87,7 +87,7 @@ spec:
           echo "[$(date)] Fleet agent starting, watching queue at /data/queue/queue.jsonl"
 
           # Run pi-mom watching the queue file
-          exec pi-mom \
+          exec mom \
             --queue /data/queue/queue.jsonl \
             --workspace /workspace \
             --traces-dir /data/traces \
