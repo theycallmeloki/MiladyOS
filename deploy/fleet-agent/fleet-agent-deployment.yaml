@@ -26,6 +26,10 @@ spec:
       - name: workspace
         configMap:
           name: fleet-agent-workspace
+      - name: harness
+        configMap:
+          name: fleet-agent-harness
+          defaultMode: 0755
       - name: trace-processor
         configMap:
           name: trace-processor
@@ -34,96 +38,51 @@ spec:
           name: webhook-bridge
 
       containers:
-      # --- pi-mom agent harness ---
+      # --- Python agent harness (queue-watching LLM agent with MCP tools) ---
       - name: fleet-agent
-        image: node:22-alpine
+        image: python:3.12-alpine
         command: ["/bin/sh", "-c"]
         args:
         - |
-          apk add --no-cache bash curl git
-
-          # Install pi-mom in a local directory (not global) so npm
-          # can resolve the full dependency tree correctly
-          mkdir -p /opt/fleet-agent
-          cat > /opt/fleet-agent/package.json << 'PKGJSON'
-          {
-            "name": "fleet-agent-harness",
-            "version": "1.0.0",
-            "private": true,
-            "dependencies": {
-              "@mariozechner/pi-ai": "latest",
-              "@mariozechner/pi-agent-core": "latest",
-              "@mariozechner/pi-mom": "latest",
-              "@mariozechner/pi-coding-agent": "latest",
-              "@mariozechner/pi-tui": "latest",
-              "@mariozechner/pi-web-ui": "latest"
-            }
-          }
-          PKGJSON
-          cd /opt/fleet-agent && npm install
+          pip install --quiet --no-cache-dir openai mcp
 
           # Set up workspace from ConfigMap
           mkdir -p /workspace /data/traces /data/training /data/queue
           cp /config/SOUL.md /workspace/SOUL.md
           cp /config/AGENTS.md /workspace/AGENTS.md
           cp /config/HEARTBEAT.md /workspace/HEARTBEAT.md
-          mkdir -p /workspace/.pi/skills/fleet-management
-          cp /config/SKILL.md /workspace/.pi/skills/fleet-management/SKILL.md
 
           # Queue file (append-only log of instructions/triggers)
           touch /data/queue/queue.jsonl
 
-          # pi-mom config
-          mkdir -p /workspace/.pi
-          cat > /workspace/.pi/settings.json << 'EOF'
-          {
-            "provider": "openai",
-            "model": "Nanbeige/Nanbeige4.1-3B",
-            "maxTokens": 4096,
-            "workspaceDir": "/workspace",
-            "tracesDir": "/data/traces",
-            "queueFile": "/data/queue/queue.jsonl",
-            "mcpServers": [
-              {
-                "name": "fleet-tools",
-                "transport": "sse",
-                "url": "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse"
-              }
-            ]
-          }
-          EOF
-
           echo "[$(date)] Fleet agent starting, watching queue at /data/queue/queue.jsonl"
-
-          # Run pi-mom watching the queue file
-          exec /opt/fleet-agent/node_modules/.bin/mom \
-            --queue /data/queue/queue.jsonl \
-            --workspace /workspace \
-            --traces-dir /data/traces \
-            --heartbeat /workspace/HEARTBEAT.md \
-            --heartbeat-interval 1800
+          exec python3 /harness/agent.py
 
         env:
         - name: OPENAI_API_KEY
           value: "not-required"
         - name: OPENAI_BASE_URL
           value: "http://litellm-proxy.default.svc.cluster.local:4000/v1"
-        - name: NODE_ENV
-          value: production
+        - name: FLEET_MODEL
+          value: "Nanbeige/Nanbeige4.1-3B"
+        - name: MCP_URL
+          value: "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse"
 
         volumeMounts:
         - name: data
           mountPath: /data
         - name: workspace
           mountPath: /config
+        - name: harness
+          mountPath: /harness
 
         resources:
           requests:
             cpu: 200m
-            memory: 512Mi
+            memory: 256Mi
           limits:
             cpu: "1"
-            memory: 2Gi
+            memory: 1Gi
 
       # --- Trace processor sidecar ---
       - name: trace-processor
