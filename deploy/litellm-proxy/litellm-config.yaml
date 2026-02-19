@@ -6,24 +6,11 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      # ── Free OpenRouter models (primary fleet-agent pool) ─────────────────
+      # ── Free OpenRouter models with tool-calling support ──────────────────
       # Daisy-chained: rate-limit or failure on one → LiteLLM tries the next.
-      # Confirmed working (tested 2026-02-19):
+      # Only models confirmed to support the tools API are included.
 
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/google/gemma-3-27b-it:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "gemma3-27b-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/deepseek/deepseek-r1-0528:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "deepseek-r1-0528-free"
-
+      # Tier 1: confirmed working with tool calling
       - model_name: "fleet-agent"
         litellm_params:
           model: "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
@@ -47,19 +34,19 @@ data:
 
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/google/gemma-3-12b-it:free"
+          model: "openrouter/stepfun/step-3.5-flash:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
-          id: "gemma3-12b-free"
+          id: "step-3-5-flash-free"
 
+      # Tier 2: work once "Allow training on prompts" propagates in OpenRouter
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/meta-llama/llama-3.3-70b-instruct:free"
+          model: "openrouter/google/gemma-3-27b-it:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
-          id: "llama33-70b-free"
+          id: "gemma3-27b-free"
 
-      # Requires "Allow training on prompts" in OpenRouter account settings:
       - model_name: "fleet-agent"
         litellm_params:
           model: "openrouter/openai/gpt-oss-20b:free"
@@ -73,13 +60,6 @@ data:
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "gpt-oss-120b-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/nousresearch/hermes-3-llama-3.1-405b:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "hermes3-405b-free"
 
       # ── Dedicated inference (fallbacks) ───────────────────────────────────
       # Bare-metal RTX 3080 Ti (AWQ 4-bit, low latency, no cloud dependency)
