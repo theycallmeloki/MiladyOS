@@ -43,6 +43,11 @@ spec:
           value: "True"
         - name: STORE_MODEL_IN_DB
           value: "True"
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openrouter-secret
+              key: OPENROUTER_API_KEY
         args:
         - "--config"
         - "/etc/litellm/config.yaml"
