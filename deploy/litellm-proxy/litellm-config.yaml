@@ -89,9 +89,11 @@ data:
       health_check_interval: 0   # disable background health-check model calls
 
     router_settings:
-      num_retries: 3
-      timeout: 120
-      routing_strategy: "least-busy"
+      num_retries: 1
+      timeout: 60
+      routing_strategy: "usage-based-routing-v2"
+      allowed_fails: 1          # mark model unhealthy after 1 failure
+      cooldown_time: 120        # seconds before retrying a failed model
       fallbacks:
         - "fleet-agent": ["Nanbeige/Nanbeige4.1-3B", "Nanbeige/Nanbeige4.1-3B-fallback"]
         - "Nanbeige/Nanbeige4.1-3B": ["Nanbeige/Nanbeige4.1-3B-fallback"]
