@@ -181,12 +181,18 @@ data:
       });
     }
 
-    // Channel name → ID cache
+    // Channel name → ID cache (resolved via team endpoint)
+    let teamId = null;
     const channelCache = {};
     async function resolveChannel(name) {
       if (channelCache[name]) return channelCache[name];
-      // Search by name across teams
-      const r = await mmApi('GET', `/api/v4/channels/name/${name}?team_name=milady`);
+      // Look up team ID once
+      if (!teamId) {
+        const tr = await mmApi('GET', '/api/v4/teams/name/milady');
+        if (tr.status !== 200 || !tr.body.id) throw new Error(`Team not found (status ${tr.status})`);
+        teamId = tr.body.id;
+      }
+      const r = await mmApi('GET', `/api/v4/teams/${teamId}/channels/name/${name}`);
       if (r.status === 200 && r.body.id) {
         channelCache[name] = r.body.id;
         return r.body.id;
