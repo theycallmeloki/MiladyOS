@@ -6,9 +6,13 @@ metadata:
 data:
   agent.py: |
     #!/usr/bin/env python3
-    """Fleet agent harness: watches queue.jsonl, runs LLM agent with MCP tools."""
-    import asyncio, json, logging, os, time
+    """
+    Fleet agent harness: watches queue.jsonl, runs LLM agent with MCP tools.
+    Features inspired by pi-mom: per-channel context, memory, skills, log.jsonl.
+    """
+    import asyncio, json, logging, os
     from pathlib import Path
+    from datetime import datetime, timezone
     from openai import OpenAI
     from mcp import ClientSession
     from mcp.client.sse import sse_client
@@ -16,17 +20,21 @@ data:
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ")
     log = logging.getLogger(__name__)
 
-    LITELLM_URL = os.environ.get("OPENAI_BASE_URL", "http://litellm-proxy.default.svc.cluster.local:4000/v1")
-    LITELLM_KEY = os.environ.get("OPENAI_API_KEY", "not-required")
-    MODEL       = os.environ.get("FLEET_MODEL", "Nanbeige/Nanbeige4.1-3B")
-    MCP_URL     = os.environ.get("MCP_URL", "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse")
-    QUEUE_FILE  = Path(os.environ.get("QUEUE_FILE", "/data/queue/queue.jsonl"))
-    WORKSPACE   = Path(os.environ.get("WORKSPACE", "/workspace"))
-    MAX_ITERS   = int(os.environ.get("AGENT_MAX_ITERS", "20"))
+    LITELLM_URL  = os.environ.get("OPENAI_BASE_URL", "http://litellm-proxy.default.svc.cluster.local:4000/v1")
+    LITELLM_KEY  = os.environ.get("OPENAI_API_KEY", "not-required")
+    MODEL        = os.environ.get("FLEET_MODEL", "Nanbeige/Nanbeige4.1-3B")
+    MCP_URL      = os.environ.get("MCP_URL", "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse")
+    QUEUE_FILE   = Path(os.environ.get("QUEUE_FILE", "/data/queue/queue.jsonl"))
+    WORKSPACE    = Path(os.environ.get("WORKSPACE", "/workspace"))
+    DATA_DIR     = Path(os.environ.get("DATA_DIR", "/data"))
+    MAX_ITERS    = int(os.environ.get("AGENT_MAX_ITERS", "20"))
+    MAX_CTX_MSGS = int(os.environ.get("AGENT_MAX_CTX_MSGS", "20"))
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)
 
-    def load_context():
+    # ── Context helpers ──────────────────────────────────────────────────────
+
+    def load_soul() -> str:
         parts = []
         for name in ("SOUL.md", "AGENTS.md"):
             p = WORKSPACE / name
@@ -34,13 +42,87 @@ data:
                 parts.append(p.read_text())
         return "\n\n".join(parts)
 
-    def load_heartbeat():
+    def load_heartbeat() -> str:
         p = WORKSPACE / "HEARTBEAT.md"
         return p.read_text() if p.exists() else ""
 
-    async def run_agent(instruction: str):
-        system = load_context()
-        log.info("Connecting to MCP server at %s", MCP_URL)
+    def load_skills() -> str:
+        """Load SKILL.md files from workspace skills directories."""
+        parts = []
+        for skills_dir in [WORKSPACE / ".pi" / "skills", WORKSPACE / "skills"]:
+            if skills_dir.exists():
+                for skill_md in sorted(skills_dir.rglob("SKILL.md")):
+                    try:
+                        parts.append(f"## Skill: {skill_md.parent.name}\n{skill_md.read_text()}")
+                    except Exception:
+                        pass
+        return ("# Available Skills\n\n" + "\n\n".join(parts)) if parts else ""
+
+    # ── Per-channel persistence (like pi-mom's channel directories) ──────────
+
+    def channel_dir(channel: str) -> Path:
+        d = DATA_DIR / "channels" / channel
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def load_memory(channel: str) -> str:
+        parts = []
+        for mem_path, label in [
+            (DATA_DIR / "MEMORY.md",              "Global Memory"),
+            (channel_dir(channel) / "MEMORY.md",  f"Channel Memory ({channel})"),
+        ]:
+            if mem_path.exists():
+                parts.append(f"# {label}\n{mem_path.read_text()}")
+        return "\n\n".join(parts)
+
+    def load_context(channel: str) -> list:
+        ctx_file = channel_dir(channel) / "context.jsonl"
+        if not ctx_file.exists():
+            return []
+        messages = []
+        try:
+            for line in ctx_file.read_text().splitlines():
+                line = line.strip()
+                if line:
+                    messages.append(json.loads(line))
+        except Exception as e:
+            log.warning("Failed to load context for %s: %s", channel, e)
+        return messages[-MAX_CTX_MSGS:]
+
+    def save_context(channel: str, messages: list):
+        ctx_file = channel_dir(channel) / "context.jsonl"
+        to_save = [m for m in messages if m.get("role") != "system"]
+        try:
+            with open(ctx_file, "w") as f:
+                for m in to_save[-MAX_CTX_MSGS:]:
+                    f.write(json.dumps(m) + "\n")
+        except Exception as e:
+            log.warning("Failed to save context for %s: %s", channel, e)
+
+    def append_log(channel: str, entry: dict):
+        log_file = channel_dir(channel) / "log.jsonl"
+        try:
+            with open(log_file, "a") as f:
+                entry["ts"] = datetime.now(timezone.utc).isoformat()
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            log.warning("Failed to write log for %s: %s", channel, e)
+
+    # ── Agent loop ───────────────────────────────────────────────────────────
+
+    async def run_agent(instruction: str, channel: str = "default"):
+        soul   = load_soul()
+        memory = load_memory(channel)
+        skills = load_skills()
+        system = "\n\n".join(filter(None, [soul, memory, skills]))
+
+        prior   = load_context(channel)
+        messages = [{"role": "system", "content": system}] + prior + [
+            {"role": "user", "content": instruction}
+        ]
+        append_log(channel, {"role": "user", "content": instruction})
+
+        log.info("Connecting to MCP (%s), channel=%s, prior_msgs=%d", MCP_URL, channel, len(prior))
         async with sse_client(MCP_URL) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -56,12 +138,9 @@ data:
                     }
                     for t in mcp_tools
                 ]
-                log.info("Available tools: %s", [t["function"]["name"] for t in tools])
+                log.info("Tools available: %s", [t["function"]["name"] for t in tools])
 
-                messages = [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": instruction},
-                ]
+                new_msgs = []
 
                 for iteration in range(MAX_ITERS):
                     response = llm.chat.completions.create(
@@ -75,55 +154,70 @@ data:
                     assistant_msg = {"role": "assistant", "content": msg.content or ""}
                     if msg.tool_calls:
                         assistant_msg["tool_calls"] = [
-                            {"id": tc.id, "type": "function",
-                             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                            }
                             for tc in msg.tool_calls
                         ]
                     messages.append(assistant_msg)
+                    new_msgs.append(assistant_msg)
 
                     if not msg.tool_calls:
-                        log.info("Agent finished after %d iteration(s)", iteration + 1)
-                        return
+                        log.info("Agent done after %d iteration(s)", iteration + 1)
+                        if msg.content:
+                            append_log(channel, {"role": "assistant", "content": msg.content})
+                        break
 
                     for tc in msg.tool_calls:
                         args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                        log.info("Tool call: %s(%s)", tc.function.name, list(args.keys()))
+                        log.info("  -> %s(%s)", tc.function.name, list(args.keys()))
                         try:
-                            result = await session.call_tool(tc.function.name, args)
+                            result  = await session.call_tool(tc.function.name, args)
                             content = result.content[0].text if result.content else ""
                         except Exception as e:
                             content = f"Tool error: {e}"
                             log.error("Tool %s failed: %s", tc.function.name, e)
-                        messages.append({"role": "tool", "tool_call_id": tc.id, "content": content})
+                        tool_msg = {"role": "tool", "tool_call_id": tc.id, "content": content}
+                        messages.append(tool_msg)
+                        new_msgs.append(tool_msg)
+                else:
+                    log.warning("Agent hit max iterations (%d)", MAX_ITERS)
 
-                log.warning("Agent hit max iterations (%d)", MAX_ITERS)
+                save_context(channel, prior + new_msgs)
+
+    # ── Queue processor ──────────────────────────────────────────────────────
 
     async def process_item(item: dict):
         itype = item.get("type", "unknown")
-        log.info("Processing queue item type=%s", itype)
+        log.info("Queue item: type=%s", itype)
+
         if itype == "heartbeat":
-            hb = load_heartbeat()
+            channel     = "heartbeat"
+            hb          = load_heartbeat()
             instruction = (
                 item.get("instruction", "Run the HEARTBEAT.md checklist.")
                 + (f"\n\n---\nHEARTBEAT.md:\n{hb}" if hb else "")
             )
         elif itype == "mattermost":
-            channel = item.get("channel", "fleet-ops")
-            user    = item.get("user", "user")
-            text    = item.get("text", "")
-            instruction = f"User @{user} in #{channel} says: {text}"
+            channel     = item.get("channel", "fleet-ops")
+            user        = item.get("user", "user")
+            text        = item.get("text", "")
+            instruction = f"User @{user} says: {text}"
         else:
+            channel     = "default"
             instruction = item.get("instruction") or json.dumps(item)
 
         try:
-            await run_agent(instruction)
+            await run_agent(instruction, channel=channel)
         except Exception as e:
-            log.error("Agent error for item %s: %s", itype, e)
+            log.error("Agent error for type=%s: %s", itype, e)
 
     async def watch_queue():
         QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
         QUEUE_FILE.touch(exist_ok=True)
-        log.info("Watching queue: %s", QUEUE_FILE)
+        log.info("Watching queue: %s  (model=%s)", QUEUE_FILE, MODEL)
         last_pos = QUEUE_FILE.stat().st_size
 
         while True:
@@ -135,7 +229,7 @@ data:
                 continue
 
             if size < last_pos:
-                last_pos = 0  # rotated
+                last_pos = 0
             if size == last_pos:
                 continue
 
