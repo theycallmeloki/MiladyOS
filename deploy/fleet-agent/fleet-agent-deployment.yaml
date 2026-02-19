@@ -64,7 +64,7 @@ spec:
         - name: OPENAI_BASE_URL
           value: "http://litellm-proxy.default.svc.cluster.local:4000/v1"
         - name: FLEET_MODEL
-          value: "Nanbeige/Nanbeige4.1-3B"
+          value: "fleet-agent"
         - name: MCP_URL
           value: "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse"
 

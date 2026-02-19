@@ -6,7 +6,66 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      # Primary: bare-metal RTX 3080 Ti node (AWQ 4-bit, lower latency, no k8s overhead)
+      # ── Free OpenRouter models (primary fleet-agent pool) ─────────────────
+      # Daisy-chained: if one rate-limits or fails, LiteLLM tries the next.
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/google/gemini-2.0-flash-exp:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "gemini-2-flash-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/openai/gpt-oss-20b:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "gpt-oss-20b-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/deepseek/deepseek-chat:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "deepseek-chat-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/deepseek/deepseek-r1:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "deepseek-r1-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/qwen/qwen-2.5-72b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "qwen25-72b-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/meta-llama/llama-3.3-70b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "llama33-70b-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/mistralai/mistral-small-3.1-24b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "mistral-small-24b-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/nvidia/llama-3.1-nemotron-nano-8b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "nemotron-nano-8b-free"
+
+      # ── Dedicated inference (fallbacks) ───────────────────────────────────
+      # Bare-metal RTX 3080 Ti (AWQ 4-bit, low latency, no cloud dependency)
       - model_name: "Nanbeige/Nanbeige4.1-3B"
         litellm_params:
           model: "openai/cyankiwi/Nanbeige4.1-3B-AWQ-4bit"
@@ -15,7 +74,7 @@ data:
         model_info:
           id: "nanbeige-bare-metal"
 
-      # Fallback: in-cluster vLLM (used when bare-metal is unavailable)
+      # In-cluster vLLM (last resort)
       - model_name: "Nanbeige/Nanbeige4.1-3B-fallback"
         litellm_params:
           model: "openai/Nanbeige/Nanbeige4.1-3B"
@@ -34,6 +93,8 @@ data:
 
     router_settings:
       num_retries: 3
-      timeout: 600
+      timeout: 120
+      routing_strategy: "least-busy"
       fallbacks:
+        - "fleet-agent": ["Nanbeige/Nanbeige4.1-3B", "Nanbeige/Nanbeige4.1-3B-fallback"]
         - "Nanbeige/Nanbeige4.1-3B": ["Nanbeige/Nanbeige4.1-3B-fallback"]
