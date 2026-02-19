@@ -9,13 +9,14 @@ data:
     """
     Fleet agent harness: watches queue.jsonl, runs LLM agent with MCP tools.
     Features inspired by pi-mom: per-channel context, memory, skills, log.jsonl.
+    Uses a custom MCP SSE client compatible with the mcp-tools server protocol.
     """
     import asyncio, json, logging, os
     from pathlib import Path
     from datetime import datetime, timezone
+    from contextlib import asynccontextmanager
     from openai import OpenAI
-    from mcp import ClientSession
-    from mcp.client.sse import sse_client
+    import httpx
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ")
     log = logging.getLogger(__name__)
@@ -32,6 +33,90 @@ data:
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)
 
+    # ── Custom MCP SSE client ────────────────────────────────────────────────
+    # The mcp-tools server sends: event: endpoint / data: {"uri":"/message?sessionId=..."}
+    # The official mcp Python lib expects a plain path, so we use our own client.
+
+    @asynccontextmanager
+    async def mcp_session(sse_url: str):
+        pending: dict = {}
+        post_url_ref  = [None]
+        _id_counter   = [1]
+
+        async def sse_reader(client: httpx.AsyncClient):
+            event_type = None
+            async with client.stream("GET", sse_url,
+                                     headers={"Accept": "text/event-stream"},
+                                     timeout=None) as resp:
+                async for line in resp.aiter_lines():
+                    if line.startswith("event:"):
+                        event_type = line[6:].strip()
+                    elif line.startswith("data:"):
+                        raw = line[5:].strip()
+                        if event_type == "endpoint":
+                            try:
+                                parsed = json.loads(raw)
+                                uri = parsed.get("uri", raw)
+                            except json.JSONDecodeError:
+                                uri = raw
+                            base = sse_url.rsplit("/sse", 1)[0]
+                            post_url_ref[0] = base + uri
+                        elif raw:
+                            try:
+                                msg = json.loads(raw)
+                                mid = msg.get("id")
+                                if mid in pending and not pending[mid].done():
+                                    pending[mid].set_result(msg)
+                            except Exception:
+                                pass
+                        event_type = None
+
+        async def rpc(client, method: str, params: dict):
+            fid = _id_counter[0]
+            _id_counter[0] += 1
+            fut = asyncio.get_event_loop().create_future()
+            pending[fid] = fut
+            await client.post(post_url_ref[0],
+                              json={"jsonrpc": "2.0", "id": fid,
+                                    "method": method, "params": params})
+            return await asyncio.wait_for(fut, timeout=60)
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60)) as client:
+            task = asyncio.create_task(sse_reader(client))
+            for _ in range(100):        # wait up to 5 s for endpoint
+                if post_url_ref[0]:
+                    break
+                await asyncio.sleep(0.05)
+            if not post_url_ref[0]:
+                task.cancel()
+                raise RuntimeError("MCP server did not send endpoint event")
+
+            # Initialize
+            await rpc(client, "initialize", {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "fleet-agent", "version": "1.0"},
+            })
+
+            class Session:
+                async def list_tools(self):
+                    result = await rpc(client, "tools/list", {})
+                    return result.get("result", {}).get("tools", [])
+
+                async def call_tool(self, name: str, arguments: dict):
+                    result = await rpc(client, "tools/call",
+                                       {"name": name, "arguments": arguments})
+                    return result.get("result", {})
+
+            try:
+                yield Session()
+            finally:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
     # ── Context helpers ──────────────────────────────────────────────────────
 
     def load_soul() -> str:
@@ -47,7 +132,6 @@ data:
         return p.read_text() if p.exists() else ""
 
     def load_skills() -> str:
-        """Load SKILL.md files from workspace skills directories."""
         parts = []
         for skills_dir in [WORKSPACE / ".pi" / "skills", WORKSPACE / "skills"]:
             if skills_dir.exists():
@@ -58,7 +142,7 @@ data:
                         pass
         return ("# Available Skills\n\n" + "\n\n".join(parts)) if parts else ""
 
-    # ── Per-channel persistence (like pi-mom's channel directories) ──────────
+    # ── Per-channel persistence ──────────────────────────────────────────────
 
     def channel_dir(channel: str) -> Path:
         d = DATA_DIR / "channels" / channel
@@ -68,8 +152,8 @@ data:
     def load_memory(channel: str) -> str:
         parts = []
         for mem_path, label in [
-            (DATA_DIR / "MEMORY.md",              "Global Memory"),
-            (channel_dir(channel) / "MEMORY.md",  f"Channel Memory ({channel})"),
+            (DATA_DIR / "MEMORY.md",             "Global Memory"),
+            (channel_dir(channel) / "MEMORY.md", f"Channel Memory ({channel})"),
         ]:
             if mem_path.exists():
                 parts.append(f"# {label}\n{mem_path.read_text()}")
@@ -116,76 +200,75 @@ data:
         skills = load_skills()
         system = "\n\n".join(filter(None, [soul, memory, skills]))
 
-        prior   = load_context(channel)
+        prior    = load_context(channel)
         messages = [{"role": "system", "content": system}] + prior + [
             {"role": "user", "content": instruction}
         ]
         append_log(channel, {"role": "user", "content": instruction})
 
-        log.info("Connecting to MCP (%s), channel=%s, prior_msgs=%d", MCP_URL, channel, len(prior))
-        async with sse_client(MCP_URL) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                mcp_tools = (await session.list_tools()).tools
-                tools = [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": t.name,
-                            "description": t.description or "",
-                            "parameters": t.inputSchema,
-                        },
-                    }
-                    for t in mcp_tools
-                ]
-                log.info("Tools available: %s", [t["function"]["name"] for t in tools])
+        log.info("MCP connect, channel=%s prior_msgs=%d", channel, len(prior))
+        async with mcp_session(MCP_URL) as session:
+            raw_tools = await session.list_tools()
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t.get("description", ""),
+                        "parameters": t.get("inputSchema", {}),
+                    },
+                }
+                for t in raw_tools
+            ]
+            log.info("Tools: %s", [t["function"]["name"] for t in tools])
 
-                new_msgs = []
+            new_msgs = []
 
-                for iteration in range(MAX_ITERS):
-                    response = llm.chat.completions.create(
-                        model=MODEL,
-                        messages=messages,
-                        tools=tools or None,
-                        max_tokens=4096,
-                    )
-                    msg = response.choices[0].message
+            for iteration in range(MAX_ITERS):
+                response = llm.chat.completions.create(
+                    model=MODEL,
+                    messages=messages,
+                    tools=tools or None,
+                    max_tokens=4096,
+                )
+                msg = response.choices[0].message
 
-                    assistant_msg = {"role": "assistant", "content": msg.content or ""}
-                    if msg.tool_calls:
-                        assistant_msg["tool_calls"] = [
-                            {
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                            }
-                            for tc in msg.tool_calls
-                        ]
-                    messages.append(assistant_msg)
-                    new_msgs.append(assistant_msg)
+                assistant_msg = {"role": "assistant", "content": msg.content or ""}
+                if msg.tool_calls:
+                    assistant_msg["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                        }
+                        for tc in msg.tool_calls
+                    ]
+                messages.append(assistant_msg)
+                new_msgs.append(assistant_msg)
 
-                    if not msg.tool_calls:
-                        log.info("Agent done after %d iteration(s)", iteration + 1)
-                        if msg.content:
-                            append_log(channel, {"role": "assistant", "content": msg.content})
-                        break
+                if not msg.tool_calls:
+                    log.info("Agent done after %d iteration(s)", iteration + 1)
+                    if msg.content:
+                        append_log(channel, {"role": "assistant", "content": msg.content})
+                    break
 
-                    for tc in msg.tool_calls:
-                        args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                        log.info("  -> %s(%s)", tc.function.name, list(args.keys()))
-                        try:
-                            result  = await session.call_tool(tc.function.name, args)
-                            content = result.content[0].text if result.content else ""
-                        except Exception as e:
-                            content = f"Tool error: {e}"
-                            log.error("Tool %s failed: %s", tc.function.name, e)
-                        tool_msg = {"role": "tool", "tool_call_id": tc.id, "content": content}
-                        messages.append(tool_msg)
-                        new_msgs.append(tool_msg)
-                else:
-                    log.warning("Agent hit max iterations (%d)", MAX_ITERS)
+                for tc in msg.tool_calls:
+                    args = json.loads(tc.function.arguments) if tc.function.arguments else {}
+                    log.info("  -> %s(%s)", tc.function.name, list(args.keys()))
+                    try:
+                        result  = await session.call_tool(tc.function.name, args)
+                        content_items = result.get("content", [])
+                        content = content_items[0].get("text", "") if content_items else str(result)
+                    except Exception as e:
+                        content = f"Tool error: {e}"
+                        log.error("Tool %s failed: %s", tc.function.name, e)
+                    tool_msg = {"role": "tool", "tool_call_id": tc.id, "content": content}
+                    messages.append(tool_msg)
+                    new_msgs.append(tool_msg)
+            else:
+                log.warning("Agent hit max iterations (%d)", MAX_ITERS)
 
-                save_context(channel, prior + new_msgs)
+            save_context(channel, prior + new_msgs)
 
     # ── Queue processor ──────────────────────────────────────────────────────
 
@@ -212,7 +295,7 @@ data:
         try:
             await run_agent(instruction, channel=channel)
         except Exception as e:
-            log.error("Agent error for type=%s: %s", itype, e)
+            log.error("Agent error type=%s: %s", itype, e)
 
     async def watch_queue():
         QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)

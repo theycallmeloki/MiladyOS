@@ -44,7 +44,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          pip install --quiet --no-cache-dir openai mcp
+          pip install --quiet --no-cache-dir openai httpx
 
           # Set up workspace from ConfigMap
           mkdir -p /workspace /data/traces /data/training /data/queue
