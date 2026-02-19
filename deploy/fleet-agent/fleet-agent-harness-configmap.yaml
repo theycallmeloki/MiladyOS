@@ -29,7 +29,7 @@ data:
     WORKSPACE          = Path(os.environ.get("WORKSPACE", "/workspace"))
     DATA_DIR           = Path(os.environ.get("DATA_DIR", "/data"))
     MAX_ITERS          = int(os.environ.get("AGENT_MAX_ITERS", "20"))
-    MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "10"))
+    MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "6"))
     MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "1000"))  # chars
     MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
 
@@ -196,7 +196,7 @@ data:
 
     # ── Agent loop ───────────────────────────────────────────────────────────
 
-    async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True):
+    async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True, need_reply: bool = False):
         soul   = load_soul()
         memory = load_memory(channel)
         skills = load_skills()
@@ -225,6 +225,7 @@ data:
             log.info("Tools: %s", [t["function"]["name"] for t in tools])
 
             new_msgs = []
+            replied  = False
 
             for iteration in range(MAX_ITERS):
                 response = llm.chat.completions.create(
@@ -260,7 +261,6 @@ data:
                 if skipped:
                     log.info("Skipping %d tool calls (limit %d/turn)", skipped, MAX_TOOLS_PER_TURN)
 
-                replied = False
                 for tc in active_calls:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                     log.info("  -> %s(%s)", tc.function.name, list(args.keys()))
@@ -280,6 +280,7 @@ data:
                     # Stop after a successful mattermost_post — no follow-up spam
                     if tc.function.name == "mattermost_post" and content.startswith("Posted to"):
                         replied = True
+                        break  # don't execute any more tools this turn
 
                 if replied:
                     log.info("Reply posted — stopping agent loop")
@@ -293,6 +294,32 @@ data:
                                      "content": "Skipped — call again"})
             else:
                 log.warning("Agent hit max iterations (%d)", MAX_ITERS)
+
+            # Force-reply: model gathered info but forgot to call mattermost_post
+            if need_reply and not replied:
+                log.info("No reply posted yet — nudging model to post now")
+                messages.append({"role": "user",
+                                  "content": "You have gathered the information but did not post a reply. "
+                                             "Call mattermost_post now with a concise summary."})
+                try:
+                    r2 = llm.chat.completions.create(model=MODEL, messages=messages,
+                                                      tools=tools or None, max_tokens=512)
+                    m2 = r2.choices[0].message
+                    if m2.tool_calls:
+                        tc = m2.tool_calls[0]
+                        args = json.loads(tc.function.arguments) if tc.function.arguments else {}
+                        log.info("  nudge -> %s(%s)", tc.function.name, list(args.keys()))
+                        result = await session.call_tool(tc.function.name, args)
+                        content_items = result.get("content", [])
+                        content = content_items[0].get("text", "") if content_items else str(result)
+                        log.info("  nudge result: %s", content[:80])
+                        new_msgs.append({"role": "assistant", "content": "", "tool_calls": [
+                            {"id": tc.id, "type": "function",
+                             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                        ]})
+                        new_msgs.append({"role": "tool", "tool_call_id": tc.id, "content": content})
+                except Exception as e:
+                    log.error("Nudge call failed: %s", e)
 
             save_context(channel, prior + new_msgs)
 
@@ -330,7 +357,8 @@ data:
             instruction = item.get("instruction") or json.dumps(item)
 
         try:
-            await run_agent(instruction, channel=channel)
+            await run_agent(instruction, channel=channel,
+                            need_reply=(itype == "mattermost"))
         except Exception as e:
             log.error("Agent error type=%s: %s", itype, e)
 
