@@ -21,15 +21,17 @@ data:
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ")
     log = logging.getLogger(__name__)
 
-    LITELLM_URL  = os.environ.get("OPENAI_BASE_URL", "http://litellm-proxy.default.svc.cluster.local:4000/v1")
-    LITELLM_KEY  = os.environ.get("OPENAI_API_KEY", "not-required")
-    MODEL        = os.environ.get("FLEET_MODEL", "Nanbeige/Nanbeige4.1-3B")
-    MCP_URL      = os.environ.get("MCP_URL", "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse")
-    QUEUE_FILE   = Path(os.environ.get("QUEUE_FILE", "/data/queue/queue.jsonl"))
-    WORKSPACE    = Path(os.environ.get("WORKSPACE", "/workspace"))
-    DATA_DIR     = Path(os.environ.get("DATA_DIR", "/data"))
-    MAX_ITERS    = int(os.environ.get("AGENT_MAX_ITERS", "20"))
-    MAX_CTX_MSGS = int(os.environ.get("AGENT_MAX_CTX_MSGS", "20"))
+    LITELLM_URL        = os.environ.get("OPENAI_BASE_URL", "http://litellm-proxy.default.svc.cluster.local:4000/v1")
+    LITELLM_KEY        = os.environ.get("OPENAI_API_KEY", "not-required")
+    MODEL              = os.environ.get("FLEET_MODEL", "Nanbeige/Nanbeige4.1-3B")
+    MCP_URL            = os.environ.get("MCP_URL", "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse")
+    QUEUE_FILE         = Path(os.environ.get("QUEUE_FILE", "/data/queue/queue.jsonl"))
+    WORKSPACE          = Path(os.environ.get("WORKSPACE", "/workspace"))
+    DATA_DIR           = Path(os.environ.get("DATA_DIR", "/data"))
+    MAX_ITERS          = int(os.environ.get("AGENT_MAX_ITERS", "20"))
+    MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "10"))
+    MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "3000"))  # chars
+    MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)
 
@@ -252,7 +254,13 @@ data:
                         append_log(channel, {"role": "assistant", "content": msg.content})
                     break
 
-                for tc in msg.tool_calls:
+                # Limit tools per turn to avoid context explosion
+                active_calls = msg.tool_calls[:MAX_TOOLS_PER_TURN]
+                skipped = len(msg.tool_calls) - len(active_calls)
+                if skipped:
+                    log.info("Skipping %d tool calls (limit %d/turn)", skipped, MAX_TOOLS_PER_TURN)
+
+                for tc in active_calls:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                     log.info("  -> %s(%s)", tc.function.name, list(args.keys()))
                     try:
@@ -262,9 +270,19 @@ data:
                     except Exception as e:
                         content = f"Tool error: {e}"
                         log.error("Tool %s failed: %s", tc.function.name, e)
+                    # Truncate long results to stay within context window
+                    if len(content) > MAX_TOOL_RESULT:
+                        content = content[:MAX_TOOL_RESULT] + f"\n... [truncated, {len(content)} chars total]"
                     tool_msg = {"role": "tool", "tool_call_id": tc.id, "content": content}
                     messages.append(tool_msg)
                     new_msgs.append(tool_msg)
+
+                # For skipped tool calls, add placeholder results
+                for tc in msg.tool_calls[MAX_TOOLS_PER_TURN:]:
+                    messages.append({"role": "tool", "tool_call_id": tc.id,
+                                     "content": "Skipped (too many parallel calls; call this tool again in the next turn)"})
+                    new_msgs.append({"role": "tool", "tool_call_id": tc.id,
+                                     "content": "Skipped — call again"})
             else:
                 log.warning("Agent hit max iterations (%d)", MAX_ITERS)
 
