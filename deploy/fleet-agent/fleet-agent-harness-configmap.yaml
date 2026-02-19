@@ -30,7 +30,7 @@ data:
     DATA_DIR           = Path(os.environ.get("DATA_DIR", "/data"))
     MAX_ITERS          = int(os.environ.get("AGENT_MAX_ITERS", "20"))
     MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "10"))
-    MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "3000"))  # chars
+    MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "1000"))  # chars
     MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)
@@ -196,13 +196,13 @@ data:
 
     # ── Agent loop ───────────────────────────────────────────────────────────
 
-    async def run_agent(instruction: str, channel: str = "default"):
+    async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True):
         soul   = load_soul()
         memory = load_memory(channel)
         skills = load_skills()
         system = "\n\n".join(filter(None, [soul, memory, skills]))
 
-        prior    = load_context(channel)
+        prior    = load_context(channel) if load_prior else []
         messages = [{"role": "system", "content": system}] + prior + [
             {"role": "user", "content": instruction}
         ]
@@ -231,7 +231,7 @@ data:
                     model=MODEL,
                     messages=messages,
                     tools=tools or None,
-                    max_tokens=4096,
+                    max_tokens=2048,
                 )
                 msg = response.choices[0].message
 
@@ -301,11 +301,21 @@ data:
                 item.get("instruction", "Run the HEARTBEAT.md checklist.")
                 + (f"\n\n---\nHEARTBEAT.md:\n{hb}" if hb else "")
             )
+            # Heartbeat is a fresh check each time — no prior context needed
+            try:
+                await run_agent(instruction, channel=channel, load_prior=False)
+            except Exception as e:
+                log.error("Agent error type=heartbeat: %s", e)
+            return
         elif itype == "mattermost":
             channel     = item.get("channel", "fleet-ops")
             user        = item.get("user", "user")
             text        = item.get("text", "")
-            instruction = f"User @{user} says: {text}"
+            instruction = (
+                f"User @{user} says in #{channel}: {text}\n\n"
+                f"IMPORTANT: You MUST call mattermost_post(channel=\"{channel}\", message=\"...\") "
+                f"to reply to this message. Do not just generate text — call the tool."
+            )
         else:
             channel     = "default"
             instruction = item.get("instruction") or json.dumps(item)
