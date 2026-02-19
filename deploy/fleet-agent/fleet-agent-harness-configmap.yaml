@@ -260,6 +260,7 @@ data:
                 if skipped:
                     log.info("Skipping %d tool calls (limit %d/turn)", skipped, MAX_TOOLS_PER_TURN)
 
+                replied = False
                 for tc in active_calls:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                     log.info("  -> %s(%s)", tc.function.name, list(args.keys()))
@@ -276,6 +277,13 @@ data:
                     tool_msg = {"role": "tool", "tool_call_id": tc.id, "content": content}
                     messages.append(tool_msg)
                     new_msgs.append(tool_msg)
+                    # Stop after a successful mattermost_post — no follow-up spam
+                    if tc.function.name == "mattermost_post" and content.startswith("Posted to"):
+                        replied = True
+
+                if replied:
+                    log.info("Reply posted — stopping agent loop")
+                    break
 
                 # For skipped tool calls, add placeholder results
                 for tc in msg.tool_calls[MAX_TOOLS_PER_TURN:]:
@@ -313,8 +321,9 @@ data:
             text        = item.get("text", "")
             instruction = (
                 f"User @{user} says in #{channel}: {text}\n\n"
-                f"IMPORTANT: You MUST call mattermost_post(channel=\"{channel}\", message=\"...\") "
-                f"to reply to this message. Do not just generate text — call the tool."
+                f"IMPORTANT: Call mattermost_post(channel=\"{channel}\", message=\"...\") "
+                f"EXACTLY ONCE to reply. You may use other tools first to gather info, "
+                f"but send only ONE reply then stop."
             )
         else:
             channel     = "default"
