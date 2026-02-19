@@ -7,14 +7,59 @@ data:
   config.yaml: |
     model_list:
       # ── Free OpenRouter models (primary fleet-agent pool) ─────────────────
-      # Daisy-chained: if one rate-limits or fails, LiteLLM tries the next.
+      # Daisy-chained: rate-limit or failure on one → LiteLLM tries the next.
+      # Confirmed working (tested 2026-02-19):
+
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/google/gemini-2.0-flash-exp:free"
+          model: "openrouter/google/gemma-3-27b-it:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
-          id: "gemini-2-flash-free"
+          id: "gemma3-27b-free"
 
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/deepseek/deepseek-r1-0528:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "deepseek-r1-0528-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "nemotron-30b-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/upstage/solar-pro-3:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "solar-pro-3-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/arcee-ai/trinity-large-preview:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "trinity-large-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/google/gemma-3-12b-it:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "gemma3-12b-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/meta-llama/llama-3.3-70b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "llama33-70b-free"
+
+      # Requires "Allow training on prompts" in OpenRouter account settings:
       - model_name: "fleet-agent"
         litellm_params:
           model: "openrouter/openai/gpt-oss-20b:free"
@@ -24,45 +69,17 @@ data:
 
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/deepseek/deepseek-chat:free"
+          model: "openrouter/openai/gpt-oss-120b:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
-          id: "deepseek-chat-free"
+          id: "gpt-oss-120b-free"
 
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/deepseek/deepseek-r1:free"
+          model: "openrouter/nousresearch/hermes-3-llama-3.1-405b:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
-          id: "deepseek-r1-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/qwen/qwen-2.5-72b-instruct:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "qwen25-72b-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/meta-llama/llama-3.3-70b-instruct:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "llama33-70b-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/mistralai/mistral-small-3.1-24b-instruct:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "mistral-small-24b-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/nvidia/llama-3.1-nemotron-nano-8b-instruct:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "nemotron-nano-8b-free"
+          id: "hermes3-405b-free"
 
       # ── Dedicated inference (fallbacks) ───────────────────────────────────
       # Bare-metal RTX 3080 Ti (AWQ 4-bit, low latency, no cloud dependency)

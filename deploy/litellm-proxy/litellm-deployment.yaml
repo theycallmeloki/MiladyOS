@@ -10,6 +10,8 @@ spec:
   selector:
     matchLabels:
       app: litellm-proxy
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
