@@ -79,8 +79,11 @@ data:
 
     ## Mattermost Responses
     When a queue item has "type": "mattermost", the user is waiting for a reply.
-    Always call mattermost_post("fleet-ops", "<your response>") at the end of the run.
-    Keep replies concise. Use code blocks for kubectl output.
+    Pattern: [use tools to gather info if needed] → call mattermost_post EXACTLY ONCE → stop.
+    - NEVER stop between gathering info and posting. After your last tool result, immediately call mattermost_post.
+    - NEVER write a text response without calling mattermost_post. Text responses are invisible to users.
+    - Keep replies concise. Use code blocks for command output.
+    - Use kubectl_get without output="json" for status checks — the table format is easier to read and post.
 
   HEARTBEAT.md: |
     # Heartbeat Checklist (runs every 30 minutes)
