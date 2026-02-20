@@ -12,7 +12,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: jenkins.miladyos.net
+  - host: jenkins.transparentlyrotatableproxy.me
     http:
       paths:
       - path: /
@@ -24,5 +24,5 @@ spec:
               number: 8080
   tls:
   - hosts:
-    - jenkins.miladyos.net
-    secretName: jenkins-miladyos-net-tls
+    - jenkins.transparentlyrotatableproxy.me
+    secretName: jenkins-transparentlyrotatableproxy-me-tls
