@@ -119,7 +119,7 @@ data:
                 try:
                     pvc = v1.read_namespaced_persistent_volume_claim(
                         name=pvc_name,
-                        namespace="default"
+                        namespace="miladyos"
                     )
                     is_bound = pvc.status.phase == "Bound"
                     miladyos_pvc_status.labels(pvc=pvc_name).set(1 if is_bound else 0)
@@ -141,7 +141,7 @@ data:
                 bgd = custom_api.get_namespaced_custom_object(
                     group="ctl.enisoc.com",
                     version="v1",
-                    namespace="default",
+                    namespace="miladyos",
                     plural="bluegreendeployments",
                     name="miladyos"
                 )
@@ -159,7 +159,7 @@ data:
             
             # Check MiladyOS pods and containers
             pods = v1.list_namespaced_pod(
-                namespace="default",
+                namespace="miladyos",
                 label_selector="app=miladyos"
             )
             
@@ -185,8 +185,8 @@ data:
         """Check MiladyOS service endpoints"""
         try:
             service_endpoints = [
-                {"service": "web", "url": "http://miladyos:8080/login", "port": 8080},
-                {"service": "registry", "url": "http://miladyos:5000/v2/", "port": 5000},
+                {"service": "web", "url": "http://miladyos.miladyos.svc.cluster.local:8080/login", "port": 8080},
+                {"service": "registry", "url": "http://miladyos.miladyos.svc.cluster.local:5000/v2/", "port": 5000},
                 {"service": "nft-auth", "url": "http://nft-auth-service:80/health", "port": 80}
             ]
             
