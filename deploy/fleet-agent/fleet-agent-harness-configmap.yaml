@@ -288,8 +288,9 @@ data:
             try:
                 with open(trace_jsonl, "a") as _f:
                     _f.write(json.dumps(event) + "\n")
-            except Exception:
-                pass
+                    _f.flush()
+            except Exception as _e:
+                log.warning("trace emit failed for %s: %s", datum_id, _e)
 
         emit({"type": "user_message", "content": instruction})
         log.info("MCP connect, channel=%s prior_msgs=%d urls=%s datum=%s",

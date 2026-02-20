@@ -425,7 +425,7 @@ data:
             <div v-for="(ev, i) in traceEvents" :key="i" :class="['ev', evClass(ev)]">
               <div class="ev-label">{{ evLabel(ev) }}</div>
               <div class="ev-body">
-                <div class="ev-content">{{ evText(ev) }}</div>
+                <div v-if="evText(ev)" class="ev-content">{{ evText(ev) }}</div>
                 <div v-if="evMeta(ev)" class="ev-meta">{{ evMeta(ev) }}</div>
               </div>
             </div>
