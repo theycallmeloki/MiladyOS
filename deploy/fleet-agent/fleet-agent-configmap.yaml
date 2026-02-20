@@ -25,7 +25,16 @@ data:
     - kubectl_get, kubectl_describe, kubectl_logs, kubectl_apply, kubectl_delete
     - tmux_run, tmux_split, tmux_select, tmux_capture
     - mattermost_post(channel, message) — post to Mattermost channels
+    - launch_rlm_job(prompt, notify_channel, max_iterations) — launch an async RLM job
     (tmux actions are visible to humans watching https://dev.transparentlyrotatableproxy.me)
+
+    ## RLM Jobs
+    For complex tasks requiring iterative Python code execution (data analysis, computation,
+    file processing), use launch_rlm_job instead of doing it inline. The RLM agent runs
+    Python code in a Kubernetes pod, iterates until the task is complete, and posts the
+    result to the specified Mattermost channel automatically.
+    After launching, immediately call mattermost_post to tell the user the job name and
+    that they will receive results in the channel when done.
 
     ## Communication
     I post status updates and findings to Mattermost:

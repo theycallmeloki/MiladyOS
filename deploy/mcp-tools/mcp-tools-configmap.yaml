@@ -146,6 +146,19 @@ data:
           },
           required: ['channel', 'message']
         }
+      },
+      {
+        name: 'launch_rlm_job',
+        description: 'Launch an RLM (Recursive Language Model) job to solve a complex task using iterative Python code execution in Kubernetes. The job runs asynchronously and posts results to a Mattermost channel when done. Use this for tasks requiring computation, data analysis, or multi-step code execution.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: 'The task for the RLM agent to solve using Python code execution' },
+            notify_channel: { type: 'string', description: 'Mattermost channel to post results to (default: fleet-ops)', default: 'fleet-ops' },
+            max_iterations: { type: 'number', description: 'Max RLM iterations (default: 10, max: 30)', default: 10 }
+          },
+          required: ['prompt']
+        }
       }
     ];
 
@@ -290,6 +303,35 @@ data:
               return `Error ${r.status}: ${JSON.stringify(r.body)}`;
             })
             .catch(e => `Error: ${e.message}`);
+        }
+        case 'launch_rlm_job': {
+          const prompt = args.prompt;
+          const notifyChannel = args.notify_channel || 'fleet-ops';
+          const maxIterations = Math.min(args.max_iterations || 10, 30);
+          const jobName = `rlm-${Date.now().toString(36)}`;
+          const manifest = JSON.stringify({
+            apiVersion: 'rlm.io/v1alpha1',
+            kind: 'RLMJob',
+            metadata: { name: jobName, namespace: 'rlm-system' },
+            spec: {
+              backend: 'openai',
+              backendKwargs: {
+                model_name: 'fleet-agent',
+                base_url: 'http://litellm-proxy.default.svc.cluster.local:4000/v1'
+              },
+              backendSecret: 'rlm-openai-secret',
+              prompt: prompt,
+              maxIterations: maxIterations,
+              notifyChannel: notifyChannel
+            }
+          });
+          const { execSync: es } = require('child_process');
+          try {
+            const out = es('kubectl apply -f -', { input: manifest, encoding: 'utf8', timeout: 30000 });
+            return `RLM job launched: **${jobName}**\n${out.trim()}\nResults will be posted to #${notifyChannel} when complete.`;
+          } catch (e) {
+            return `Error launching RLM job: ${e.stderr ? e.stderr.trim() : e.message}`;
+          }
         }
         default:
           return `Unknown tool: ${name}`;
