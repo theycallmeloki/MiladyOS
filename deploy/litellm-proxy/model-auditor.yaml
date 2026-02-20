@@ -91,7 +91,7 @@ spec:
               image: python:3.12-slim
               env:
                 - name: LITELLM_BASE
-                  value: "http://litellm.default.svc.cluster.local:4000/v1"
+                  value: "http://litellm-proxy.default.svc.cluster.local:4000/v1"
                 - name: FAIL_THRESHOLD
                   value: "3"
               resources:
@@ -160,7 +160,7 @@ spec:
                           print(f"  WARNING: restart patch returned HTTP {s}", flush=True)
 
                   # ── Model test ───────────────────────────────────────────────
-                  LITELLM = os.environ.get("LITELLM_BASE", "http://litellm.default.svc.cluster.local:4000/v1")
+                  LITELLM = os.environ.get("LITELLM_BASE", "http://litellm-proxy.default.svc.cluster.local:4000/v1")
                   FAIL_THRESHOLD = int(os.environ.get("FAIL_THRESHOLD", "3"))
 
                   TOOL = [{
