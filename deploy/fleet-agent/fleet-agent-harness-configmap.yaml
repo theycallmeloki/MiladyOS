@@ -25,6 +25,7 @@ data:
     LITELLM_KEY        = os.environ.get("OPENAI_API_KEY", "not-required")
     MODEL              = os.environ.get("FLEET_MODEL", "Nanbeige/Nanbeige4.1-3B")
     MCP_URL            = os.environ.get("MCP_URL", "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse")
+    MCP_URLS           = [u.strip() for u in os.environ.get("MCP_URLS", MCP_URL).split(",") if u.strip()]
     QUEUE_FILE         = Path(os.environ.get("QUEUE_FILE", "/data/queue/queue.jsonl"))
     WORKSPACE          = Path(os.environ.get("WORKSPACE", "/workspace"))
     DATA_DIR           = Path(os.environ.get("DATA_DIR", "/data"))
@@ -119,6 +120,41 @@ data:
                 except asyncio.CancelledError:
                     pass
 
+    @asynccontextmanager
+    async def merged_mcp_sessions(urls: list):
+        """Connect to multiple MCP SSE backends and present them as a single merged session."""
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            tool_to_session = {}
+            all_tools = []
+            for url in urls:
+                try:
+                    session = await stack.enter_async_context(mcp_session(url))
+                    raw = await session.list_tools()
+                    for t in raw:
+                        name = t["name"]
+                        if name not in tool_to_session:
+                            tool_to_session[name] = session
+                            all_tools.append(t)
+                    log.info("MCP backend connected: %s (%d tools)", url, len(raw))
+                except Exception as e:
+                    log.warning("MCP backend unavailable, skipping %s: %s", url, e)
+
+            if not tool_to_session:
+                raise RuntimeError("No MCP backends available from: %s" % urls)
+
+            class MergedSession:
+                async def list_tools(self_inner):
+                    return all_tools
+
+                async def call_tool(self_inner, name: str, arguments: dict):
+                    sess = tool_to_session.get(name)
+                    if sess is None:
+                        return {"content": [{"type": "text", "text": f"Unknown tool: {name}"}]}
+                    return await sess.call_tool(name, arguments)
+
+            yield MergedSession()
+
     # ── Context helpers ──────────────────────────────────────────────────────
 
     def load_soul() -> str:
@@ -208,8 +244,8 @@ data:
         ]
         append_log(channel, {"role": "user", "content": instruction})
 
-        log.info("MCP connect, channel=%s prior_msgs=%d", channel, len(prior))
-        async with mcp_session(MCP_URL) as session:
+        log.info("MCP connect, channel=%s prior_msgs=%d urls=%s", channel, len(prior), MCP_URLS)
+        async with merged_mcp_sessions(MCP_URLS) as session:
             raw_tools = await session.list_tools()
             tools = [
                 {
