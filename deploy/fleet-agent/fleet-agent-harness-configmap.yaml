@@ -34,6 +34,8 @@ data:
     MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "2000"))  # chars
     MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
     DATUM_DIR          = DATA_DIR / "datums"
+    TRACE_DIR          = DATA_DIR / "traces"
+    QUEUE_CONCURRENCY  = int(os.environ.get("QUEUE_CONCURRENCY", "3"))
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)
 
@@ -258,7 +260,8 @@ data:
 
     # ── Agent loop ───────────────────────────────────────────────────────────
 
-    async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True, need_reply: bool = False, reply_channel: str = ""):
+    async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True,
+                        need_reply: bool = False, reply_channel: str = "", datum_id: str = ""):
         soul   = load_soul()
         memory = load_memory(channel)
         skills = load_skills()
@@ -270,7 +273,28 @@ data:
         ]
         append_log(channel, {"role": "user", "content": instruction})
 
-        log.info("MCP connect, channel=%s prior_msgs=%d urls=%s", channel, len(prior), MCP_URLS)
+        # ── Trace writer ─────────────────────────────────────────────────────
+        trace_events: list = []
+        trace_jsonl = (TRACE_DIR / f"{datum_id}.jsonl") if datum_id else None
+        trace_json  = (TRACE_DIR / f"{datum_id}.json")  if datum_id else None
+        if datum_id:
+            TRACE_DIR.mkdir(parents=True, exist_ok=True)
+
+        def emit(event: dict):
+            if not datum_id:
+                return
+            event["ts"] = datetime.now(timezone.utc).isoformat()
+            trace_events.append(event)
+            try:
+                with open(trace_jsonl, "a") as _f:
+                    _f.write(json.dumps(event) + "\n")
+            except Exception:
+                pass
+
+        emit({"type": "user_message", "content": instruction})
+        log.info("MCP connect, channel=%s prior_msgs=%d urls=%s datum=%s",
+                 channel, len(prior), MCP_URLS, datum_id or "none")
+
         async with merged_mcp_sessions(MCP_URLS) as session:
             raw_tools = await session.list_tools()
             tools = [
@@ -285,11 +309,16 @@ data:
                 for t in raw_tools
             ]
             log.info("Tools: %s", [t["function"]["name"] for t in tools])
+            emit({"type": "tools_ready", "names": [t["function"]["name"] for t in tools]})
 
             new_msgs = []
             replied  = False
+            iters_done = 0
 
             for iteration in range(MAX_ITERS):
+                iters_done = iteration + 1
+                emit({"type": "iter_start", "iter": iters_done})
+
                 response = llm.chat.completions.create(
                     model=MODEL,
                     messages=messages,
@@ -302,13 +331,16 @@ data:
                 usage_str = (f"in={usage.prompt_tokens} out={usage.completion_tokens}"
                              if usage else "usage=?")
                 log.info("--- iter %d/%d | model=%s | %s ---",
-                         iteration + 1, MAX_ITERS, actual_model, usage_str)
+                         iters_done, MAX_ITERS, actual_model, usage_str)
 
-                # Log reasoning/text content if present
                 if msg.content:
                     preview = msg.content.replace("\n", " ")[:300]
                     log.info("  [reasoning] %s%s", preview,
                              " ..." if len(msg.content) > 300 else "")
+                    emit({"type": "assistant_message", "content": msg.content,
+                          "model": actual_model,
+                          "usage": {"in": usage.prompt_tokens,
+                                    "out": usage.completion_tokens} if usage else {}})
 
                 assistant_msg = {"role": "assistant", "content": msg.content or ""}
                 if msg.tool_calls:
@@ -324,7 +356,7 @@ data:
                 new_msgs.append(assistant_msg)
 
                 if not msg.tool_calls:
-                    log.info("  [done] no more tool calls after %d iteration(s)", iteration + 1)
+                    log.info("  [done] no more tool calls after %d iteration(s)", iters_done)
                     if msg.content:
                         append_log(channel, {"role": "assistant", "content": msg.content})
                     break
@@ -338,6 +370,7 @@ data:
                 for tc in active_calls:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                     log.info("  [call] %s | args=%s", tc.function.name, json.dumps(args)[:200])
+                    emit({"type": "tool_start", "name": tc.function.name, "input": args})
                     try:
                         result  = await session.call_tool(tc.function.name, args)
                         content_items = result.get("content", [])
@@ -345,26 +378,24 @@ data:
                     except Exception as e:
                         content = f"Tool error: {e}"
                         log.error("  [error] %s failed: %s", tc.function.name, e)
-                    # Truncate long results to stay within context window
                     if len(content) > MAX_TOOL_RESULT:
                         content = content[:MAX_TOOL_RESULT] + f"\n... [truncated, {len(content)} chars total]"
                     log.info("  [result] %s | %s%s",
                              tc.function.name,
                              content[:200].replace("\n", " "),
                              " ..." if len(content) > 200 else "")
+                    emit({"type": "tool_end", "name": tc.function.name, "output": content[:1000]})
                     tool_msg = {"role": "tool", "tool_call_id": tc.id, "content": content}
                     messages.append(tool_msg)
                     new_msgs.append(tool_msg)
-                    # Stop after a successful mattermost_post — no follow-up spam
                     if tc.function.name == "mattermost_post" and content.startswith("Posted to"):
                         replied = True
-                        break  # don't execute any more tools this turn
+                        break
 
                 if replied:
                     log.info("  [posted] reply sent — stopping loop")
                     break
 
-                # For skipped tool calls, add placeholder results
                 for tc in msg.tool_calls[MAX_TOOLS_PER_TURN:]:
                     messages.append({"role": "tool", "tool_call_id": tc.id,
                                      "content": "Skipped (too many parallel calls; call this tool again in the next turn)"})
@@ -372,11 +403,13 @@ data:
                                      "content": "Skipped — call again"})
             else:
                 log.warning("Agent hit max iterations (%d)", MAX_ITERS)
+                emit({"type": "run_end", "status": "max_iters", "iters": iters_done})
 
             # Force-reply: model gathered info but forgot to call mattermost_post
             if need_reply and not replied:
                 target = reply_channel or channel
                 log.info("No reply posted yet — nudging model to post to #%s", target)
+                emit({"type": "nudge", "target": target})
                 messages.append({"role": "user",
                                   "content": f"STOP. You MUST call mattermost_post RIGHT NOW. "
                                              f"channel=\"{target}\". Do not call any other tool first. "
@@ -394,24 +427,24 @@ data:
                             content_items = result.get("content", [])
                             content = content_items[0].get("text", "") if content_items else str(result)
                             log.info("  nudge result: %s", content[:80])
+                            emit({"type": "tool_end", "name": "mattermost_post",
+                                  "output": content[:200], "nudge": True})
                             new_msgs.append({"role": "assistant", "content": "", "tool_calls": [
                                 {"id": tc.id, "type": "function",
                                  "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
                             ]})
                             new_msgs.append({"role": "tool", "tool_call_id": tc.id, "content": content})
                         else:
-                            # Model called wrong tool — force a fallback post
                             log.warning("  nudge called %s instead of mattermost_post — forcing fallback post",
                                         tc.function.name)
-                            fallback = f"I processed your request but encountered an issue composing a reply. " \
-                                       f"Please try again or check #fleet-ops logs."
+                            fallback = ("I processed your request but encountered an issue composing a reply. "
+                                        "Please try again or check #fleet-ops logs.")
                             result = await session.call_tool("mattermost_post",
                                                               {"channel": target, "message": fallback})
                             content_items = result.get("content", [])
                             content = content_items[0].get("text", "") if content_items else str(result)
                             log.info("  fallback post result: %s", content[:80])
                     elif m2.content:
-                        # Model replied in text but didn't call a tool — post the text directly
                         log.info("  nudge got text reply — posting directly")
                         text_reply = _strip_think(m2.content)[:1000]
                         if text_reply:
@@ -422,6 +455,15 @@ data:
                             log.info("  text-to-post result: %s", content[:80])
                 except Exception as e:
                     log.error("Nudge call failed: %s", e)
+
+            emit({"type": "run_end", "status": "complete", "iters": iters_done})
+
+            # Write consolidated .json for the trace processor (training data pipeline)
+            if datum_id and trace_events:
+                try:
+                    trace_json.write_text(json.dumps(trace_events))
+                except Exception as e:
+                    log.warning("Failed to write trace json for %s: %s", datum_id, e)
 
             save_context(channel, prior + new_msgs)
 
@@ -446,7 +488,7 @@ data:
                     item.get("instruction", "Run the HEARTBEAT.md checklist.")
                     + (f"\n\n---\nHEARTBEAT.md:\n{hb}" if hb else "")
                 )
-                await run_agent(instruction, channel=channel, load_prior=False)
+                await run_agent(instruction, channel=channel, load_prior=False, datum_id=datum_id)
 
             elif itype == "browser_task":
                 channel     = item.get("channel", "fleet-ops")
@@ -463,7 +505,8 @@ data:
                     f"After launching, call mattermost_post to confirm to #{channel}."
                 )
                 update_datum(datum_id, status="rlm_dispatched")
-                await run_agent(instruction, channel=channel, need_reply=True, reply_channel=channel)
+                await run_agent(instruction, channel=channel, need_reply=True,
+                                reply_channel=channel, datum_id=datum_id)
 
             elif itype == "mattermost":
                 channel = item.get("channel", "fleet-ops")
@@ -487,12 +530,12 @@ data:
                         f"but send only ONE reply then stop."
                     )
                 await run_agent(instruction, channel=channel,
-                                need_reply=True, reply_channel=channel)
+                                need_reply=True, reply_channel=channel, datum_id=datum_id)
 
             else:
                 channel     = "default"
                 instruction = item.get("instruction") or json.dumps(item)
-                await run_agent(instruction, channel=channel)
+                await run_agent(instruction, channel=channel, datum_id=datum_id)
 
             update_datum(datum_id, status="complete")
 
@@ -500,10 +543,18 @@ data:
             update_datum(datum_id, status="failed", error=str(e))
             log.error("Agent error type=%s: %s", itype, e)
 
+    _queue_sem = asyncio.Semaphore(QUEUE_CONCURRENCY)
+
+    async def _run_item_sem(item: dict):
+        """Wrap process_item with the concurrency semaphore."""
+        async with _queue_sem:
+            await process_item(item)
+
     async def watch_queue():
         QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
         QUEUE_FILE.touch(exist_ok=True)
-        log.info("Watching queue: %s  (model=%s)", QUEUE_FILE, MODEL)
+        log.info("Watching queue: %s  (model=%s  concurrency=%d)",
+                 QUEUE_FILE, MODEL, QUEUE_CONCURRENCY)
         last_pos = QUEUE_FILE.stat().st_size
 
         while True:
@@ -527,11 +578,11 @@ data:
                         continue
                     try:
                         item = json.loads(raw)
-                        await process_item(item)
+                        asyncio.create_task(_run_item_sem(item))
                     except json.JSONDecodeError as e:
                         log.error("Bad queue line: %s — %s", raw[:80], e)
                     except Exception as e:
-                        log.error("Unexpected error: %s", e)
+                        log.error("Unexpected error dispatching item: %s", e)
             last_pos = QUEUE_FILE.stat().st_size
 
     if __name__ == "__main__":
