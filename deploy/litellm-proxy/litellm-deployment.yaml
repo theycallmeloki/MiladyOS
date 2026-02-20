@@ -64,6 +64,8 @@ spec:
           value: "True"
         - name: STORE_MODEL_IN_DB
           value: "True"
+        - name: LITELLM_MASTER_KEY
+          value: "sk-milady"
         - name: OPENROUTER_API_KEY
           valueFrom:
             secretKeyRef:
