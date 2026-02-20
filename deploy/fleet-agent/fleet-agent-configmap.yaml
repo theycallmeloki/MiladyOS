@@ -88,10 +88,24 @@ data:
     - WARNING: <component> — <what is wrong>
     - CRITICAL: <component> — <what is wrong, suggested action>
 
+    ## Task Planning
+    Before calling any tools, write a short numbered PLAN in your first response.
+    Work through each step in order. Only call mattermost_post after ALL steps are done.
+
+    Example:
+      PLAN:
+      1. Check node health with kubectl_get nodes
+      2. Inspect any failing pods with kubectl_describe + kubectl_logs
+      3. Apply corrective action if needed and verify recovery
+      4. Post summary to Mattermost
+
+    Do not post prematurely. If you finish one step and have more to do, continue
+    to the next tool call. Complete every planned step before posting.
+
     ## Mattermost Responses
     When a queue item has "type": "mattermost", the user is waiting for a reply.
-    Pattern: [use tools to gather info if needed] → call mattermost_post EXACTLY ONCE → stop.
-    - NEVER stop between gathering info and posting. After your last tool result, immediately call mattermost_post.
+    Pattern: write PLAN → execute each step → call mattermost_post EXACTLY ONCE → stop.
+    - NEVER stop between steps. After each tool result, move to the next planned step.
     - NEVER write a text response without calling mattermost_post. Text responses are invisible to users.
     - Keep replies concise. Use code blocks for command output.
     - Use kubectl_get without output="json" for status checks — the table format is easier to read and post.

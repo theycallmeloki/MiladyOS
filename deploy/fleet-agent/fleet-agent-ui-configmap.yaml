@@ -251,6 +251,36 @@ data:
             f.write(json.dumps(entry) + "\n")
         return {"ok": True}
 
+    @app.post("/api/retry/{datum_id}")
+    def retry_datum(datum_id: str, body: dict = {}):
+        datum_file = DATA / "datums" / f"{datum_id}.json"
+        if not datum_file.exists():
+            return {"ok": False, "error": "datum not found"}
+        try:
+            datum = json.loads(datum_file.read_text())
+        except Exception:
+            return {"ok": False, "error": "bad datum file"}
+        instruction = body.get("instruction") or datum.get("instruction") or datum.get("text", "")
+        entry = {
+            "ts":          datetime.now(timezone.utc).isoformat() + "Z",
+            "type":        datum.get("type", "mattermost"),
+            "channel":     datum.get("channel", "fleet-ops"),
+            "user":        datum.get("user", "ui"),
+            "user_id":     datum.get("user_id", "ui"),
+            "text":        instruction,
+            "instruction": instruction,
+            "retry_of":    datum_id,
+        }
+        if datum.get("url"):
+            entry["url"] = datum["url"]
+        if datum.get("context_channel"):
+            entry["context_channel"] = datum["context_channel"]
+        q = DATA / "queue/queue.jsonl"
+        q.parent.mkdir(parents=True, exist_ok=True)
+        with open(q, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+        return {"ok": True}
+
     @app.get("/")
     def index():
         return HTMLResponse((UI / "index.html").read_text())
@@ -452,6 +482,34 @@ data:
         .raw-line:hover { background: rgba(255,255,255,.03); }
         .loki-err { color: var(--red); font-size: 10px; padding: 8px 4px; }
 
+        /* retry panel */
+        .retry-panel {
+          flex-shrink: 0; border-top: 1px solid var(--border);
+          padding: 10px 12px; display: flex; flex-direction: column; gap: 7px;
+          background: var(--bg);
+        }
+        .retry-label { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+        .retry-input {
+          background: var(--surface); border: 1px solid var(--border);
+          color: var(--text); padding: 6px 9px; border-radius: 4px;
+          font-family: inherit; font-size: 11px; resize: vertical; min-height: 54px;
+          outline: none; line-height: 1.5;
+        }
+        .retry-input:focus { border-color: var(--accent); }
+        .retry-actions { display: flex; gap: 6px; }
+        .btn-retry { height: 26px; padding: 0 10px; background: var(--yellow); color: #0d0f14;
+          border: none; border-radius: 4px; cursor: pointer; font-family: inherit;
+          font-weight: 700; font-size: 11px; }
+        .btn-retry:hover { opacity: .85; }
+        .btn-cancel { height: 26px; padding: 0 10px; background: transparent;
+          border: 1px solid var(--border); color: var(--muted); border-radius: 4px;
+          cursor: pointer; font-family: inherit; font-size: 11px; }
+        .btn-cancel:hover { color: var(--text); border-color: var(--text); }
+        .btn-sm { height: 20px; padding: 0 7px; background: transparent;
+          border: 1px solid var(--border); color: var(--muted); border-radius: 3px;
+          cursor: pointer; font-size: 10px; font-family: inherit; }
+        .btn-sm:hover { color: var(--yellow); border-color: var(--yellow); }
+
         .empty { color: var(--muted); text-align: center; padding: 48px 20px; }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -546,7 +604,10 @@ data:
             </div>
             <div v-if="streaming || lokiStreaming" class="dot live-dot pulse" style="margin-left:6px"></div>
             <span v-if="streaming || lokiStreaming" style="color:var(--green)">live</span>
-            <span class="log-close" @click="closeLog">✕</span>
+            <button v-if="['failed','complete','rlm_dispatched'].includes(selected.status)"
+                    class="btn-sm" style="margin-left:auto"
+                    @click="toggleRetry">↻ retry</button>
+            <span class="log-close" :style="['failed','complete','rlm_dispatched'].includes(selected.status) ? '' : 'margin-left:auto'" @click="closeLog">✕</span>
           </div>
 
           <!-- TRACE tab -->
@@ -570,6 +631,19 @@ data:
             </div>
             <div v-for="(line, i) in lokiLines" :key="i" class="raw-line">{{ line }}</div>
           </div>
+
+          <!-- retry panel -->
+          <div v-if="retryMode" class="retry-panel">
+            <div class="retry-label">re-queue with instruction</div>
+            <textarea class="retry-input" v-model="retryInstruction"
+                      placeholder="edit instruction before re-queuing…"
+                      @keydown.ctrl.enter="submitRetry"></textarea>
+            <div class="retry-actions">
+              <button class="btn-retry" @click="submitRetry">↻ re-queue</button>
+              <button class="btn-cancel" @click="retryMode=false">cancel</button>
+              <span v-if="retrySent" style="color:var(--green);font-size:11px;align-self:center">queued ✓</span>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -585,15 +659,18 @@ data:
         const selected      = ref(null)
         const traceEvents   = ref([])
         const streaming     = ref(false)
-        const activeTab     = ref('trace')
-        const lokiLines     = ref([])
-        const lokiStreaming  = ref(false)
-        const lokiError     = ref('')
-        const tick          = ref(5)
-        const sent          = ref(false)
-        const logBody       = ref(null)
-        const logRawBody    = ref(null)
-        const maxConc       = ref(3)
+        const activeTab      = ref('trace')
+        const lokiLines      = ref([])
+        const lokiStreaming   = ref(false)
+        const lokiError      = ref('')
+        const retryMode      = ref(false)
+        const retryInstruction = ref('')
+        const retrySent      = ref(false)
+        const tick           = ref(5)
+        const sent           = ref(false)
+        const logBody        = ref(null)
+        const logRawBody     = ref(null)
+        const maxConc        = ref(3)
 
         const cmd = reactive({ type: 'mattermost', channel: 'fleet-ops', instruction: '', url: '' })
 
@@ -677,12 +754,39 @@ data:
         function closeLog() {
           if (es)     { es.close();     es     = null }
           if (lokiEs) { lokiEs.close(); lokiEs = null }
-          selected.value     = null
-          traceEvents.value  = []
-          lokiLines.value    = []
-          lokiError.value    = ''
-          streaming.value    = false
-          lokiStreaming.value = false
+          selected.value       = null
+          traceEvents.value    = []
+          lokiLines.value      = []
+          lokiError.value      = ''
+          streaming.value      = false
+          lokiStreaming.value  = false
+          retryMode.value      = false
+          retryInstruction.value = ''
+          retrySent.value      = false
+        }
+
+        function toggleRetry() {
+          retryMode.value = !retryMode.value
+          if (retryMode.value && selected.value) {
+            retryInstruction.value =
+              selected.value.instruction || selected.value.text || ''
+            retrySent.value = false
+          }
+        }
+
+        async function submitRetry() {
+          if (!selected.value) return
+          await fetch(`/api/retry/${selected.value.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instruction: retryInstruction.value }),
+          })
+          retrySent.value = true
+          setTimeout(() => {
+            retryMode.value = false
+            retrySent.value = false
+            refresh()
+          }, 1500)
         }
 
         async function openLog(d) {
@@ -799,8 +903,9 @@ data:
         return { queue, datums, cmd, counts, concurrency, maxConc, tick, sent,
                  selected, traceEvents, streaming, logBody,
                  activeTab, lokiLines, lokiStreaming, lokiError, logRawBody,
+                 retryMode, retryInstruction, retrySent,
                  rel, evClass, evLabel, evText, evMeta,
-                 openLog, closeLog, send }
+                 openLog, closeLog, send, toggleRetry, submitRetry }
       }
     }).mount('#app')
     </script>
