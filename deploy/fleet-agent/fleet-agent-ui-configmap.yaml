@@ -1,0 +1,372 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fleet-agent-ui
+  namespace: fleet-agent
+data:
+  server.py: |
+    #!/usr/bin/env python3
+    """Thin API server for the fleet-agent UI. Reads /data (shared PVC) and
+    exposes queue, datums, channel logs, and a dispatch endpoint."""
+    import json, os, uvicorn
+    from pathlib import Path
+    from datetime import datetime, timezone
+    from fastapi import FastAPI
+    from fastapi.responses import HTMLResponse, JSONResponse
+
+    app  = FastAPI()
+    DATA = Path(os.environ.get("DATA_DIR", "/data"))
+    UI   = Path(os.environ.get("UI_DIR",   "/ui"))
+
+    def _read_jsonl(path: Path, tail: int = 100) -> list:
+        if not path.exists():
+            return []
+        lines = [l.strip() for l in path.read_text().splitlines() if l.strip()]
+        out = []
+        for line in lines[-tail:]:
+            try:
+                out.append(json.loads(line))
+            except Exception:
+                pass
+        return out
+
+    @app.get("/api/queue")
+    def get_queue():
+        items = _read_jsonl(DATA / "queue/queue.jsonl", tail=100)
+        return list(reversed(items))
+
+    @app.get("/api/datums")
+    def get_datums():
+        d = DATA / "datums"
+        if not d.exists():
+            return []
+        results = []
+        for f in sorted(d.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:100]:
+            try:
+                results.append(json.loads(f.read_text()))
+            except Exception:
+                pass
+        return results
+
+    @app.get("/api/channels")
+    def get_channels():
+        ch_dir = DATA / "channels"
+        if not ch_dir.exists():
+            return []
+        out = []
+        for ch in sorted(ch_dir.iterdir()):
+            if ch.is_dir():
+                log_entries = _read_jsonl(ch / "log.jsonl", tail=5)
+                out.append({
+                    "name": ch.name,
+                    "recent": log_entries,
+                })
+        return out
+
+    @app.post("/api/dispatch")
+    def dispatch(body: dict):
+        entry = {
+            "ts":          datetime.now(timezone.utc).isoformat() + "Z",
+            "type":        body.get("type", "mattermost"),
+            "channel":     body.get("channel", "fleet-ops"),
+            "user":        "ui",
+            "user_id":     "ui",
+            "text":        body.get("instruction", ""),
+            "instruction": body.get("instruction", ""),
+        }
+        if body.get("url"):
+            entry["url"] = body["url"]
+        if body.get("context_channel"):
+            entry["context_channel"] = body["context_channel"]
+        q = DATA / "queue/queue.jsonl"
+        q.parent.mkdir(parents=True, exist_ok=True)
+        with open(q, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+        return {"ok": True}
+
+    @app.get("/")
+    def index():
+        return HTMLResponse((UI / "index.html").read_text())
+
+    if __name__ == "__main__":
+        uvicorn.run(app, host="0.0.0.0", port=8080, log_level="warning")
+
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Fleet Agent</title>
+      <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+      <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+          --bg:      #0d0f14;
+          --surface: #161a22;
+          --border:  #252a38;
+          --text:    #e2e8f0;
+          --muted:   #4a5568;
+          --accent:  #818cf8;
+          --green:   #34d399;
+          --yellow:  #fbbf24;
+          --red:     #f87171;
+          --blue:    #60a5fa;
+          --purple:  #a78bfa;
+        }
+        body {
+          background: var(--bg); color: var(--text);
+          font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+          font-size: 12px; height: 100vh; display: flex; flex-direction: column;
+          overflow: hidden;
+        }
+
+        /* ── header ── */
+        .header {
+          display: flex; align-items: center; gap: 16px;
+          padding: 10px 18px; border-bottom: 1px solid var(--border);
+          background: var(--surface); flex-shrink: 0;
+        }
+        .logo { font-size: 13px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); }
+        .stats { display: flex; gap: 16px; margin-left: auto; align-items: center; }
+        .stat  { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+        .stat strong { color: var(--text); }
+        .dot { width: 7px; height: 7px; border-radius: 50%; }
+        .tick { color: var(--muted); font-size: 10px; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .pulse { animation: pulse 2s infinite; }
+
+        /* ── dispatch bar ── */
+        .dispatch {
+          display: flex; gap: 8px; align-items: center;
+          padding: 8px 18px; border-bottom: 1px solid var(--border);
+          background: var(--surface); flex-shrink: 0;
+        }
+        .dispatch select, .dispatch input, .dispatch textarea {
+          background: var(--bg); border: 1px solid var(--border);
+          color: var(--text); padding: 5px 9px; border-radius: 4px;
+          font-family: inherit; font-size: 12px; outline: none;
+        }
+        .dispatch select { height: 30px; }
+        .dispatch input  { height: 30px; }
+        .dispatch textarea { flex: 1; height: 30px; resize: none; line-height: 20px; }
+        .dispatch .url-input { width: 200px; }
+        .btn {
+          height: 30px; padding: 0 14px; background: var(--accent); color: #0d0f14;
+          border: none; border-radius: 4px; cursor: pointer; font-family: inherit;
+          font-weight: 700; font-size: 12px; white-space: nowrap;
+        }
+        .btn:hover { opacity: .85; }
+        .sent { color: var(--green); font-size: 11px; }
+
+        /* ── main grid ── */
+        .main {
+          display: grid; grid-template-columns: 1fr 320px;
+          flex: 1; overflow: hidden;
+        }
+        .panel { display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
+        .panel-head {
+          padding: 8px 14px; border-bottom: 1px solid var(--border);
+          font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+          color: var(--muted); display: flex; align-items: center; gap: 8px;
+          flex-shrink: 0;
+        }
+        .panel-head .count { color: var(--text); }
+        .panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+        .panel-body.flush { padding: 0; }
+
+        /* ── datum cards ── */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+        .card {
+          background: var(--surface); border: 1px solid var(--border);
+          border-left: 3px solid var(--border); border-radius: 5px; padding: 11px;
+        }
+        .card.complete        { border-left-color: var(--green);  }
+        .card.failed          { border-left-color: var(--red);    }
+        .card.processing      { border-left-color: var(--yellow); }
+        .card.rlm_dispatched  { border-left-color: var(--purple); }
+        .card.pending         { border-left-color: var(--muted);  }
+        .card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+        .card-text {
+          line-height: 1.5; color: var(--text);
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .card-url  { color: var(--blue); font-size: 11px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .card-meta { color: var(--muted); font-size: 10px; margin-top: 5px; }
+        .card-err  { color: var(--red);   font-size: 10px; margin-top: 4px; }
+
+        /* ── badges ── */
+        .badge {
+          font-size: 9px; padding: 2px 5px; border-radius: 3px;
+          text-transform: uppercase; letter-spacing: .06em; font-weight: 700;
+        }
+        .b-type     { background: rgba(129,140,248,.15); color: var(--accent); }
+        .b-complete { background: rgba( 52,211,153,.15); color: var(--green);  }
+        .b-failed   { background: rgba(248,113,113,.15); color: var(--red);    }
+        .b-processing     { background: rgba(251,191, 36,.15); color: var(--yellow); }
+        .b-rlm_dispatched { background: rgba(167,139,250,.15); color: var(--purple); }
+        .b-pending  { background: rgba(100,116,139,.15); color: var(--muted);  }
+        .b-heartbeat { background: rgba( 96,165,250,.15); color: var(--blue);  }
+        .b-mattermost { background: rgba(129,140,248,.15); color: var(--accent); }
+        .b-browser_task { background: rgba( 52,211,153,.15); color: var(--green); }
+
+        .ts { margin-left: auto; color: var(--muted); font-size: 10px; }
+
+        /* ── queue feed ── */
+        .q-item { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+        .q-item-top { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+        .q-text {
+          color: var(--text); line-height: 1.45;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .q-meta { color: var(--muted); font-size: 10px; margin-top: 3px; }
+
+        .empty { color: var(--muted); text-align: center; padding: 48px 20px; }
+
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+      </style>
+    </head>
+    <body>
+    <div id="app">
+
+      <div class="header">
+        <div class="logo">⬡ FLEET AGENT</div>
+        <div class="stats">
+          <div class="stat"><div class="dot pulse" style="background:var(--green)"></div> <strong>{{ counts.complete }}</strong> done</div>
+          <div class="stat"><div class="dot pulse" style="background:var(--yellow)"></div> <strong>{{ counts.processing }}</strong> active</div>
+          <div class="stat"><div class="dot" style="background:var(--purple)"></div> <strong>{{ counts.rlm_dispatched }}</strong> rlm</div>
+          <div class="stat"><div class="dot" style="background:var(--red)"></div> <strong>{{ counts.failed }}</strong> failed</div>
+          <div class="tick">↻ {{ tick }}s</div>
+        </div>
+      </div>
+
+      <div class="dispatch">
+        <select v-model="cmd.type">
+          <option value="mattermost">mattermost</option>
+          <option value="browser_task">browser_task</option>
+          <option value="heartbeat">heartbeat</option>
+        </select>
+        <input v-model="cmd.channel" placeholder="channel" style="width:110px" />
+        <input v-if="cmd.type === 'browser_task'" v-model="cmd.url" placeholder="url" class="url-input" />
+        <textarea v-model="cmd.instruction" placeholder="instruction… (Ctrl+Enter to send)" @keydown.ctrl.enter="send"></textarea>
+        <button class="btn" @click="send">→ dispatch</button>
+        <span v-if="sent" class="sent">queued ✓</span>
+      </div>
+
+      <div class="main">
+
+        <div class="panel">
+          <div class="panel-head">
+            datums <span class="count">{{ datums.length }}</span>
+          </div>
+          <div class="panel-body">
+            <div v-if="datums.length === 0" class="empty">no datums yet — dispatch something</div>
+            <div class="grid">
+              <div v-for="d in datums" :key="d.id" :class="['card', d.status]">
+                <div class="card-top">
+                  <span :class="['badge', 'b-' + d.type]">{{ d.type }}</span>
+                  <span :class="['badge', 'b-' + d.status]">{{ d.status }}</span>
+                  <span class="ts">{{ reltime(d.created_at) }}</span>
+                </div>
+                <div class="card-text">{{ d.instruction || d.text || '—' }}</div>
+                <div v-if="d.url" class="card-url">{{ d.url }}</div>
+                <div v-if="d.user || d.channel" class="card-meta">
+                  <span v-if="d.user && d.user !== 'ui'">@{{ d.user }}</span>
+                  <span v-if="d.channel"> · #{{ d.channel }}</span>
+                  <span v-if="d.is_long_job"> · rlm job</span>
+                </div>
+                <div v-if="d.error" class="card-err">{{ d.error }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="border-right:none">
+          <div class="panel-head">
+            queue <span class="count">{{ queue.length }}</span>
+          </div>
+          <div class="panel-body flush">
+            <div v-if="queue.length === 0" class="empty">queue empty</div>
+            <div v-for="item in queue" :key="item.ts + item.instruction" class="q-item">
+              <div class="q-item-top">
+                <span :class="['badge', 'b-' + item.type]">{{ item.type }}</span>
+                <span v-if="item.channel" style="color:var(--muted)">#{{ item.channel }}</span>
+                <span v-if="item.user && item.user !== 'ui'" style="color:var(--muted)">@{{ item.user }}</span>
+              </div>
+              <div class="q-text">{{ item.instruction || item.text || item.type }}</div>
+              <div class="q-meta">{{ reltime(item.ts) }}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+    const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue
+
+    createApp({
+      setup() {
+        const queue  = ref([])
+        const datums = ref([])
+        const tick   = ref(5)
+        const sent   = ref(false)
+        const cmd = reactive({ type: 'mattermost', channel: 'fleet-ops', instruction: '', url: '' })
+
+        const counts = computed(() => {
+          const c = { complete: 0, processing: 0, failed: 0, rlm_dispatched: 0, pending: 0 }
+          for (const d of datums.value) { c[d.status] = (c[d.status] || 0) + 1 }
+          return c
+        })
+
+        function reltime(ts) {
+          if (!ts) return ''
+          const s = Math.floor((Date.now() - new Date(ts)) / 1000)
+          if (s < 60)   return s + 's ago'
+          if (s < 3600) return Math.floor(s / 60) + 'm ago'
+          if (s < 86400) return Math.floor(s / 3600) + 'h ago'
+          return new Date(ts).toLocaleDateString()
+        }
+
+        async function refresh() {
+          try {
+            const [q, d] = await Promise.all([
+              fetch('/api/queue').then(r => r.json()),
+              fetch('/api/datums').then(r => r.json()),
+            ])
+            queue.value  = q
+            datums.value = d
+          } catch(e) { console.warn('refresh err', e) }
+        }
+
+        async function send() {
+          if (!cmd.instruction.trim()) return
+          const body = { type: cmd.type, channel: cmd.channel, instruction: cmd.instruction }
+          if (cmd.url) body.url = cmd.url
+          await fetch('/api/dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          cmd.instruction = ''
+          cmd.url = ''
+          sent.value = true
+          setTimeout(() => { sent.value = false }, 2000)
+          await refresh()
+        }
+
+        let timer, countdown
+        onMounted(() => {
+          refresh()
+          timer     = setInterval(refresh, 5000)
+          countdown = setInterval(() => { tick.value = tick.value <= 1 ? 5 : tick.value - 1 }, 1000)
+        })
+        onUnmounted(() => { clearInterval(timer); clearInterval(countdown) })
+
+        return { queue, datums, cmd, counts, tick, sent, reltime, send }
+      }
+    }).mount('#app')
+    </script>
+    </body>
+    </html>

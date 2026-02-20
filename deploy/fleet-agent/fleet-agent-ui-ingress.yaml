@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fleet-agent-ui-ingress
+  namespace: fleet-agent
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: fleet.transparentlyrotatableproxy.me
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fleet-agent-ui
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - fleet.transparentlyrotatableproxy.me
+    secretName: fleet-transparentlyrotatableproxy-me-tls
