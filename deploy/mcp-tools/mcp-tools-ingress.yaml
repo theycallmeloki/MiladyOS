@@ -13,7 +13,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: mcp.miladyos.net
+  - host: mcp.transparentlyrotatableproxy.me
     http:
       paths:
       - path: /
@@ -25,5 +25,5 @@ spec:
               number: 3000
   tls:
   - hosts:
-    - mcp.miladyos.net
-    secretName: mcp-miladyos-net-tls
+    - mcp.transparentlyrotatableproxy.me
+    secretName: mcp-transparentlyrotatableproxy-me-tls
