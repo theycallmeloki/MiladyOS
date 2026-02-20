@@ -194,22 +194,22 @@ data:
 
       # ── Dedicated inference (fallbacks) ───────────────────────────────────
       # Bare-metal RTX 3080 Ti (AWQ 4-bit, low latency, no cloud dependency)
-      - model_name: "Nanbeige/Nanbeige4.1-3B"
+      - model_name: "Qwen/Qwen2.5-7B"
         litellm_params:
-          model: "openai/cyankiwi/Nanbeige4.1-3B-AWQ-4bit"
+          model: "openai/Qwen/Qwen2.5-7B-Instruct-AWQ"
           api_base: "http://192.168.1.19:8000/v1"
           api_key: "not-needed"
         model_info:
-          id: "nanbeige-bare-metal"
+          id: "qwen-25-7b-bare-metal"
 
       # In-cluster vLLM (last resort)
-      - model_name: "Nanbeige/Nanbeige4.1-3B-fallback"
+      - model_name: "Qwen/Qwen2.5-7B-fallback"
         litellm_params:
-          model: "openai/Nanbeige/Nanbeige4.1-3B"
+          model: "openai/Qwen/Qwen2.5-7B-Instruct-AWQ"
           api_base: "http://vllm-server.self-hosted-models.svc.cluster.local:8080/v1"
           api_key: "not-needed"
         model_info:
-          id: "nanbeige-incluster"
+          id: "qwen-25-7b-incluster"
 
     litellm_settings:
       drop_params: true
@@ -226,5 +226,5 @@ data:
       allowed_fails: 2          # tolerate transient errors before cooling down
       cooldown_time: 60         # shorter cooldown — free tier resets quickly
       fallbacks:
-        - "fleet-agent": ["Nanbeige/Nanbeige4.1-3B", "Nanbeige/Nanbeige4.1-3B-fallback"]
-        - "Nanbeige/Nanbeige4.1-3B": ["Nanbeige/Nanbeige4.1-3B-fallback"]
+        - "fleet-agent": ["Qwen/Qwen2.5-7B", "Qwen/Qwen2.5-7B-fallback"]
+        - "Qwen/Qwen2.5-7B": ["Qwen/Qwen2.5-7B-fallback"]
