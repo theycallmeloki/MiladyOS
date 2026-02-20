@@ -62,8 +62,6 @@ spec:
           value: "4000"
         - name: LITELLM_LOAD_MODEL_CONFIG_AT_START
           value: "True"
-        - name: STORE_MODEL_IN_DB
-          value: "True"
         - name: LITELLM_MASTER_KEY
           value: "sk-milady"
         - name: OPENROUTER_API_KEY

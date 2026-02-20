@@ -1,21 +1,22 @@
 # Model Auditor — automatically maintains litellm-config-live
 #
-# Tests each candidate model in isolation by:
-#   1. POST /model/new  — temp entry with a unique model_name
-#   2. POST /v1/chat/completions with that unique name → LiteLLM routes
-#      through its own egress (OpenRouter API key, etc.)
-#   3. POST /model/delete — clean up temp entry
-# This gives per-model signal without needing direct internet egress.
+# Tests each candidate model in isolation via a temp LiteLLM routing
+# entry, then writes litellm-config-live and (if models were pruned)
+# does a rolling restart so LiteLLM picks up the new config.
 #
-# After testing:
-#   A. Hot-swaps the live routing set via admin API (zero restart)
-#   B. Writes litellm-config-live ConfigMap (for clean pod restarts)
+# LiteLLM is config-file-driven (no DB). The live ConfigMap is the
+# authoritative model list — the init-container loads it at startup.
+#
+# Flow every 4h:
+#   1. For each candidate: POST /model/new (temp) → test → DELETE
+#   2. Write litellm-config-live (pruned config.yaml + tracking.json)
+#   3. If anything pruned → kubectl rollout restart litellm-proxy
 #
 # Failure semantics:
 #   PASS        — responded with a tool call ✅
 #   TEXT-ONLY   — responded without tool call ⚠️  (soft fail, counted)
 #   RATE-LIMIT  — 429, skip this round (no penalty)
-#   FAIL        — error/timeout (counts toward prune threshold)
+#   FAIL        — error/timeout (counts toward prune threshold = 3)
 
 ---
 apiVersion: v1
@@ -42,6 +43,11 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["create"]
+  # Restart LiteLLM when models are pruned
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["litellm-proxy"]
+    verbs: ["get", "patch"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -104,7 +110,7 @@ spec:
                 - python3
                 - -c
                 - |
-                  # stdlib only — no pip install, no direct internet needed
+                  # stdlib only — no pip install, no external dependencies
                   import json, os, time, uuid, urllib.request, urllib.error, ssl
                   from datetime import datetime, timezone
 
@@ -143,7 +149,15 @@ spec:
                                     "metadata":{"name":name,"namespace":NS},"data":data})
                           print(f"  Created ConfigMap {name}", flush=True)
 
-                  # ── LiteLLM admin + proxy API ────────────────────────────────
+                  def deployment_restart(name):
+                      ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                      _, s = k8s("PATCH", f"/apis/apps/v1/namespaces/{NS}/deployments/{name}",
+                          body={"spec":{"template":{"metadata":{"annotations":{
+                              "kubectl.kubernetes.io/restartedAt": ts}}}}},
+                          ct="application/merge-patch+json")
+                      print(f"  Rollout restart → HTTP {s}", flush=True)
+
+                  # ── LiteLLM proxy API ────────────────────────────────────────
                   LITELLM = os.environ.get("LITELLM_BASE", "http://litellm-proxy.default.svc.cluster.local:4000")
                   KEY     = os.environ.get("LITELLM_MASTER_KEY", "sk-milady")
 
@@ -162,34 +176,7 @@ spec:
                       except Exception as e:
                           return {"message": str(e)}, 0
 
-                  def ll_active_ids():
-                      body, s = ll("GET", "/model/info")
-                      if s != 200:
-                          print(f"  WARNING: GET /model/info → {s}", flush=True)
-                          return None
-                      return {(m.get("model_info") or {}).get("id")
-                              for m in body.get("data", [])
-                              if (m.get("model_info") or {}).get("id")}
-
-                  def ll_add(entry):
-                      mid = (entry.get("model_info") or {}).get("id", "?")
-                      body, s = ll("POST", "/model/new", entry)
-                      if s in (200, 201):
-                          print(f"  ✅ Added   {mid}", flush=True)
-                      else:
-                          print(f"  ⚠️  Add {mid} → {s}: {body}", flush=True)
-
-                  def ll_delete(model_id):
-                      body, s = ll("POST", "/model/delete", {"id": model_id})
-                      if s in (200, 201):
-                          print(f"  🗑️  Deleted {model_id}", flush=True)
-                      else:
-                          print(f"  ⚠️  Delete {model_id} → {s}: {body}", flush=True)
-
                   # ── Per-model test via temp routing entry ────────────────────
-                  # Cluster pods have no direct internet egress, but LiteLLM does.
-                  # We create a temp model_name, test through LiteLLM (which has
-                  # the API keys and egress), then delete the temp entry.
                   FAIL_THRESHOLD = int(os.environ.get("FAIL_THRESHOLD", "3"))
                   SLEEP_S        = int(os.environ.get("SLEEP_BETWEEN_TESTS", "3"))
 
@@ -207,24 +194,24 @@ spec:
 
                   def test_model(entry, timeout=60):
                       """
-                      Test a specific model in isolation by temporarily adding it to
-                      LiteLLM under a unique name, then cleaning up afterwards.
+                      Test a model in isolation: create a uniquely-named temp routing
+                      entry in LiteLLM, test it, then clean up. LiteLLM uses its own
+                      credentials and egress — auditor needs no internet access.
                       """
                       temp_name = f"audit-{uuid.uuid4().hex[:12]}"
                       temp_id   = f"tmp-{temp_name}"
 
-                      # 1. Register temp entry
-                      temp_entry = {
-                          "model_name":   temp_name,
+                      # Register temp entry
+                      _, add_s = ll("POST", "/model/new", {
+                          "model_name":     temp_name,
                           "litellm_params": entry["litellm_params"],
-                          "model_info":   {"id": temp_id},
-                      }
-                      _, add_s = ll("POST", "/model/new", temp_entry)
+                          "model_info":     {"id": temp_id},
+                      })
                       if add_s not in (200, 201):
                           return {"ok": False, "latency": 0,
-                                  "error": f"temp entry add failed: HTTP {add_s}"}
+                                  "error": f"temp add failed HTTP {add_s}"}
 
-                      # 2. Test
+                      # Test
                       payload = json.dumps({
                           "model": temp_name, "messages": MESSAGES, "tools": TOOL,
                           "tool_choice": "auto", "max_tokens": 128, "temperature": 0
@@ -252,9 +239,8 @@ spec:
                           result = {"ok": False, "latency": round(time.time()-t0, 2),
                                     "error": str(e)[:200]}
 
-                      # 3. Clean up temp entry
+                      # Clean up — best-effort
                       ll("POST", "/model/delete", {"id": temp_id})
-
                       return result
 
                   # ── Main ─────────────────────────────────────────────────────
@@ -323,25 +309,7 @@ spec:
                       else:
                           passing.append(entry)
 
-                  desired_ids = {(e.get("model_info") or {}).get("id") for e in passing}
-                  print(f"\nDesired: {len(passing)} active, {len(pruned)} pruned", flush=True)
-
-                  # ── Hot-swap via LiteLLM admin API ───────────────────────────
-                  print("\nQuerying LiteLLM active models...", flush=True)
-                  active_ids = ll_active_ids()
-                  if active_ids is not None:
-                      to_remove = active_ids - desired_ids
-                      to_add    = desired_ids - active_ids
-                      entry_by_id = {(e.get("model_info") or {}).get("id"): e for e in candidates}
-                      print(f"Hot-swap: +{len(to_add)} add, -{len(to_remove)} remove", flush=True)
-                      for mid in to_remove:
-                          ll_delete(mid)
-                      for mid in to_add:
-                          if mid in entry_by_id:
-                              ll_add(entry_by_id[mid])
-                      print("Hot-swap complete. No restart needed.", flush=True)
-                  else:
-                      print("WARNING: LiteLLM admin API unreachable — ConfigMap still written.", flush=True)
+                  print(f"\nResult: {len(passing)} active, {len(pruned)} pruned", flush=True)
 
                   # ── Write live ConfigMap ─────────────────────────────────────
                   live_cfg = {"model_list": passing}
@@ -350,6 +318,15 @@ spec:
                       "config.yaml":   json.dumps(live_cfg, indent=2),
                       "tracking.json": json.dumps(tracking, indent=2),
                   })
+
+                  # ── Restart LiteLLM if anything was pruned ───────────────────
+                  # Config-file driven (no DB), so restart is required to apply.
+                  # Init-container will load the pruned litellm-config-live.
+                  if pruned:
+                      print(f"Pruned {len(pruned)} models — restarting litellm-proxy...", flush=True)
+                      deployment_restart("litellm-proxy")
+                  else:
+                      print("Nothing pruned — no restart needed.", flush=True)
 
                   # ── Summary ──────────────────────────────────────────────────
                   pruned_set = set(pruned)
