@@ -228,3 +228,58 @@ data:
       fallbacks:
         - "fleet-agent": ["Qwen/Qwen2.5-7B", "Qwen/Qwen2.5-7B-fallback"]
         - "Qwen/Qwen2.5-7B": ["Qwen/Qwen2.5-7B-fallback"]
+
+  # ── Auditor input files (JSON — no pyyaml needed in the CronJob) ──────────
+  # candidates.json: full candidate pool; auditor reads this to know what to test
+  # settings.json:   non-model config sections preserved verbatim into live config
+  candidates.json: |
+    [
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/openai/gpt-oss-120b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"gpt-oss-120b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/meta-llama/llama-3.3-70b-instruct:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"llama-3-3-70b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/upstage/solar-pro-3:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"solar-pro-3-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/deepseek/deepseek-r1:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"deepseek-r1-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/deepseek/deepseek-chat-v3-0324:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"deepseek-v3-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/google/gemini-2.0-flash-exp:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"gemini-2-flash-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/google/gemma-3-27b-it:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"gemma-3-27b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/mistralai/mistral-small-3.1-24b-instruct:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"mistral-small-3-1-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/qwen/qwen3-235b-a22b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"qwen3-235b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/llama-3.1-nemotron-70b-instruct:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-70b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/openai/gpt-oss-20b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"gpt-oss-20b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/deepseek/deepseek-r1-0528:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"deepseek-r1-0528-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/stepfun-ai/step-3-5-flash:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"step-3-5-flash-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/arcee-trinity-70b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-large-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/arcee-trinity-mini:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-mini-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-3-nano-30b-a3b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-3-nano-30b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-nano-12b-v2:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-nano-12b-v2-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-nano-9b-v2:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-nano-9b-v2-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/qwen/qwen3-next-80b-a3b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"qwen3-next-80b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/qwen/qwen3-coder-480b-a35b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"qwen3-coder-480b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/z-ai/glm-4-5-air:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"glm-4-5-air-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nousresearch/hermes-3-llama-3.1-405b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"hermes-3-405b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/meta-llama/llama-3.2-3b-instruct:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"llama-3-2-3b-free"}},
+      {"model_name":"Qwen/Qwen2.5-7B","litellm_params":{"model":"openai/Qwen/Qwen2.5-7B-Instruct-AWQ","api_base":"http://192.168.1.19:8000/v1","api_key":"not-needed"},"model_info":{"id":"qwen-25-7b-bare-metal"}},
+      {"model_name":"Qwen/Qwen2.5-7B-fallback","litellm_params":{"model":"openai/Qwen/Qwen2.5-7B-Instruct-AWQ","api_base":"http://vllm-server.self-hosted-models.svc.cluster.local:8080/v1","api_key":"not-needed"},"model_info":{"id":"qwen-25-7b-incluster"}}
+    ]
+
+  settings.json: |
+    {
+      "litellm_settings": {
+        "drop_params": true,
+        "telemetry": false,
+        "callbacks": "custom_callbacks.proxy_handler_instance"
+      },
+      "general_settings": {
+        "health_check_interval": 0
+      },
+      "router_settings": {
+        "num_retries": 3,
+        "timeout": 90,
+        "routing_strategy": "usage-based-routing-v2",
+        "allowed_fails": 2,
+        "cooldown_time": 60,
+        "fallbacks": [
+          {"fleet-agent": ["Qwen/Qwen2.5-7B", "Qwen/Qwen2.5-7B-fallback"]},
+          {"Qwen/Qwen2.5-7B": ["Qwen/Qwen2.5-7B-fallback"]}
+        ]
+      }
+    }
