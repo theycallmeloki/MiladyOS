@@ -33,6 +33,7 @@ data:
     MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "6"))
     MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "2000"))  # chars
     MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
+    DATUM_DIR          = DATA_DIR / "datums"
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)
 
@@ -237,6 +238,24 @@ data:
         except Exception as e:
             log.warning("Failed to write log for %s: %s", channel, e)
 
+    # ── Datum tracking ───────────────────────────────────────────────────────
+
+    def write_datum(item: dict, status: str = "processing") -> str:
+        DATUM_DIR.mkdir(parents=True, exist_ok=True)
+        datum_id = item.get("id") or datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+        datum = {**item, "id": datum_id, "status": status,
+                 "created_at": datetime.now(timezone.utc).isoformat()}
+        (DATUM_DIR / f"{datum_id}.json").write_text(json.dumps(datum, indent=2))
+        return datum_id
+
+    def update_datum(datum_id: str, **kwargs):
+        path = DATUM_DIR / f"{datum_id}.json"
+        if path.exists():
+            datum = json.loads(path.read_text())
+            datum.update(kwargs)
+            datum["updated_at"] = datetime.now(timezone.utc).isoformat()
+            path.write_text(json.dumps(datum, indent=2))
+
     # ── Agent loop ───────────────────────────────────────────────────────────
 
     async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True, need_reply: bool = False, reply_channel: str = ""):
@@ -408,42 +427,77 @@ data:
 
     # ── Queue processor ──────────────────────────────────────────────────────
 
+    # Keywords that signal a long-running agentic job vs. a quick inline reply
+    LONG_JOB_KEYWORDS = [
+        "fill", "browse", "scrape", "research", "monitor", "watch",
+        "keep checking", "search the web", "analyze", "generate report",
+    ]
+
     async def process_item(item: dict):
         itype = item.get("type", "unknown")
         log.info("Queue item: type=%s", itype)
-
-        if itype == "heartbeat":
-            channel     = "heartbeat"
-            hb          = load_heartbeat()
-            instruction = (
-                item.get("instruction", "Run the HEARTBEAT.md checklist.")
-                + (f"\n\n---\nHEARTBEAT.md:\n{hb}" if hb else "")
-            )
-            # Heartbeat is a fresh check each time — no prior context needed
-            try:
-                await run_agent(instruction, channel=channel, load_prior=False)
-            except Exception as e:
-                log.error("Agent error type=heartbeat: %s", e)
-            return
-        elif itype == "mattermost":
-            channel     = item.get("channel", "fleet-ops")
-            user        = item.get("user", "user")
-            text        = item.get("text", "")
-            instruction = (
-                f"User @{user} says in #{channel}: {text}\n\n"
-                f"IMPORTANT: Call mattermost_post(channel=\"{channel}\", message=\"...\") "
-                f"EXACTLY ONCE to reply. You may use other tools first to gather info, "
-                f"but send only ONE reply then stop."
-            )
-        else:
-            channel     = "default"
-            instruction = item.get("instruction") or json.dumps(item)
+        datum_id = write_datum(item)
 
         try:
-            await run_agent(instruction, channel=channel,
-                            need_reply=(itype == "mattermost"),
-                            reply_channel=channel if itype == "mattermost" else "")
+            if itype == "heartbeat":
+                channel     = "heartbeat"
+                hb          = load_heartbeat()
+                instruction = (
+                    item.get("instruction", "Run the HEARTBEAT.md checklist.")
+                    + (f"\n\n---\nHEARTBEAT.md:\n{hb}" if hb else "")
+                )
+                await run_agent(instruction, channel=channel, load_prior=False)
+
+            elif itype == "browser_task":
+                channel     = item.get("channel", "fleet-ops")
+                url         = item.get("url", "")
+                ctx_ch      = item.get("context_channel", "form-context")
+                instruction = (
+                    f"Browser task requested.\n"
+                    f"Instruction: {item.get('instruction', '')}\n"
+                    f"Target URL: {url}\n"
+                    f"User profile context is in Mattermost #{ctx_ch} — use bash_exec "
+                    f"with curl to fetch that channel's history via the Mattermost REST API, "
+                    f"then use launch_rlm_job(prompt=..., notify_channel=\"{channel}\", "
+                    f"max_iterations=20) to handle the task asynchronously. "
+                    f"After launching, call mattermost_post to confirm to #{channel}."
+                )
+                update_datum(datum_id, status="rlm_dispatched")
+                await run_agent(instruction, channel=channel, need_reply=True, reply_channel=channel)
+
+            elif itype == "mattermost":
+                channel = item.get("channel", "fleet-ops")
+                user    = item.get("user", "user")
+                text    = item.get("text", "")
+                is_long = any(kw in text.lower() for kw in LONG_JOB_KEYWORDS)
+
+                if is_long:
+                    instruction = (
+                        f"User @{user} in #{channel}: {text}\n\n"
+                        f"This is a long-running task. Use launch_rlm_job(prompt=..., "
+                        f"notify_channel=\"{channel}\", max_iterations=20) to handle it "
+                        f"asynchronously, then call mattermost_post to confirm the job started."
+                    )
+                    update_datum(datum_id, is_long_job=True, status="rlm_dispatched")
+                else:
+                    instruction = (
+                        f"User @{user} says in #{channel}: {text}\n\n"
+                        f"IMPORTANT: Call mattermost_post(channel=\"{channel}\", message=\"...\") "
+                        f"EXACTLY ONCE to reply. You may use other tools first to gather info, "
+                        f"but send only ONE reply then stop."
+                    )
+                await run_agent(instruction, channel=channel,
+                                need_reply=True, reply_channel=channel)
+
+            else:
+                channel     = "default"
+                instruction = item.get("instruction") or json.dumps(item)
+                await run_agent(instruction, channel=channel)
+
+            update_datum(datum_id, status="complete")
+
         except Exception as e:
+            update_datum(datum_id, status="failed", error=str(e))
             log.error("Agent error type=%s: %s", itype, e)
 
     async def watch_queue():

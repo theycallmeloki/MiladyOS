@@ -36,6 +36,9 @@ spec:
       - name: webhook-bridge
         configMap:
           name: webhook-bridge
+      - name: fleet-agent-ui-vol
+        configMap:
+          name: fleet-agent-ui
 
       containers:
       # --- Python agent harness (queue-watching LLM agent with MCP tools) ---
@@ -137,6 +140,35 @@ spec:
           limits:
             cpu: 100m
             memory: 128Mi
+
+      # --- Fleet Agent UI (Vue3 dashboard + FastAPI) ---
+      - name: fleet-agent-ui
+        image: python:3.12-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip install --quiet --no-cache-dir fastapi uvicorn
+          exec python3 /ui/server.py
+        env:
+        - name: DATA_DIR
+          value: "/data"
+        - name: UI_DIR
+          value: "/ui"
+        ports:
+        - containerPort: 8080
+          name: ui
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: fleet-agent-ui-vol
+          mountPath: /ui
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
 
       # --- Heartbeat CronJob trigger (queue writer) ---
       # Note: CronJob is defined separately; the heartbeat trigger
