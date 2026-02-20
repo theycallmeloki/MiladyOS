@@ -1,22 +1,17 @@
 # Model Auditor — automatically maintains litellm-config-live
 #
 # Reads seed candidate pool from litellm-config (git-managed),
-# tests every model for tool-calling correctness + latency,
-# and writes litellm-config-live (runtime-managed) with only
-# passing models. LiteLLM prefers the live config on restart.
+# tests every model for tool-calling correctness + latency, then:
+#   1. Hot-swaps via LiteLLM admin API (instant, zero restart)
+#      - DELETE /model/delete  for models with 3+ consecutive failures
+#      - POST   /model/new     for models that recovered or are new
+#   2. Writes litellm-config-live ConfigMap (for clean restart persistence)
 #
-# Uses stdlib only (no pip install) — reads candidates.json and
-# settings.json from the seed ConfigMap, writes the live config
-# as indented JSON (which is valid YAML, parsed fine by LiteLLM).
-#
-# Flow:
-#   litellm-config (git/ArgoCD) — candidate pool, never shrinks
-#         ↓ read candidates.json + settings.json
-#   model-auditor (CronJob, every 4h) — test + prune
-#         ↓ write
-#   litellm-config-live (K8s only) — active model list + tracking
-#         ↓ preferred by init-container
-#   LiteLLM Deployment
+# litellm-config (git/ArgoCD)  — candidate pool, never shrinks automatically
+#       ↓ candidates.json + settings.json
+# model-auditor CronJob (4h)   — test → hot-swap via API + write live CM
+#       ↓ live CM for restarts     ↓ admin API for runtime
+# litellm-config-live (K8s)   LiteLLM router (in-memory, instant)
 
 ---
 apiVersion: v1
@@ -32,25 +27,17 @@ metadata:
   name: model-auditor
   namespace: default
 rules:
-  # Read seed config
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames: ["litellm-config"]
     verbs: ["get"]
-  # Read/create/patch the live config (auditor owns this)
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames: ["litellm-config-live"]
     verbs: ["get", "create", "patch"]
-  # Allow creating litellm-config-live if it doesn't exist yet
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["create"]
-  # Restart litellm deployment when model list changes
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    resourceNames: ["litellm-proxy"]
-    verbs: ["get", "patch"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -95,7 +82,9 @@ spec:
               image: python:3.12-slim
               env:
                 - name: LITELLM_BASE
-                  value: "http://litellm-proxy.default.svc.cluster.local:4000/v1"
+                  value: "http://litellm-proxy.default.svc.cluster.local:4000"
+                - name: LITELLM_MASTER_KEY
+                  value: "sk-milady"
                 - name: FAIL_THRESHOLD
                   value: "3"
               resources:
@@ -109,22 +98,22 @@ spec:
                 - python3
                 - -c
                 - |
-                  # stdlib only — no pip install needed
+                  # stdlib only — no pip install, no external dependencies
                   import json, os, time, urllib.request, urllib.error, ssl
                   from datetime import datetime, timezone
 
                   # ── K8s API via service account ──────────────────────────────
-                  K8S  = "https://kubernetes.default.svc"
-                  TOK  = open("/var/run/secrets/kubernetes.io/serviceaccount/token").read().strip()
-                  CA   = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-                  NS   = open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
-                  CTX  = ssl.create_default_context(cafile=CA)
+                  K8S = "https://kubernetes.default.svc"
+                  TOK = open("/var/run/secrets/kubernetes.io/serviceaccount/token").read().strip()
+                  CA  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+                  NS  = open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
+                  CTX = ssl.create_default_context(cafile=CA)
 
                   def k8s(method, path, body=None, ct="application/json"):
                       data = json.dumps(body).encode() if body else None
                       hdrs = {"Authorization": f"Bearer {TOK}"}
                       if data: hdrs["Content-Type"] = ct
-                      req  = urllib.request.Request(f"{K8S}{path}", data=data, headers=hdrs, method=method)
+                      req = urllib.request.Request(f"{K8S}{path}", data=data, headers=hdrs, method=method)
                       try:
                           with urllib.request.urlopen(req, context=CTX, timeout=15) as r:
                               return json.loads(r.read()), r.status
@@ -138,8 +127,7 @@ spec:
                       return d if s == 200 else None
 
                   def cm_apply(name, data):
-                      existing = cm_get(name)
-                      if existing:
+                      if cm_get(name):
                           k8s("PATCH", f"/api/v1/namespaces/{NS}/configmaps/{name}",
                               body={"data": data}, ct="application/merge-patch+json")
                           print(f"  Patched ConfigMap {name}", flush=True)
@@ -149,18 +137,56 @@ spec:
                                     "metadata":{"name":name,"namespace":NS},"data":data})
                           print(f"  Created ConfigMap {name}", flush=True)
 
-                  def deployment_restart(name):
-                      ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-                      _, s = k8s("PATCH", f"/apis/apps/v1/namespaces/{NS}/deployments/{name}",
-                          body={"spec":{"template":{"metadata":{"annotations":{
-                              "kubectl.kubernetes.io/restartedAt": ts}}}}},
-                          ct="application/merge-patch+json")
-                      print(f"  Rollout restart → HTTP {s}", flush=True)
+                  # ── LiteLLM admin API ────────────────────────────────────────
+                  LITELLM = os.environ.get("LITELLM_BASE", "http://litellm-proxy.default.svc.cluster.local:4000")
+                  KEY     = os.environ.get("LITELLM_MASTER_KEY", "sk-milady")
 
-                  # ── Model test ───────────────────────────────────────────────
-                  LITELLM        = os.environ.get("LITELLM_BASE", "http://litellm-proxy.default.svc.cluster.local:4000/v1")
+                  def ll(method, path, body=None):
+                      """Call the LiteLLM admin API. Returns (body, status)."""
+                      data = json.dumps(body).encode() if body else None
+                      hdrs = {"Authorization": f"Bearer {KEY}"}
+                      if data: hdrs["Content-Type"] = "application/json"
+                      req = urllib.request.Request(f"{LITELLM}{path}", data=data, headers=hdrs, method=method)
+                      try:
+                          with urllib.request.urlopen(req, timeout=15) as r:
+                              return json.loads(r.read()), r.status
+                      except urllib.error.HTTPError as e:
+                          try:    err = json.loads(e.read())
+                          except: err = {"message": str(e)}
+                          return err, e.code
+                      except Exception as e:
+                          return {"message": str(e)}, 0
+
+                  def ll_active_ids():
+                      """Return set of model_info.id currently loaded in LiteLLM."""
+                      body, s = ll("GET", "/model/info")
+                      if s != 200:
+                          print(f"  WARNING: GET /model/info returned {s}: {body}", flush=True)
+                          return None
+                      ids = set()
+                      for m in body.get("data", []):
+                          mid = (m.get("model_info") or {}).get("id")
+                          if mid:
+                              ids.add(mid)
+                      return ids
+
+                  def ll_add(entry):
+                      mid = (entry.get("model_info") or {}).get("id", "?")
+                      body, s = ll("POST", "/model/new", entry)
+                      if s in (200, 201):
+                          print(f"  ✅ Added   {mid}", flush=True)
+                      else:
+                          print(f"  ⚠️  Add {mid} → HTTP {s}: {body}", flush=True)
+
+                  def ll_delete(model_id):
+                      body, s = ll("POST", "/model/delete", {"id": model_id})
+                      if s in (200, 201):
+                          print(f"  🗑️  Deleted {model_id}", flush=True)
+                      else:
+                          print(f"  ⚠️  Delete {model_id} → HTTP {s}: {body}", flush=True)
+
+                  # ── Test a model via the LiteLLM proxy ──────────────────────
                   FAIL_THRESHOLD = int(os.environ.get("FAIL_THRESHOLD", "3"))
-
                   TOOL = [{"type":"function","function":{"name":"kubectl_get",
                       "description":"Run kubectl get on the cluster",
                       "parameters":{"type":"object",
@@ -178,9 +204,9 @@ spec:
                           "model":model_id, "messages":MESSAGES, "tools":TOOL,
                           "tool_choice":"auto", "max_tokens":128, "temperature":0
                       }).encode()
-                      req = urllib.request.Request(f"{LITELLM}/chat/completions", data=payload,
+                      req = urllib.request.Request(f"{LITELLM}/v1/chat/completions", data=payload,
                           headers={"Content-Type":"application/json",
-                                   "Authorization":"Bearer sk-milady"},
+                                   "Authorization":f"Bearer {KEY}"},
                           method="POST")
                       t0 = time.time()
                       try:
@@ -194,8 +220,9 @@ spec:
                       except Exception as e:
                           return {"ok":False, "latency":round(time.time()-t0,2), "error":str(e)[:200]}
 
-                  # ── Load seed (candidates.json + settings.json) ──────────────
+                  # ── Main ─────────────────────────────────────────────────────
                   print("=== Model Auditor starting ===", flush=True)
+
                   seed_cm = cm_get("litellm-config")
                   if not seed_cm:
                       print("ERROR: litellm-config seed not found", flush=True)
@@ -206,7 +233,6 @@ spec:
                   settings   = json.loads(seed_data["settings.json"])
                   print(f"Seed: {len(candidates)} candidate models", flush=True)
 
-                  # ── Load tracking from previous run ──────────────────────────
                   live_cm  = cm_get("litellm-config-live")
                   tracking = {}
                   if live_cm:
@@ -224,9 +250,7 @@ spec:
                       print(f"  [{mid}] ... ", end="", flush=True)
                       r = test_model(mid)
 
-                      t = tracking.get(mid, {
-                          "consecutive_failures":0, "total_passes":0, "total_tests":0
-                      })
+                      t = tracking.get(mid, {"consecutive_failures":0,"total_passes":0,"total_tests":0})
                       t["total_tests"]  = t.get("total_tests",  0) + 1
                       t["last_checked"] = now
                       t["last_latency"] = r.get("latency")
@@ -239,7 +263,7 @@ spec:
                       elif r["ok"]:
                           t["consecutive_failures"] = t.get("consecutive_failures", 0) + 1
                           t["last_result"]          = "text-only"
-                          print(f"TEXT-ONLY  {r['latency']}s  (no tool call)", flush=True)
+                          print(f"TEXT-ONLY  {r['latency']}s", flush=True)
                       else:
                           t["consecutive_failures"] = t.get("consecutive_failures", 0) + 1
                           t["last_result"]          = "fail"
@@ -247,9 +271,9 @@ spec:
                           print(f"FAIL  {r.get('error','')[:100]}", flush=True)
 
                       tracking[mid] = t
-                      time.sleep(2)  # gentle on rate limits
+                      time.sleep(2)
 
-                  # ── Build live model list ────────────────────────────────────
+                  # ── Compute desired active set ───────────────────────────────
                   passing = []
                   pruned  = []
                   for entry in candidates:
@@ -260,26 +284,44 @@ spec:
                       else:
                           passing.append(entry)
 
-                  print(f"\nResult: {len(passing)} passing, {len(pruned)} pruned", flush=True)
-                  if pruned:
-                      print(f"Pruned: {pruned}", flush=True)
+                  desired_ids = {(e.get("model_info") or {}).get("id") for e in passing}
+                  print(f"\nDesired: {len(passing)} active, {len(pruned)} pruned", flush=True)
 
-                  # Write live config as indented JSON — valid YAML, LiteLLM parses it fine
+                  # ── Hot-swap via LiteLLM admin API (no restart needed) ───────
+                  print("\nQuerying LiteLLM active models...", flush=True)
+                  active_ids = ll_active_ids()
+
+                  if active_ids is not None:
+                      to_remove = active_ids - desired_ids
+                      to_add    = desired_ids - active_ids
+
+                      print(f"Hot-swap: +{len(to_add)} to add, -{len(to_remove)} to remove", flush=True)
+
+                      # Build a lookup from id → full entry for additions
+                      entry_by_id = {
+                          (e.get("model_info") or {}).get("id"): e
+                          for e in candidates
+                      }
+
+                      for mid in to_remove:
+                          ll_delete(mid)
+
+                      for mid in to_add:
+                          if mid in entry_by_id:
+                              ll_add(entry_by_id[mid])
+
+                      print("Hot-swap complete. No restart needed.", flush=True)
+                  else:
+                      print("WARNING: Could not reach LiteLLM admin API — skipping hot-swap.", flush=True)
+                      print("         Live ConfigMap will still be written for next restart.", flush=True)
+
+                  # ── Write live ConfigMap (for clean restarts) ────────────────
                   live_cfg = {"model_list": passing}
                   live_cfg.update(settings)
-                  live_config_yaml = json.dumps(live_cfg, indent=2)
-
                   cm_apply("litellm-config-live", {
-                      "config.yaml":   live_config_yaml,
+                      "config.yaml":   json.dumps(live_cfg, indent=2),
                       "tracking.json": json.dumps(tracking, indent=2),
                   })
-
-                  # Only restart if something was pruned (config actually changed)
-                  if pruned:
-                      print("Restarting litellm-proxy to apply pruned model list...", flush=True)
-                      deployment_restart("litellm-proxy")
-                  else:
-                      print("No models pruned — skipping restart", flush=True)
 
                   # ── Summary ──────────────────────────────────────────────────
                   pruned_set = set(pruned)
@@ -298,4 +340,4 @@ spec:
                           cf  = t.get("consecutive_failures", 0)
                           print(f"{icons[bucket]} {mid}: {p}/{n} passes, cf={cf}, last={lat}s")
 
-                  print(f"\nDone. Live config: {len(passing)} active models.", flush=True)
+                  print(f"\nDone. {len(passing)} active models, {len(pruned)} pruned.", flush=True)
