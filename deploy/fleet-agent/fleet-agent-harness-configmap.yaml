@@ -295,8 +295,9 @@ data:
                 log.warning("trace emit failed for %s: %s", datum_id, _e)
 
         emit({"type": "user_message", "content": instruction})
-        log.info("MCP connect, channel=%s prior_msgs=%d urls=%s datum=%s",
-                 channel, len(prior), MCP_URLS, datum_id or "none")
+        datum_tag = f"[D:{datum_id}] " if datum_id else ""
+        log.info("%sMCP connect channel=%s prior_msgs=%d urls=%s",
+                 datum_tag, channel, len(prior), MCP_URLS)
 
         async with merged_mcp_sessions(MCP_URLS) as session:
             raw_tools = await session.list_tools()
@@ -361,12 +362,12 @@ data:
                 usage = getattr(response, "usage", None)
                 usage_str = (f"in={usage.prompt_tokens} out={usage.completion_tokens}"
                              if usage else "usage=?")
-                log.info("--- iter %d/%d | model=%s | %s ---",
-                         iters_done, MAX_ITERS, actual_model, usage_str)
+                log.info("%s--- iter %d/%d | model=%s | %s ---",
+                         datum_tag, iters_done, MAX_ITERS, actual_model, usage_str)
 
                 if msg.content:
                     preview = msg.content.replace("\n", " ")[:300]
-                    log.info("  [reasoning] %s%s", preview,
+                    log.info("%s  [reasoning] %s%s", datum_tag, preview,
                              " ..." if len(msg.content) > 300 else "")
                     emit({"type": "assistant_message", "content": msg.content,
                           "model": actual_model,
@@ -387,7 +388,7 @@ data:
                 new_msgs.append(assistant_msg)
 
                 if not msg.tool_calls:
-                    log.info("  [done] no more tool calls after %d iteration(s)", iters_done)
+                    log.info("%s  [done] no more tool calls after %d iteration(s)", datum_tag, iters_done)
                     if msg.content:
                         append_log(channel, {"role": "assistant", "content": msg.content})
                     break
@@ -400,7 +401,7 @@ data:
 
                 for tc in active_calls:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                    log.info("  [call] %s | args=%s", tc.function.name, json.dumps(args)[:200])
+                    log.info("%s  [call] %s | args=%s", datum_tag, tc.function.name, json.dumps(args)[:200])
                     emit({"type": "tool_start", "name": tc.function.name, "input": args})
                     content = None
                     for tool_attempt in range(MAX_TOOL_RETRIES):
@@ -430,8 +431,8 @@ data:
                                       "error": str(e)})
                     if len(content) > MAX_TOOL_RESULT:
                         content = content[:MAX_TOOL_RESULT] + f"\n... [truncated, {len(content)} chars total]"
-                    log.info("  [result] %s | %s%s",
-                             tc.function.name,
+                    log.info("%s  [result] %s | %s%s",
+                             datum_tag, tc.function.name,
                              content[:200].replace("\n", " "),
                              " ..." if len(content) > 200 else "")
                     emit({"type": "tool_end", "name": tc.function.name, "output": content[:1000]})

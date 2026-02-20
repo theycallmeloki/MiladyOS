@@ -8,15 +8,16 @@ data:
     #!/usr/bin/env python3
     """Thin API server for the fleet-agent UI. Reads /data (shared PVC) and
     exposes queue, datums, traces, channels, and a dispatch endpoint."""
-    import asyncio, json, os, uvicorn
+    import asyncio, json, os, time, urllib.request, urllib.parse, uvicorn
     from pathlib import Path
     from datetime import datetime, timezone
     from fastapi import FastAPI
     from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
-    app  = FastAPI()
-    DATA = Path(os.environ.get("DATA_DIR", "/data"))
-    UI   = Path(os.environ.get("UI_DIR",   "/ui"))
+    app      = FastAPI()
+    DATA     = Path(os.environ.get("DATA_DIR",  "/data"))
+    UI       = Path(os.environ.get("UI_DIR",    "/ui"))
+    LOKI_URL = os.environ.get("LOKI_URL", "http://loki.monitoring.svc.cluster.local:3100")
 
     def _read_jsonl(path: Path, tail: int = 100) -> list:
         if not path.exists():
@@ -100,6 +101,102 @@ data:
                         if d.get("status") in ("complete", "failed", "rlm_dispatched"):
                             yield 'data: {"type":"stream_end"}\n\n'
                             break
+                except Exception:
+                    pass
+
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache",
+                                          "X-Accel-Buffering": "no"})
+
+    def _loki_query(datum_id: str, start_ns: int, end_ns: int, limit: int = 500) -> list:
+        """Synchronous Loki query — call via asyncio.to_thread from async contexts."""
+        query  = '{namespace="fleet-agent"} |= "[D:' + datum_id + ']"'
+        params = urllib.parse.urlencode({
+            "query": query, "start": str(start_ns), "end": str(end_ns),
+            "limit": str(limit), "direction": "forward",
+        })
+        req = urllib.request.Request(
+            f"{LOKI_URL}/loki/api/v1/query_range?{params}",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        lines = []
+        for stream in data.get("data", {}).get("result", []):
+            for ts_ns, line in stream.get("values", []):
+                lines.append((int(ts_ns), line))
+        lines.sort()
+        return lines
+
+    def _datum_ns(datum: dict):
+        """Return (start_ns, end_ns) for a datum's time window."""
+        created = datum.get("created_at", "")
+        updated = datum.get("updated_at", "")
+        try:
+            start_ns = int(datetime.fromisoformat(
+                created.rstrip("Z")).replace(tzinfo=timezone.utc).timestamp() * 1e9)
+        except Exception:
+            start_ns = int((time.time() - 3600) * 1e9)
+        if updated:
+            try:
+                end_ns = int(datetime.fromisoformat(
+                    updated.rstrip("Z")).replace(tzinfo=timezone.utc).timestamp() * 1e9) + int(60e9)
+            except Exception:
+                end_ns = int(time.time() * 1e9)
+        else:
+            end_ns = int(time.time() * 1e9)
+        return start_ns, end_ns
+
+    @app.get("/api/logs/{datum_id}")
+    async def get_loki_logs(datum_id: str):
+        datum_file = DATA / "datums" / f"{datum_id}.json"
+        if not datum_file.exists():
+            return {"error": "datum not found", "lines": []}
+        try:
+            datum = json.loads(datum_file.read_text())
+        except Exception:
+            return {"error": "bad datum file", "lines": []}
+        start_ns, end_ns = _datum_ns(datum)
+        try:
+            rows = await asyncio.to_thread(_loki_query, datum_id, start_ns, end_ns)
+            return {"lines": [line for _, line in rows]}
+        except Exception as e:
+            return {"error": str(e), "lines": []}
+
+    @app.get("/api/logs/{datum_id}/stream")
+    async def stream_loki_logs(datum_id: str):
+        """SSE: poll Loki every 2 s for new log lines tagged [D:{datum_id}]."""
+        datum_file = DATA / "datums" / f"{datum_id}.json"
+
+        async def events():
+            if not datum_file.exists():
+                yield 'data: {"error":"datum not found"}\n\n'
+                return
+            try:
+                datum    = json.loads(datum_file.read_text())
+                start_ns, _ = _datum_ns(datum)
+            except Exception:
+                yield 'data: {"error":"bad datum"}\n\n'
+                return
+
+            last_ts_ns = start_ns
+            for _ in range(300):          # up to ~10 min
+                await asyncio.sleep(2)
+                end_ns = int(time.time() * 1e9)
+                if end_ns > last_ts_ns:
+                    try:
+                        rows = await asyncio.to_thread(
+                            _loki_query, datum_id, last_ts_ns + 1, end_ns, 200)
+                        for ts_ns, line in rows:
+                            last_ts_ns = max(last_ts_ns, ts_ns)
+                            yield f"data: {json.dumps({'line': line})}\n\n"
+                    except Exception:
+                        pass
+                try:
+                    d = json.loads(datum_file.read_text())
+                    if d.get("status") in ("complete", "failed", "rlm_dispatched"):
+                        yield 'data: {"type":"stream_end"}\n\n'
+                        break
                 except Exception:
                     pass
 
@@ -336,6 +433,25 @@ data:
 
         .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
+        /* drawer tabs */
+        .log-tabs { display: flex; gap: 1px; margin-left: 8px; }
+        .tab-btn {
+          padding: 2px 8px; border-radius: 3px; cursor: pointer;
+          font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+          color: var(--muted); border: 1px solid transparent;
+        }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active { color: var(--accent); border-color: var(--accent); }
+
+        /* raw loki log lines */
+        .log-raw  { font-size: 10.5px; gap: 0; }
+        .raw-line {
+          padding: 1px 4px; border-bottom: 1px solid rgba(37,42,56,.4);
+          white-space: pre-wrap; word-break: break-all; line-height: 1.6; color: var(--text);
+        }
+        .raw-line:hover { background: rgba(255,255,255,.03); }
+        .loki-err { color: var(--red); font-size: 10px; padding: 8px 4px; }
+
         .empty { color: var(--muted); text-align: center; padding: 48px 20px; }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -421,12 +537,20 @@ data:
         <!-- log drawer -->
         <div v-if="selected" class="log-drawer">
           <div class="log-head">
-            <span>trace · {{ selected.id }}</span>
-            <div v-if="streaming" class="dot live-dot pulse"></div>
-            <span v-if="streaming" style="color:var(--green)">live</span>
+            <span>{{ selected.id }}</span>
+            <div class="log-tabs">
+              <div :class="['tab-btn', activeTab==='trace' ? 'active' : '']"
+                   @click="activeTab='trace'">trace</div>
+              <div :class="['tab-btn', activeTab==='logs' ? 'active' : '']"
+                   @click="activeTab='logs'">logs</div>
+            </div>
+            <div v-if="streaming || lokiStreaming" class="dot live-dot pulse" style="margin-left:6px"></div>
+            <span v-if="streaming || lokiStreaming" style="color:var(--green)">live</span>
             <span class="log-close" @click="closeLog">✕</span>
           </div>
-          <div class="log-body" ref="logBody">
+
+          <!-- TRACE tab -->
+          <div v-show="activeTab==='trace'" class="log-body" ref="logBody">
             <div v-if="traceEvents.length===0" class="empty">loading trace…</div>
             <div v-for="(ev, i) in traceEvents" :key="i" :class="['ev', evClass(ev)]">
               <div class="ev-label">{{ evLabel(ev) }}</div>
@@ -435,6 +559,16 @@ data:
                 <div v-if="evMeta(ev)" class="ev-meta">{{ evMeta(ev) }}</div>
               </div>
             </div>
+          </div>
+
+          <!-- LOGS tab (raw Loki lines) -->
+          <div v-show="activeTab==='logs'" class="log-body log-raw" ref="logRawBody">
+            <div v-if="lokiError" class="loki-err">{{ lokiError }}</div>
+            <div v-else-if="lokiLines.length===0" class="empty">
+              no logs yet — Loki collects logs tagged [D:datum_id]<br>
+              (requires fleet-agent pod restart after this update)
+            </div>
+            <div v-for="(line, i) in lokiLines" :key="i" class="raw-line">{{ line }}</div>
           </div>
         </div>
 
@@ -446,15 +580,20 @@ data:
 
     createApp({
       setup() {
-        const queue       = ref([])
-        const datums      = ref([])
-        const selected    = ref(null)
-        const traceEvents = ref([])
-        const streaming   = ref(false)
-        const tick        = ref(5)
-        const sent        = ref(false)
-        const logBody     = ref(null)
-        const maxConc     = ref(3)
+        const queue         = ref([])
+        const datums        = ref([])
+        const selected      = ref(null)
+        const traceEvents   = ref([])
+        const streaming     = ref(false)
+        const activeTab     = ref('trace')
+        const lokiLines     = ref([])
+        const lokiStreaming  = ref(false)
+        const lokiError     = ref('')
+        const tick          = ref(5)
+        const sent          = ref(false)
+        const logBody       = ref(null)
+        const logRawBody    = ref(null)
+        const maxConc       = ref(3)
 
         const cmd = reactive({ type: 'mattermost', channel: 'fleet-ops', instruction: '', url: '' })
 
@@ -533,48 +672,85 @@ data:
           return parts.join('  ·  ')
         }
 
-        let es = null
+        let es = null, lokiEs = null
+
         function closeLog() {
-          if (es) { es.close(); es = null }
-          selected.value    = null
-          traceEvents.value = []
-          streaming.value   = false
+          if (es)     { es.close();     es     = null }
+          if (lokiEs) { lokiEs.close(); lokiEs = null }
+          selected.value     = null
+          traceEvents.value  = []
+          lokiLines.value    = []
+          lokiError.value    = ''
+          streaming.value    = false
+          lokiStreaming.value = false
         }
 
         async function openLog(d) {
-          if (es) { es.close(); es = null }
-          selected.value    = d
-          traceEvents.value = []
-          streaming.value   = false
+          if (es)     { es.close();     es     = null }
+          if (lokiEs) { lokiEs.close(); lokiEs = null }
+          selected.value     = d
+          traceEvents.value  = []
+          lokiLines.value    = []
+          lokiError.value    = ''
+          streaming.value    = false
+          lokiStreaming.value = false
 
           const done = ['complete','failed','rlm_dispatched'].includes(d.status)
 
+          // ── Structured trace (existing .jsonl) ──
           if (done) {
-            // Run is finished — load via HTTP, no SSE needed
             try {
               traceEvents.value = await fetch(`/api/traces/${d.id}`).then(r => r.json())
               await nextTick()
               if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight
             } catch(e) { console.warn('trace load', e) }
           } else {
-            // Run is still active — SSE stream replays all existing events then tails live
-            // Don't do an HTTP pre-fetch or we'd duplicate everything
             streaming.value = true
             es = new EventSource(`/api/traces/${d.id}/stream`)
             es.onmessage = async (e) => {
               try {
                 const ev = JSON.parse(e.data)
                 if (ev.type === 'stream_end') {
-                  streaming.value = false
-                  es.close(); es = null
-                  return
+                  streaming.value = false; es.close(); es = null; return
                 }
                 traceEvents.value.push(ev)
                 await nextTick()
                 if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight
-              } catch(_) { /* ignore parse errors */ }
+              } catch(_) {}
             }
             es.onerror = () => { streaming.value = false }
+          }
+
+          // ── Loki raw logs ──
+          try {
+            const resp = await fetch(`/api/logs/${d.id}`)
+            const data = await resp.json()
+            if (data.error) {
+              lokiError.value = 'Loki: ' + data.error
+            } else {
+              lokiLines.value = data.lines || []
+              await nextTick()
+              if (logRawBody.value) logRawBody.value.scrollTop = logRawBody.value.scrollHeight
+            }
+          } catch(e) { lokiError.value = 'Loki unavailable' }
+
+          if (!done) {
+            lokiStreaming.value = true
+            lokiEs = new EventSource(`/api/logs/${d.id}/stream`)
+            lokiEs.onmessage = async (e) => {
+              try {
+                const ev = JSON.parse(e.data)
+                if (ev.type === 'stream_end') {
+                  lokiStreaming.value = false; lokiEs.close(); lokiEs = null; return
+                }
+                if (ev.line) {
+                  lokiLines.value.push(ev.line)
+                  await nextTick()
+                  if (logRawBody.value) logRawBody.value.scrollTop = logRawBody.value.scrollHeight
+                }
+              } catch(_) {}
+            }
+            lokiEs.onerror = () => { lokiStreaming.value = false }
           }
         }
 
@@ -622,6 +798,7 @@ data:
 
         return { queue, datums, cmd, counts, concurrency, maxConc, tick, sent,
                  selected, traceEvents, streaming, logBody,
+                 activeTab, lokiLines, lokiStreaming, lokiError, logRawBody,
                  rel, evClass, evLabel, evText, evMeta,
                  openLog, closeLog, send }
       }
