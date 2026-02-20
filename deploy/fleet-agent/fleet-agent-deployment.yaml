@@ -67,6 +67,8 @@ spec:
           value: "fleet-agent"
         - name: MCP_URL
           value: "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse"
+        - name: MCP_URLS
+          value: "http://mcp-tools.mcp-tools.svc.cluster.local:3000/sse,http://miladyos.default.svc.cluster.local:6000/sse"
 
         volumeMounts:
         - name: data
