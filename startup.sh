@@ -427,21 +427,6 @@ else
     echo "GoTTY not available, skipping web terminal"
 fi
 
-# Start dmux (web terminal multiplexer)
-if command -v dmux > /dev/null 2>&1; then
-    echo "Starting dmux on port 4040..."
-    HOSTNAME=0.0.0.0 dmux &
-    sleep 3
-
-    if pgrep -f "dmux" > /dev/null || lsof -i:4040 > /dev/null 2>&1; then
-        echo "✓ dmux started on port 4040"
-        echo "✓ Access terminal interface at: http://localhost:4040"
-    else
-        echo "WARNING: dmux may not have started successfully"
-    fi
-else
-    echo "dmux not installed, skipping"
-fi
 
 # Ensure custom theme is in Jenkins userContent (survives persistent volumes)
 if [ -f /opt/jenkins-theme/milady-theme.css ]; then
