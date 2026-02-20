@@ -30,14 +30,6 @@ data:
         model_info:
           id: "solar-pro-3-free"
 
-      # StepFun Step 3.5 Flash: 256k context window
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/stepfun/step-3.5-flash:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "step-3-5-flash-free"
-
       # ── Dedicated inference (fallbacks) ───────────────────────────────────
       # Bare-metal RTX 3080 Ti (AWQ 4-bit, low latency, no cloud dependency)
       - model_name: "Nanbeige/Nanbeige4.1-3B"
