@@ -319,7 +319,7 @@ data:
                 model_name: 'fleet-agent',
                 base_url: 'http://litellm-proxy.default.svc.cluster.local:4000/v1'
               },
-              backendSecret: 'rlm-openai-secret',
+              backendSecret: 'rlm-litellm-secret',
               prompt: prompt,
               maxIterations: maxIterations,
               notifyChannel: notifyChannel
