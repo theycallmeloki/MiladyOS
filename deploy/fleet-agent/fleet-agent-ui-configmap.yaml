@@ -529,16 +529,18 @@ data:
           traceEvents.value = []
           streaming.value   = false
 
-          // Load existing trace events
-          try {
-            const events = await fetch(`/api/traces/${d.id}`).then(r => r.json())
-            traceEvents.value = events
-            await nextTick()
-            if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight
-          } catch(e) { console.warn('trace load', e) }
+          const done = ['complete','failed','rlm_dispatched'].includes(d.status)
 
-          // Open SSE stream if still running
-          if (!['complete','failed'].includes(d.status)) {
+          if (done) {
+            // Run is finished — load via HTTP, no SSE needed
+            try {
+              traceEvents.value = await fetch(`/api/traces/${d.id}`).then(r => r.json())
+              await nextTick()
+              if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight
+            } catch(e) { console.warn('trace load', e) }
+          } else {
+            // Run is still active — SSE stream replays all existing events then tails live
+            // Don't do an HTTP pre-fetch or we'd duplicate everything
             streaming.value = true
             es = new EventSource(`/api/traces/${d.id}/stream`)
             es.onmessage = async (e) => {
@@ -549,14 +551,10 @@ data:
                   es.close(); es = null
                   return
                 }
-                // Avoid duplicates — only append if not already in the list
-                const last = traceEvents.value[traceEvents.value.length - 1]
-                if (!last || JSON.stringify(last) !== JSON.stringify(ev)) {
-                  traceEvents.value.push(ev)
-                  await nextTick()
-                  if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight
-                }
-              } catch(e) { /* ignore parse errors */ }
+                traceEvents.value.push(ev)
+                await nextTick()
+                if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight
+              } catch(_) { /* ignore parse errors */ }
             }
             es.onerror = () => { streaming.value = false }
           }
