@@ -115,7 +115,7 @@ data:
       # Arcee AI Trinity Large Preview: 131k context
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/arcee-ai/arcee-trinity-70b:free"
+          model: "openrouter/arcee-ai/trinity-large-preview:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "arcee-trinity-large-free"
@@ -123,7 +123,7 @@ data:
       # Arcee AI Trinity Mini: 131k context
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/arcee-ai/arcee-trinity-mini:free"
+          model: "openrouter/arcee-ai/trinity-mini:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "arcee-trinity-mini-free"
@@ -247,8 +247,8 @@ data:
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/openai/gpt-oss-20b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"gpt-oss-20b-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/deepseek/deepseek-r1-0528:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"deepseek-r1-0528-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/stepfun-ai/step-3-5-flash:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"step-3-5-flash-free"}},
-      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/arcee-trinity-70b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-large-free"}},
-      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/arcee-trinity-mini:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-mini-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/trinity-large-preview:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-large-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/trinity-mini:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-mini-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-3-nano-30b-a3b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-3-nano-30b-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-nano-12b-v2:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-nano-12b-v2-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-nano-9b-v2:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-nano-9b-v2-free"}},
