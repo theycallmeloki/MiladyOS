@@ -1,0 +1,196 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-benchmark
+  namespace: default
+  labels:
+    app: model-benchmark
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: benchmark
+          image: python:3.12-slim
+          env:
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-secrets
+                  key: OPENROUTER_API_KEY
+            - name: LITELLM_BASE
+              value: "http://litellm.default.svc.cluster.local:4000/v1"
+            - name: MATTERMOST_URL
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-agent-secrets
+                  key: MATTERMOST_URL
+            - name: MATTERMOST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-agent-secrets
+                  key: MATTERMOST_TOKEN
+          command:
+            - python3
+            - -c
+            - |
+              import json, time, urllib.request, urllib.parse, os, sys
+
+              LITELLM_BASE = os.environ["LITELLM_BASE"]
+              MM_URL       = os.environ.get("MATTERMOST_URL", "")
+              MM_TOKEN     = os.environ.get("MATTERMOST_TOKEN", "")
+
+              # --- Tool-call test payload ---
+              TOOL_DEF = [{
+                "type": "function",
+                "function": {
+                  "name": "get_cluster_status",
+                  "description": "Returns current cluster health",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "namespace": {"type": "string", "description": "Kubernetes namespace"}
+                    },
+                    "required": ["namespace"]
+                  }
+                }
+              }]
+
+              MESSAGES = [
+                {"role": "system", "content": "You are a Kubernetes fleet agent. Use tools when asked."},
+                {"role": "user",   "content": "Check the health of the default namespace right now."}
+              ]
+
+              # All model IDs in the pool (matches model_info.id in litellm-config.yaml)
+              MODELS = [
+                "gpt-oss-120b-free",
+                "llama-3-3-70b-free",
+                "solar-pro-3-free",
+                "deepseek-r1-free",
+                "deepseek-v3-free",
+                "gemini-2-flash-free",
+                "gemma-3-27b-free",
+                "mistral-small-3-1-free",
+                "qwen3-235b-free",
+                "nemotron-70b-free",
+                "gpt-oss-20b-free",
+                "deepseek-r1-0528-free",
+                "step-3-5-flash-free",
+                "arcee-trinity-large-free",
+                "arcee-trinity-mini-free",
+                "nemotron-3-nano-30b-free",
+                "nemotron-nano-12b-v2-free",
+                "nemotron-nano-9b-v2-free",
+                "qwen3-next-80b-free",
+                "qwen3-coder-480b-free",
+                "glm-4-5-air-free",
+                "hermes-3-405b-free",
+                "llama-3-2-3b-free",
+                # Bare-metal
+                "qwen-25-7b-bare-metal",
+              ]
+
+              def test_model(model_id):
+                  url = f"{LITELLM_BASE}/chat/completions"
+                  payload = json.dumps({
+                      "model": model_id,
+                      "messages": MESSAGES,
+                      "tools": TOOL_DEF,
+                      "tool_choice": "auto",
+                      "max_tokens": 256,
+                      "temperature": 0,
+                  }).encode()
+                  req = urllib.request.Request(url, data=payload,
+                      headers={"Content-Type": "application/json",
+                               "Authorization": "Bearer sk-milady"},
+                      method="POST")
+                  t0 = time.time()
+                  try:
+                      with urllib.request.urlopen(req, timeout=60) as resp:
+                          latency = round(time.time() - t0, 2)
+                          body = json.loads(resp.read())
+                          choice = body["choices"][0]
+                          msg = choice["message"]
+                          called_tool = bool(msg.get("tool_calls"))
+                          finish = choice.get("finish_reason", "?")
+                          content_preview = (msg.get("content") or "")[:80]
+                          return {
+                              "ok": True, "latency": latency,
+                              "tool_call": called_tool,
+                              "finish": finish,
+                              "preview": content_preview,
+                          }
+                  except Exception as e:
+                      latency = round(time.time() - t0, 2)
+                      return {"ok": False, "latency": latency, "error": str(e)[:120]}
+
+              results = {}
+              for mid in MODELS:
+                  print(f"Testing {mid}...", flush=True)
+                  results[mid] = test_model(mid)
+                  r = results[mid]
+                  if r["ok"]:
+                      tc = "✅ tool" if r["tool_call"] else "⚠️  text"
+                      print(f"  {tc}  {r['latency']}s  finish={r['finish']}", flush=True)
+                  else:
+                      print(f"  ❌ {r['error']}", flush=True)
+                  time.sleep(1)  # be gentle to rate limits
+
+              # --- Format Mattermost report ---
+              ok_tool  = [m for m,r in results.items() if r["ok"] and r["tool_call"]]
+              ok_text  = [m for m,r in results.items() if r["ok"] and not r["tool_call"]]
+              failed   = [m for m,r in results.items() if not r["ok"]]
+
+              lines = ["## Model Benchmark Results\n"]
+              lines.append(f"**{len(ok_tool)}/{len(MODELS)} called tool correctly**\n")
+              lines.append("### ✅ Tool-calling OK")
+              for m in ok_tool:
+                  r = results[m]
+                  lines.append(f"- `{m}` — {r['latency']}s")
+              if ok_text:
+                  lines.append("\n### ⚠️ Responded (no tool call)")
+                  for m in ok_text:
+                      r = results[m]
+                      lines.append(f"- `{m}` — {r['latency']}s — _{r.get('preview','')}_")
+              if failed:
+                  lines.append("\n### ❌ Failed")
+                  for m in failed:
+                      r = results[m]
+                      lines.append(f"- `{m}` — {r['latency']}s — `{r['error']}`")
+
+              report = "\n".join(lines)
+              print("\n" + report, flush=True)
+
+              # --- Post to Mattermost fleet-ops ---
+              if MM_URL and MM_TOKEN:
+                  # Resolve channel id for fleet-ops
+                  try:
+                      mm_api = MM_URL.rstrip("/")
+                      ch_req = urllib.request.Request(
+                          f"{mm_api}/api/v4/channels/name/fleet-ops?team_name=milady",
+                          headers={"Authorization": f"Bearer {MM_TOKEN}"})
+                      with urllib.request.urlopen(ch_req, timeout=10) as r:
+                          ch = json.loads(r.read())
+                      ch_id = ch["id"]
+                      post_req = urllib.request.Request(
+                          f"{mm_api}/api/v4/posts",
+                          data=json.dumps({"channel_id": ch_id, "message": report}).encode(),
+                          headers={"Authorization": f"Bearer {MM_TOKEN}",
+                                   "Content-Type": "application/json"},
+                          method="POST")
+                      with urllib.request.urlopen(post_req, timeout=10) as r:
+                          print("Posted to #fleet-ops", flush=True)
+                  except Exception as e:
+                      print(f"Mattermost post failed: {e}", flush=True)
+
+              # Exit 0 always — results are in logs
+              sys.exit(0)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
