@@ -11,7 +11,7 @@ data:
     Features inspired by pi-mom: per-channel context, memory, skills, log.jsonl.
     Uses a custom MCP SSE client compatible with the mcp-tools server protocol.
     """
-    import asyncio, json, logging, os
+    import asyncio, json, logging, os, re
     from pathlib import Path
     from datetime import datetime, timezone
     from contextlib import asynccontextmanager
@@ -31,7 +31,7 @@ data:
     DATA_DIR           = Path(os.environ.get("DATA_DIR", "/data"))
     MAX_ITERS          = int(os.environ.get("AGENT_MAX_ITERS", "20"))
     MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "6"))
-    MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "1000"))  # chars
+    MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "600"))   # chars
     MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)
@@ -86,7 +86,7 @@ data:
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(60)) as client:
             task = asyncio.create_task(sse_reader(client))
-            for _ in range(100):        # wait up to 5 s for endpoint
+            for _ in range(40):         # wait up to 2 s for endpoint
                 if post_url_ref[0]:
                     break
                 await asyncio.sleep(0.05)
@@ -211,12 +211,19 @@ data:
             log.warning("Failed to load context for %s: %s", channel, e)
         return messages[-MAX_CTX_MSGS:]
 
+    def _strip_think(text: str) -> str:
+        """Remove <think>...</think> reasoning blocks before persisting to context."""
+        return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
     def save_context(channel: str, messages: list):
         ctx_file = channel_dir(channel) / "context.jsonl"
         to_save = [m for m in messages if m.get("role") != "system"]
         try:
             with open(ctx_file, "w") as f:
                 for m in to_save[-MAX_CTX_MSGS:]:
+                    # Strip <think> blocks from assistant messages — they bloat context
+                    if m.get("role") == "assistant" and m.get("content"):
+                        m = {**m, "content": _strip_think(m["content"])}
                     f.write(json.dumps(m) + "\n")
         except Exception as e:
             log.warning("Failed to save context for %s: %s", channel, e)
@@ -232,7 +239,7 @@ data:
 
     # ── Agent loop ───────────────────────────────────────────────────────────
 
-    async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True, need_reply: bool = False):
+    async def run_agent(instruction: str, channel: str = "default", load_prior: bool = True, need_reply: bool = False, reply_channel: str = ""):
         soul   = load_soul()
         memory = load_memory(channel)
         skills = load_skills()
@@ -349,10 +356,12 @@ data:
 
             # Force-reply: model gathered info but forgot to call mattermost_post
             if need_reply and not replied:
-                log.info("No reply posted yet — nudging model to post now")
+                target = reply_channel or channel
+                log.info("No reply posted yet — nudging model to post to #%s", target)
                 messages.append({"role": "user",
-                                  "content": "You have gathered the information but did not post a reply. "
-                                             "Call mattermost_post now with a concise summary."})
+                                  "content": f"STOP. You MUST call mattermost_post RIGHT NOW. "
+                                             f"channel=\"{target}\". Do not call any other tool first. "
+                                             f"Post a concise summary of what you found or did."})
                 try:
                     r2 = llm.chat.completions.create(model=MODEL, messages=messages,
                                                       tools=tools or None, max_tokens=512)
@@ -361,15 +370,37 @@ data:
                         tc = m2.tool_calls[0]
                         args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                         log.info("  nudge -> %s(%s)", tc.function.name, list(args.keys()))
-                        result = await session.call_tool(tc.function.name, args)
-                        content_items = result.get("content", [])
-                        content = content_items[0].get("text", "") if content_items else str(result)
-                        log.info("  nudge result: %s", content[:80])
-                        new_msgs.append({"role": "assistant", "content": "", "tool_calls": [
-                            {"id": tc.id, "type": "function",
-                             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
-                        ]})
-                        new_msgs.append({"role": "tool", "tool_call_id": tc.id, "content": content})
+                        if tc.function.name == "mattermost_post":
+                            result = await session.call_tool(tc.function.name, args)
+                            content_items = result.get("content", [])
+                            content = content_items[0].get("text", "") if content_items else str(result)
+                            log.info("  nudge result: %s", content[:80])
+                            new_msgs.append({"role": "assistant", "content": "", "tool_calls": [
+                                {"id": tc.id, "type": "function",
+                                 "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                            ]})
+                            new_msgs.append({"role": "tool", "tool_call_id": tc.id, "content": content})
+                        else:
+                            # Model called wrong tool — force a fallback post
+                            log.warning("  nudge called %s instead of mattermost_post — forcing fallback post",
+                                        tc.function.name)
+                            fallback = f"I processed your request but encountered an issue composing a reply. " \
+                                       f"Please try again or check #fleet-ops logs."
+                            result = await session.call_tool("mattermost_post",
+                                                              {"channel": target, "message": fallback})
+                            content_items = result.get("content", [])
+                            content = content_items[0].get("text", "") if content_items else str(result)
+                            log.info("  fallback post result: %s", content[:80])
+                    elif m2.content:
+                        # Model replied in text but didn't call a tool — post the text directly
+                        log.info("  nudge got text reply — posting directly")
+                        text_reply = _strip_think(m2.content)[:1000]
+                        if text_reply:
+                            result = await session.call_tool("mattermost_post",
+                                                              {"channel": target, "message": text_reply})
+                            content_items = result.get("content", [])
+                            content = content_items[0].get("text", "") if content_items else str(result)
+                            log.info("  text-to-post result: %s", content[:80])
                 except Exception as e:
                     log.error("Nudge call failed: %s", e)
 
@@ -410,7 +441,8 @@ data:
 
         try:
             await run_agent(instruction, channel=channel,
-                            need_reply=(itype == "mattermost"))
+                            need_reply=(itype == "mattermost"),
+                            reply_channel=channel if itype == "mattermost" else "")
         except Exception as e:
             log.error("Agent error type=%s: %s", itype, e)
 

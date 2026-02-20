@@ -71,14 +71,15 @@ data:
       },
       {
         name: 'kubectl_get',
-        description: 'Run kubectl get on a resource and return JSON output.',
+        description: 'Run kubectl get on a resource. Returns a human-readable table by default (wide). Use output="json" only when you need machine-readable detail.',
         inputSchema: {
           type: 'object',
           properties: {
             resource: { type: 'string', description: 'Resource type, e.g. pods, nodes, deployments' },
             namespace: { type: 'string', description: 'Namespace (omit for cluster-scoped or --all-namespaces)' },
             all_namespaces: { type: 'boolean', description: 'If true, query all namespaces' },
-            name: { type: 'string', description: 'Specific resource name (optional)' }
+            name: { type: 'string', description: 'Specific resource name (optional)' },
+            output: { type: 'string', description: 'Output format: wide (default), json, yaml, name', default: 'wide' }
           },
           required: ['resource']
         }
@@ -254,7 +255,8 @@ data:
           if (args.name) cmd += ` ${args.name}`;
           if (args.all_namespaces) cmd += ' --all-namespaces';
           else if (args.namespace) cmd += ` -n ${args.namespace}`;
-          cmd += ' -o json';
+          const fmt = args.output || 'wide';
+          cmd += ` -o ${fmt}`;
           const r = run(cmd);
           return r.output;
         }
