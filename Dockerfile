@@ -150,15 +150,8 @@ WORKDIR /
 # Node.js and npm are still needed for other parts
 RUN apt-get update && apt-get install -y nodejs npm
 
-# Install Agentboard
-# node-pty requires node-gyp compilation; Debian's node-gyp is broken (missing gyp module)
-# Fix: install gyp Python module and use system Python (not venv)
-RUN pip3 install gyp-next --break-system-packages && \
-    npm install -g @gbasin/agentboard --python=/usr/bin/python3
-
-# Agentboard environment - pipe-pane mode works in docker without TTY
-ENV TERMINAL_MODE=pipe-pane
-ENV TMUX_SESSION=miladyos
+# Install dmux
+RUN npm install -g dmux
 
 # Install Go 1.22
 RUN apt-get update && \
