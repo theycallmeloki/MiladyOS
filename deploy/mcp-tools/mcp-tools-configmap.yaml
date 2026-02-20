@@ -8,65 +8,84 @@ data:
     #!/usr/bin/env node
     /**
      * MiladyOS MCP Tool Server
-     * Exposes kubectl + tmux operations as MCP tools over SSE transport.
-     * Connects to the shared 'milady' tmux session in gotty-dev namespace.
+     * Exposes kubectl, bash, file, and Mattermost operations as MCP tools over SSE.
      */
 
-    const { execSync, exec } = require('child_process');
-    const http = require('http');
+    const { execSync } = require('child_process');
+    const fs   = require('fs');
+    const path = require('path');
+    const http  = require('http');
     const https = require('https');
     const { URL } = require('url');
 
-    const PORT = parseInt(process.env.PORT || '3000');
-    const GOTTY_NS = process.env.GOTTY_POD_NAMESPACE || 'gotty-dev';
-    const TMUX_SESSION = 'milady';
-    const MM_URL   = process.env.MATTERMOST_URL || 'http://mattermost.mattermost.svc.cluster.local:8065';
-    const MM_TOKEN = process.env.MATTERMOST_BOT_TOKEN || '';
+    const PORT       = parseInt(process.env.PORT || '3000');
+    const MM_URL     = process.env.MATTERMOST_URL  || 'http://mattermost.mattermost.svc.cluster.local:8065';
+    const MM_TOKEN   = process.env.MATTERMOST_BOT_TOKEN || '';
+    const SCRATCH    = '/tmp/fleet-scratch';
 
-    // --- Tool definitions (MCP schema) ---
+    // Ensure scratch dir exists on startup
+    fs.mkdirSync(SCRATCH, { recursive: true });
+
+    // --- Tool definitions ---
     const TOOLS = [
       {
-        name: 'tmux_run',
-        description: 'Run a shell command in the shared milady tmux session and return output. Visible to anyone watching the GoTTY terminal.',
+        name: 'bash_exec',
+        description: 'Execute a shell command in an isolated scratch workspace (/tmp/fleet-scratch). Has kubectl, curl, git, jq, and standard Linux tools. Use for running scripts, cloning repos, processing files, installing packages. stdout+stderr are combined. Output may be truncated — use head/tail/grep to get specific sections of large output.',
         inputSchema: {
           type: 'object',
           properties: {
-            cmd: { type: 'string', description: 'Shell command to run' },
-            pane: { type: 'string', description: 'Tmux pane target (default: milady)', default: TMUX_SESSION }
+            cmd:     { type: 'string', description: 'Shell command to run' },
+            timeout: { type: 'number', description: 'Timeout ms (default 60000)', default: 60000 }
           },
           required: ['cmd']
         }
       },
       {
-        name: 'tmux_split',
-        description: 'Split the tmux window horizontally or vertically.',
+        name: 'file_read',
+        description: 'Read a file from the scratch workspace (/tmp/fleet-scratch/). For large files use bash_exec with head/tail/grep instead.',
         inputSchema: {
           type: 'object',
           properties: {
-            direction: { type: 'string', enum: ['horizontal', 'vertical'], description: 'horizontal = side by side, vertical = top/bottom' }
+            path: { type: 'string', description: 'File path relative to /tmp/fleet-scratch/' }
           },
-          required: ['direction']
+          required: ['path']
         }
       },
       {
-        name: 'tmux_select',
-        description: 'Select (focus) a tmux pane by index.',
+        name: 'file_write',
+        description: 'Write (or overwrite) a file in the scratch workspace (/tmp/fleet-scratch/). Parent directories are created automatically.',
         inputSchema: {
           type: 'object',
           properties: {
-            pane: { type: 'number', description: 'Pane index (0-based)' }
+            path:    { type: 'string', description: 'File path relative to /tmp/fleet-scratch/' },
+            content: { type: 'string', description: 'Content to write' }
           },
-          required: ['pane']
+          required: ['path', 'content']
         }
       },
       {
-        name: 'tmux_capture',
-        description: 'Capture and return the current content of a tmux pane.',
+        name: 'mattermost_upload',
+        description: 'Upload a file from the scratch workspace to a Mattermost channel, with an optional message.',
         inputSchema: {
           type: 'object',
           properties: {
-            pane: { type: 'number', description: 'Pane index (0-based, default 0)', default: 0 }
-          }
+            channel:   { type: 'string', description: 'Channel name (e.g. fleet-ops)' },
+            file_path: { type: 'string', description: 'File path relative to /tmp/fleet-scratch/' },
+            message:   { type: 'string', description: 'Optional message to accompany the file', default: '' }
+          },
+          required: ['channel', 'file_path']
+        }
+      },
+      {
+        name: 'queue_task',
+        description: 'Queue a follow-up task for the fleet agent to process asynchronously. Use for deferred or chained work that the agent should do later.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            instruction: { type: 'string', description: 'Task instruction for the agent' },
+            channel:     { type: 'string', description: 'Channel context (default: fleet-ops)', default: 'fleet-ops' }
+          },
+          required: ['instruction']
         }
       },
       {
@@ -75,11 +94,11 @@ data:
         inputSchema: {
           type: 'object',
           properties: {
-            resource: { type: 'string', description: 'Resource type, e.g. pods, nodes, deployments' },
-            namespace: { type: 'string', description: 'Namespace (omit for cluster-scoped or --all-namespaces)' },
+            resource:       { type: 'string', description: 'Resource type, e.g. pods, nodes, deployments' },
+            namespace:      { type: 'string', description: 'Namespace (omit for cluster-scoped or all-namespaces)' },
             all_namespaces: { type: 'boolean', description: 'If true, query all namespaces' },
-            name: { type: 'string', description: 'Specific resource name (optional)' },
-            output: { type: 'string', description: 'Output format: wide (default), json, yaml, name', default: 'wide' }
+            name:           { type: 'string', description: 'Specific resource name (optional)' },
+            output:         { type: 'string', description: 'Output format: wide (default), json, yaml, name', default: 'wide' }
           },
           required: ['resource']
         }
@@ -90,8 +109,8 @@ data:
         inputSchema: {
           type: 'object',
           properties: {
-            resource: { type: 'string', description: 'Resource type' },
-            name: { type: 'string', description: 'Resource name' },
+            resource:  { type: 'string', description: 'Resource type' },
+            name:      { type: 'string', description: 'Resource name' },
             namespace: { type: 'string', description: 'Namespace' }
           },
           required: ['resource', 'name']
@@ -103,22 +122,22 @@ data:
         inputSchema: {
           type: 'object',
           properties: {
-            pod: { type: 'string', description: 'Pod name' },
+            pod:       { type: 'string', description: 'Pod name' },
             namespace: { type: 'string', description: 'Namespace' },
             container: { type: 'string', description: 'Container name (optional)' },
-            tail: { type: 'number', description: 'Number of lines from end (default 100)', default: 100 }
+            tail:      { type: 'number', description: 'Number of lines from end (default 50)', default: 50 }
           },
           required: ['pod']
         }
       },
       {
         name: 'kubectl_apply',
-        description: 'Apply a Kubernetes manifest (YAML string).',
+        description: 'Apply a Kubernetes manifest (YAML or JSON string).',
         inputSchema: {
           type: 'object',
           properties: {
-            manifest: { type: 'string', description: 'YAML manifest to apply' },
-            dry_run: { type: 'boolean', description: 'If true, use --dry-run=client', default: false }
+            manifest: { type: 'string', description: 'YAML/JSON manifest to apply' },
+            dry_run:  { type: 'boolean', description: 'If true, use --dry-run=client', default: false }
           },
           required: ['manifest']
         }
@@ -129,8 +148,8 @@ data:
         inputSchema: {
           type: 'object',
           properties: {
-            resource: { type: 'string', description: 'Resource type' },
-            name: { type: 'string', description: 'Resource name' },
+            resource:  { type: 'string', description: 'Resource type' },
+            name:      { type: 'string', description: 'Resource name' },
             namespace: { type: 'string', description: 'Namespace' }
           },
           required: ['resource', 'name']
@@ -138,11 +157,11 @@ data:
       },
       {
         name: 'mattermost_post',
-        description: 'Post a message to a Mattermost channel by channel name (e.g. fleet-ops, heartbeat, alerts). Uses the fleet-agent bot account.',
+        description: 'Post a message to a Mattermost channel by name (e.g. fleet-ops, heartbeat, alerts).',
         inputSchema: {
           type: 'object',
           properties: {
-            channel: { type: 'string', description: 'Channel name (without #), e.g. fleet-ops, heartbeat, alerts' },
+            channel: { type: 'string', description: 'Channel name (without #)' },
             message: { type: 'string', description: 'Message text (Markdown supported)' }
           },
           required: ['channel', 'message']
@@ -150,13 +169,13 @@ data:
       },
       {
         name: 'launch_rlm_job',
-        description: 'Launch an RLM (Recursive Language Model) job to solve a complex task using iterative Python code execution in Kubernetes. The job runs asynchronously and posts results to a Mattermost channel when done. Use this for tasks requiring computation, data analysis, or multi-step code execution.',
+        description: 'Launch an RLM job to solve a complex task using iterative Python code execution in Kubernetes. Runs async and posts results to Mattermost when done. Use for computation, data analysis, or multi-step code tasks.',
         inputSchema: {
           type: 'object',
           properties: {
-            prompt: { type: 'string', description: 'The task for the RLM agent to solve using Python code execution' },
-            notify_channel: { type: 'string', description: 'Mattermost channel to post results to (default: fleet-ops)', default: 'fleet-ops' },
-            max_iterations: { type: 'number', description: 'Max RLM iterations (default: 10, max: 30)', default: 10 }
+            prompt:          { type: 'string', description: 'Task for the RLM agent to solve via Python' },
+            notify_channel:  { type: 'string', description: 'Mattermost channel for results (default: fleet-ops)', default: 'fleet-ops' },
+            max_iterations:  { type: 'number', description: 'Max RLM iterations (default: 10, max: 30)', default: 10 }
           },
           required: ['prompt']
         }
@@ -164,9 +183,9 @@ data:
     ];
 
     // --- Mattermost API helper ---
-    function mmApi(method, path, body) {
+    function mmApi(method, apiPath, body) {
       return new Promise((resolve, reject) => {
-        const u = new URL(MM_URL + path);
+        const u = new URL(MM_URL + apiPath);
         const isHttps = u.protocol === 'https:';
         const payload = body ? JSON.stringify(body) : null;
         const opts = {
@@ -195,12 +214,11 @@ data:
       });
     }
 
-    // Channel name → ID cache (resolved via team endpoint)
+    // Channel name → ID cache
     let teamId = null;
     const channelCache = {};
     async function resolveChannel(name) {
       if (channelCache[name]) return channelCache[name];
-      // Look up team ID once
       if (!teamId) {
         const tr = await mmApi('GET', '/api/v4/teams/name/milady');
         if (tr.status !== 200 || !tr.body.id) throw new Error(`Team not found (status ${tr.status})`);
@@ -214,86 +232,165 @@ data:
       throw new Error(`Channel not found: ${name} (status ${r.status})`);
     }
 
-    // --- Tool execution ---
+    // Safe path resolution within scratch dir
+    function scratchPath(rel) {
+      const resolved = path.resolve(SCRATCH, rel.replace(/^\/+/, ''));
+      if (!resolved.startsWith(SCRATCH)) throw new Error('Path traversal not allowed');
+      return resolved;
+    }
+
+    // Simple sync runner for kubectl commands
     function run(cmd, opts = {}) {
       try {
         const out = execSync(cmd, { encoding: 'utf8', timeout: 30000, ...opts });
         return { ok: true, output: out.trim() };
       } catch (e) {
-        return { ok: false, output: e.stderr ? e.stderr.trim() : e.message };
+        const out = [e.stdout, e.stderr].filter(Boolean).map(s => s.trim()).join('\n');
+        return { ok: false, output: out || e.message };
       }
     }
 
     function executeTool(name, args) {
       switch (name) {
-        case 'tmux_run': {
-          const pane = args.pane || TMUX_SESSION;
-          // Send keys to tmux session
-          run(`tmux send-keys -t ${pane} ${JSON.stringify(args.cmd)} Enter`);
-          // Wait briefly for command to run
-          execSync('sleep 1');
-          // Capture output
-          const cap = run(`tmux capture-pane -pt ${pane} -S -20`);
-          return cap.output;
+
+        case 'bash_exec': {
+          const timeout = Math.min(args.timeout || 60000, 120000);
+          try {
+            const out = execSync(args.cmd, {
+              encoding: 'utf8',
+              timeout,
+              cwd: SCRATCH,
+              env: { ...process.env },
+              shell: '/bin/bash'
+            });
+            const trimmed = out.trim();
+            return trimmed.slice(-4000) || '(no output)';
+          } catch (e) {
+            const combined = [e.stdout, e.stderr].filter(Boolean).map(s => s.trim()).join('\n');
+            return (combined || e.message).slice(-4000);
+          }
         }
-        case 'tmux_split': {
-          const flag = args.direction === 'horizontal' ? '-h' : '-v';
-          const r = run(`tmux split-window ${flag} -t ${TMUX_SESSION}`);
-          return r.ok ? `Split ${args.direction} OK` : r.output;
+
+        case 'file_read': {
+          try {
+            const fp = scratchPath(args.path);
+            if (!fs.existsSync(fp)) return `File not found: ${args.path}`;
+            const content = fs.readFileSync(fp, 'utf8');
+            // Return last 4000 chars if large, with a note
+            if (content.length > 4000) {
+              return `[file truncated — showing last 4000 of ${content.length} chars]\n` + content.slice(-4000);
+            }
+            return content;
+          } catch (e) {
+            return `Error reading file: ${e.message}`;
+          }
         }
-        case 'tmux_select': {
-          const r = run(`tmux select-pane -t ${TMUX_SESSION}:0.${args.pane}`);
-          return r.ok ? `Selected pane ${args.pane}` : r.output;
+
+        case 'file_write': {
+          try {
+            const fp = scratchPath(args.path);
+            fs.mkdirSync(path.dirname(fp), { recursive: true });
+            fs.writeFileSync(fp, args.content, 'utf8');
+            return `Wrote ${args.content.length} chars to ${args.path}`;
+          } catch (e) {
+            return `Error writing file: ${e.message}`;
+          }
         }
-        case 'tmux_capture': {
-          const pane = args.pane || 0;
-          const r = run(`tmux capture-pane -pt ${TMUX_SESSION}:0.${pane} -S -50`);
-          return r.output;
+
+        case 'mattermost_upload': {
+          try {
+            const fp = scratchPath(args.file_path);
+            if (!fs.existsSync(fp)) return `File not found: ${args.file_path}`;
+            return resolveChannel(args.channel).then(channelId => {
+              // Upload via curl (multipart)
+              const uploadOut = execSync(
+                `curl -s -X POST ` +
+                `-H "Authorization: Bearer ${MM_TOKEN}" ` +
+                `-F "files=@${fp}" -F "channel_id=${channelId}" ` +
+                `"${MM_URL}/api/v4/files"`,
+                { encoding: 'utf8', timeout: 30000 }
+              );
+              const uploadData = JSON.parse(uploadOut);
+              const fileId = uploadData.file_infos?.[0]?.id;
+              if (!fileId) return `Upload failed: ${uploadOut.slice(0, 200)}`;
+              // Post with attachment
+              return mmApi('POST', '/api/v4/posts', {
+                channel_id: channelId,
+                message: args.message || '',
+                file_ids: [fileId]
+              }).then(r => {
+                if (r.status === 201) return `Uploaded ${path.basename(fp)} to #${args.channel}`;
+                return `Post failed (${r.status}): ${JSON.stringify(r.body).slice(0, 200)}`;
+              });
+            }).catch(e => `Error: ${e.message}`);
+          } catch (e) {
+            return `Error: ${e.message}`;
+          }
         }
+
+        case 'queue_task': {
+          const item = JSON.stringify({
+            type: 'task',
+            instruction: args.instruction,
+            channel: args.channel || 'fleet-ops',
+            ts: new Date().toISOString()
+          });
+          try {
+            execSync(
+              'kubectl exec -n fleet-agent deployment/fleet-agent -c fleet-agent -i -- sh -c "cat >> /data/queue/queue.jsonl"',
+              { input: item + '\n', encoding: 'utf8', timeout: 10000 }
+            );
+            return `Task queued for #${args.channel || 'fleet-ops'}`;
+          } catch (e) {
+            return `Error queuing task: ${e.stderr ? e.stderr.trim() : e.message}`;
+          }
+        }
+
         case 'kubectl_get': {
           let cmd = `kubectl get ${args.resource}`;
           if (args.name) cmd += ` ${args.name}`;
           if (args.all_namespaces) cmd += ' --all-namespaces';
           else if (args.namespace) cmd += ` -n ${args.namespace}`;
-          const fmt = args.output || 'wide';
-          cmd += ` -o ${fmt}`;
+          cmd += ` -o ${args.output || 'wide'}`;
           const r = run(cmd);
           return r.output;
         }
+
         case 'kubectl_describe': {
           let cmd = `kubectl describe ${args.resource} ${args.name}`;
           if (args.namespace) cmd += ` -n ${args.namespace}`;
           const r = run(cmd);
           return r.output;
         }
+
         case 'kubectl_logs': {
           let cmd = `kubectl logs ${args.pod}`;
           if (args.namespace) cmd += ` -n ${args.namespace}`;
           if (args.container) cmd += ` -c ${args.container}`;
-          cmd += ` --tail=${args.tail || 100}`;
+          cmd += ` --tail=${args.tail || 50}`;
           const r = run(cmd);
           return r.output;
         }
+
         case 'kubectl_apply': {
-          const { execSync: es } = require('child_process');
           try {
             const dryRun = args.dry_run ? '--dry-run=client' : '';
-            const out = es(`kubectl apply ${dryRun} -f -`, {
-              input: args.manifest,
-              encoding: 'utf8',
-              timeout: 30000
+            const out = execSync(`kubectl apply ${dryRun} -f -`, {
+              input: args.manifest, encoding: 'utf8', timeout: 30000
             });
             return out.trim();
           } catch (e) {
             return e.stderr ? e.stderr.trim() : e.message;
           }
         }
+
         case 'kubectl_delete': {
           let cmd = `kubectl delete ${args.resource} ${args.name}`;
           if (args.namespace) cmd += ` -n ${args.namespace}`;
           const r = run(cmd);
           return r.output;
         }
+
         case 'mattermost_post': {
           return resolveChannel(args.channel)
             .then(channelId => mmApi('POST', '/api/v4/posts', {
@@ -306,14 +403,11 @@ data:
             })
             .catch(e => `Error: ${e.message}`);
         }
+
         case 'launch_rlm_job': {
-          const prompt = args.prompt;
-          const notifyChannel = args.notify_channel || 'fleet-ops';
-          const maxIterations = Math.min(args.max_iterations || 10, 30);
           const jobName = `rlm-${Date.now().toString(36)}`;
           const manifest = JSON.stringify({
-            apiVersion: 'rlm.io/v1alpha1',
-            kind: 'RLMJob',
+            apiVersion: 'rlm.io/v1alpha1', kind: 'RLMJob',
             metadata: { name: jobName, namespace: 'rlm-system' },
             spec: {
               backend: 'openai',
@@ -322,29 +416,26 @@ data:
                 base_url: 'http://litellm-proxy.default.svc.cluster.local:4000/v1'
               },
               backendSecret: 'rlm-litellm-secret',
-              prompt: prompt,
-              maxIterations: maxIterations,
-              notifyChannel: notifyChannel
+              prompt: args.prompt,
+              maxIterations: Math.min(args.max_iterations || 10, 30),
+              notifyChannel: args.notify_channel || 'fleet-ops'
             }
           });
-          const { execSync: es } = require('child_process');
           try {
-            const out = es('kubectl apply -f -', { input: manifest, encoding: 'utf8', timeout: 30000 });
-            return `RLM job launched: **${jobName}**\n${out.trim()}\nResults will be posted to #${notifyChannel} when complete.`;
+            const out = execSync('kubectl apply -f -', { input: manifest, encoding: 'utf8', timeout: 30000 });
+            return `RLM job launched: **${jobName}**\n${out.trim()}\nResults → #${args.notify_channel || 'fleet-ops'}`;
           } catch (e) {
             return `Error launching RLM job: ${e.stderr ? e.stderr.trim() : e.message}`;
           }
         }
+
         default:
           return `Unknown tool: ${name}`;
       }
     }
 
     // --- MCP over SSE HTTP server ---
-    // Implements a minimal MCP server: GET /sse opens event stream,
-    // POST /message sends JSON-RPC requests.
-
-    const clients = new Map(); // sessionId -> res
+    const clients = new Map();
 
     function sendEvent(res, event, data) {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -353,21 +444,18 @@ data:
     const server = http.createServer((req, res) => {
       const url = new URL(req.url, `http://localhost`);
 
-      // Health check
       if (url.pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', tools: TOOLS.length }));
         return;
       }
 
-      // Tool listing endpoint (convenience)
       if (url.pathname === '/tools' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ tools: TOOLS }));
         return;
       }
 
-      // SSE endpoint — client subscribes here
       if (url.pathname === '/sse' && req.method === 'GET') {
         const sessionId = Math.random().toString(36).slice(2);
         res.writeHead(200, {
@@ -377,51 +465,33 @@ data:
           'Access-Control-Allow-Origin': '*'
         });
         clients.set(sessionId, res);
-
-        // Send endpoint URL to client
         sendEvent(res, 'endpoint', { uri: `/message?sessionId=${sessionId}` });
-
-        // Heartbeat
         const hb = setInterval(() => res.write(': ping\n\n'), 15000);
-
-        req.on('close', () => {
-          clearInterval(hb);
-          clients.delete(sessionId);
-        });
+        req.on('close', () => { clearInterval(hb); clients.delete(sessionId); });
         return;
       }
 
-      // Message endpoint — receives JSON-RPC from client
       if (url.pathname === '/message' && req.method === 'POST') {
         const sessionId = url.searchParams.get('sessionId');
         const clientRes = clients.get(sessionId);
-
         let body = '';
         req.on('data', d => body += d);
         req.on('end', () => {
-          res.writeHead(202);
-          res.end();
-
+          res.writeHead(202); res.end();
           let msg;
           try { msg = JSON.parse(body); } catch { return; }
-
           const { id, method, params } = msg;
-
-          // Handle MCP protocol methods
           if (method === 'initialize') {
             if (clientRes) sendEvent(clientRes, 'message', {
               jsonrpc: '2.0', id,
               result: {
                 protocolVersion: '2024-11-05',
                 capabilities: { tools: {} },
-                serverInfo: { name: 'miladyos-mcp-tools', version: '1.0.0' }
+                serverInfo: { name: 'miladyos-mcp-tools', version: '2.0.0' }
               }
             });
           } else if (method === 'tools/list') {
-            if (clientRes) sendEvent(clientRes, 'message', {
-              jsonrpc: '2.0', id,
-              result: { tools: TOOLS }
-            });
+            if (clientRes) sendEvent(clientRes, 'message', { jsonrpc: '2.0', id, result: { tools: TOOLS } });
           } else if (method === 'tools/call') {
             const { name, arguments: args } = params;
             Promise.resolve()
@@ -430,13 +500,11 @@ data:
               .then(result => {
                 if (clientRes) sendEvent(clientRes, 'message', {
                   jsonrpc: '2.0', id,
-                  result: {
-                    content: [{ type: 'text', text: String(result) }]
-                  }
+                  result: { content: [{ type: 'text', text: String(result) }] }
                 });
               });
           } else if (method === 'notifications/initialized') {
-            // No response needed
+            // no-op
           } else {
             if (clientRes) sendEvent(clientRes, 'message', {
               jsonrpc: '2.0', id,
@@ -447,8 +515,7 @@ data:
         return;
       }
 
-      res.writeHead(404);
-      res.end();
+      res.writeHead(404); res.end();
     });
 
     server.listen(PORT, () => {

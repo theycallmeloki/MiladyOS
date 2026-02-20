@@ -31,7 +31,7 @@ data:
     DATA_DIR           = Path(os.environ.get("DATA_DIR", "/data"))
     MAX_ITERS          = int(os.environ.get("AGENT_MAX_ITERS", "20"))
     MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "6"))
-    MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "600"))   # chars
+    MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "2000"))  # chars
     MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
 
     llm = OpenAI(base_url=LITELLM_URL, api_key=LITELLM_KEY)

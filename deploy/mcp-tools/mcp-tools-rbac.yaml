@@ -14,6 +14,9 @@ rules:
                "persistentvolumeclaims", "persistentvolumes", "configmaps",
                "secrets", "events", "replicationcontrollers"]
   verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
   verbs: ["get", "list", "watch", "patch"]
