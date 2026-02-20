@@ -6,53 +6,7 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      # ── Free OpenRouter models with tool-calling support ──────────────────
-      # Daisy-chained: rate-limit or failure on one → LiteLLM tries the next.
-      # Only models confirmed to support the tools API are included.
-
-      # Tier 1: confirmed working with tool calling
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "nemotron-30b-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/upstage/solar-pro-3:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "solar-pro-3-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/arcee-ai/trinity-large-preview:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "trinity-large-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/stepfun/step-3.5-flash:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "step-3-5-flash-free"
-
-      # Tier 2: work once "Allow training on prompts" propagates in OpenRouter
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/google/gemma-3-27b-it:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "gemma3-27b-free"
-
-      - model_name: "fleet-agent"
-        litellm_params:
-          model: "openrouter/openai/gpt-oss-20b:free"
-          api_key: "os.environ/OPENROUTER_API_KEY"
-        model_info:
-          id: "gpt-oss-20b-free"
+      # ── Free OpenRouter models — 70B+ only, tool-calling confirmed ─────────
 
       - model_name: "fleet-agent"
         litellm_params:
@@ -60,6 +14,29 @@ data:
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "gpt-oss-120b-free"
+
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/meta-llama/llama-3.3-70b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "llama-3-3-70b-free"
+
+      # Solar Pro 3: 128k context window, useful for long-context tasks
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/upstage/solar-pro-3:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "solar-pro-3-free"
+
+      # StepFun Step 3.5 Flash: 256k context window
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/stepfun/step-3.5-flash:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "step-3-5-flash-free"
 
       # ── Dedicated inference (fallbacks) ───────────────────────────────────
       # Bare-metal RTX 3080 Ti (AWQ 4-bit, low latency, no cloud dependency)

@@ -191,6 +191,23 @@ data:
         image = spec.get("image", "python:3.11-slim")
         timeout = spec.get("timeout", 600)
         prompt = spec["prompt"]
+        notify_channel = spec.get("notifyChannel", "")
+
+        env = [
+            {"name": "RLM_JOB_NAME", "value": name},
+            {"name": "RLM_JOB_NAMESPACE", "value": namespace},
+            {"name": "RLM_PROMPT", "value": prompt},
+            {"name": "RLM_BACKEND", "value": backend},
+            {"name": "BACKEND_KWARGS", "value": json.dumps(backend_kwargs)},
+            {"name": "RLM_NUM_WORKERS", "value": str(num_workers)},
+            {"name": "RLM_MAX_ITERATIONS", "value": str(max_iterations)},
+            {"name": "RLM_MAX_DEPTH", "value": str(max_depth)},
+            {"name": "RLM_WORKER_IMAGE", "value": image},
+            {"name": "RLM_TIMEOUT", "value": str(timeout)},
+            {"name": "RLM_LOG_DIR", "value": "/rlm-logs"},
+        ]
+        if notify_channel:
+            env.append({"name": "RLM_NOTIFY_CHANNEL", "value": notify_channel})
 
         return {
             "apiVersion": "v1",
@@ -223,23 +240,10 @@ data:
                             "python",
                             "/app/coordinator.py",
                         ],
-                        "env": [
-                            {"name": "RLM_JOB_NAME", "value": name},
-                            {"name": "RLM_JOB_NAMESPACE", "value": namespace},
-                            {"name": "RLM_PROMPT", "value": prompt},
-                            {"name": "RLM_BACKEND", "value": backend},
-                            {"name": "BACKEND_KWARGS", "value": json.dumps(backend_kwargs)},
-                            {"name": "RLM_NUM_WORKERS", "value": str(num_workers)},
-                            {"name": "RLM_MAX_ITERATIONS", "value": str(max_iterations)},
-                            {"name": "RLM_MAX_DEPTH", "value": str(max_depth)},
-                            {"name": "RLM_WORKER_IMAGE", "value": image},
-                            {"name": "RLM_TIMEOUT", "value": str(timeout)},
-                            {"name": "RLM_LOG_DIR", "value": "/rlm-logs"},
-                        ],
+                        "env": env,
                         "envFrom": [
-                            {
-                                "secretRef": {"name": backend_secret},
-                            },
+                            {"secretRef": {"name": backend_secret}},
+                            {"secretRef": {"name": "rlm-mattermost-secret"}},
                         ],
                         "volumeMounts": [
                             {

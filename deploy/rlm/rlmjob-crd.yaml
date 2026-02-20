@@ -70,6 +70,9 @@ spec:
                   type: integer
                   default: 600
                   description: "Timeout in seconds for the job."
+                notifyChannel:
+                  type: string
+                  description: "Optional Mattermost channel name to post results to on completion."
             status:
               type: object
               properties:
