@@ -30,9 +30,9 @@ data:
     WORKSPACE          = Path(os.environ.get("WORKSPACE", "/workspace"))
     DATA_DIR           = Path(os.environ.get("DATA_DIR", "/data"))
     MAX_ITERS          = int(os.environ.get("AGENT_MAX_ITERS", "20"))
-    MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "6"))
+    MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "12"))
     MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "2000"))  # chars
-    MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
+    MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "5"))
     MAX_TOOL_RETRIES   = int(os.environ.get("AGENT_MAX_TOOL_RETRIES",   "3"))
     MAX_LLM_RETRIES    = int(os.environ.get("AGENT_MAX_LLM_RETRIES",    "2"))
     DATUM_DIR          = DATA_DIR / "datums"
@@ -340,11 +340,14 @@ data:
                         is_ctx = any(k in err_str for k in
                                      ("context", "token", "length", "too long", "maximum"))
                         if is_ctx and llm_attempt < MAX_LLM_RETRIES - 1:
-                            # Truncate: keep system prompt + most recent messages
-                            keep = max(2, len(llm_messages) // 2)
-                            llm_messages = llm_messages[:1] + llm_messages[-keep:]
-                            log.warning("  [llm] context too long — truncated to %d msgs, retrying",
-                                        len(llm_messages))
+                            # Smart truncation: keep system prompt + most recent 1/3
+                            # prioritise tool results (they contain facts the agent needs)
+                            system_msg = llm_messages[0]
+                            rest = llm_messages[1:]
+                            keep_n = max(4, len(rest) // 3)
+                            llm_messages = [system_msg] + rest[-keep_n:]
+                            log.warning("  [llm] context too long — truncated %d→%d msgs, retrying",
+                                        1 + len(rest), len(llm_messages))
                             emit({"type": "ctx_truncated", "kept": len(llm_messages)})
                         elif llm_attempt < MAX_LLM_RETRIES - 1:
                             wait = 2 ** llm_attempt
@@ -448,10 +451,11 @@ data:
                     break
 
                 for tc in msg.tool_calls[MAX_TOOLS_PER_TURN:]:
-                    messages.append({"role": "tool", "tool_call_id": tc.id,
-                                     "content": "Skipped (too many parallel calls; call this tool again in the next turn)"})
-                    new_msgs.append({"role": "tool", "tool_call_id": tc.id,
-                                     "content": "Skipped — call again"})
+                    skip_note = (f"Skipped: too many parallel calls this turn "
+                                 f"(limit {MAX_TOOLS_PER_TURN}). "
+                                 f"Call {tc.function.name} again in the next iteration if still needed.")
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": skip_note})
+                    new_msgs.append({"role": "tool", "tool_call_id": tc.id, "content": skip_note})
             else:
                 log.warning("Agent hit max iterations (%d)", MAX_ITERS)
                 emit({"type": "run_end", "status": "max_iters", "iters": iters_done})
@@ -536,27 +540,36 @@ data:
 
         try:
             if itype == "heartbeat":
-                channel     = "heartbeat"
-                hb          = load_heartbeat()
+                channel = "heartbeat"
+                hb      = load_heartbeat()
                 instruction = (
-                    item.get("instruction", "Run the HEARTBEAT.md checklist.")
-                    + (f"\n\n---\nHEARTBEAT.md:\n{hb}" if hb else "")
+                    f"TASK: Scheduled cluster heartbeat check\n\n"
+                    f"Execute every item in the checklist below in order. "
+                    f"Collect all findings, then:\n"
+                    f"- If all healthy → mattermost_post(channel=\"heartbeat\", message=\"✅ HEARTBEAT_OK — all systems nominal.\")\n"
+                    f"- If any WARNING → post summary to #heartbeat AND details to #alerts\n"
+                    f"- If any CRITICAL → post summary to #heartbeat AND post 🚨 CRITICAL details to #alerts\n"
+                    f"STOP after posting. Do not loop back over checks.\n\n"
+                    f"CHECKLIST:\n{hb}"
                 )
                 await run_agent(instruction, channel=channel, load_prior=False, datum_id=datum_id)
 
             elif itype == "browser_task":
-                channel     = item.get("channel", "fleet-ops")
-                url         = item.get("url", "")
-                ctx_ch      = item.get("context_channel", "form-context")
+                channel = item.get("channel", "fleet-ops")
+                url     = item.get("url", "")
+                ctx_ch  = item.get("context_channel", "form-context")
+                task    = item.get("instruction", "")
                 instruction = (
-                    f"Browser task requested.\n"
-                    f"Instruction: {item.get('instruction', '')}\n"
-                    f"Target URL: {url}\n"
-                    f"User profile context is in Mattermost #{ctx_ch} — use bash_exec "
-                    f"with curl to fetch that channel's history via the Mattermost REST API, "
-                    f"then use launch_rlm_job(prompt=..., notify_channel=\"{channel}\", "
-                    f"max_iterations=20) to handle the task asynchronously. "
-                    f"After launching, call mattermost_post to confirm to #{channel}."
+                    f"TASK: Browser automation\n"
+                    f"Goal: {task}\n"
+                    f"Target URL: {url}\n\n"
+                    f"Steps:\n"
+                    f"1. Fetch user profile context from Mattermost #{ctx_ch} "
+                    f"   (use bash_exec with curl to the Mattermost REST API)\n"
+                    f"2. Call launch_rlm_job(prompt=\"{task} — URL: {url} — context: <fetched context>\", "
+                    f"   notify_channel=\"{channel}\", max_iterations=20)\n"
+                    f"3. Call mattermost_post(channel=\"{channel}\", message=\"Browser task launched for {url}\")\n"
+                    f"4. STOP.\n"
                 )
                 update_datum(datum_id, status="rlm_dispatched")
                 await run_agent(instruction, channel=channel, need_reply=True,
@@ -570,18 +583,22 @@ data:
 
                 if is_long:
                     instruction = (
-                        f"User @{user} in #{channel}: {text}\n\n"
-                        f"This is a long-running task. Use launch_rlm_job(prompt=..., "
-                        f"notify_channel=\"{channel}\", max_iterations=20) to handle it "
-                        f"asynchronously, then call mattermost_post to confirm the job started."
+                        f"TASK: Long-running request from @{user} in #{channel}\n"
+                        f"Request: {text}\n\n"
+                        f"Steps:\n"
+                        f"1. Call launch_rlm_job(prompt=\"{text}\", "
+                        f"   notify_channel=\"{channel}\", max_iterations=20)\n"
+                        f"2. Call mattermost_post(channel=\"{channel}\", "
+                        f"   message=\"Started async job for: {text[:100]}\")\n"
+                        f"3. STOP. Do not wait for the job to finish.\n"
                     )
                     update_datum(datum_id, is_long_job=True, status="rlm_dispatched")
                 else:
                     instruction = (
-                        f"User @{user} says in #{channel}: {text}\n\n"
-                        f"IMPORTANT: Call mattermost_post(channel=\"{channel}\", message=\"...\") "
-                        f"EXACTLY ONCE to reply. You may use other tools first to gather info, "
-                        f"but send only ONE reply then stop."
+                        f"TASK: Reply to @{user} in #{channel}\n"
+                        f"Message: {text}\n\n"
+                        f"Write a PLAN, execute each step using tools, "
+                        f"then call mattermost_post(channel=\"{channel}\") ONCE with your findings. STOP.\n"
                     )
                 await run_agent(instruction, channel=channel,
                                 need_reply=True, reply_channel=channel, datum_id=datum_id)
