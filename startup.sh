@@ -229,12 +229,15 @@ else
 fi
 
 # Create directory for Redka database and start if available
-if command -v redka > /dev/null 2>&1; then
+# Set USE_EXTERNAL_REDIS=true to skip Redka/Redis and use an external Redis instead
+if [ "${USE_EXTERNAL_REDIS}" = "true" ]; then
+    echo "USE_EXTERNAL_REDIS is set, skipping Redka/Redis startup (using external Redis at ${REDIS_HOST}:${REDIS_PORT})"
+elif command -v redka > /dev/null 2>&1; then
     echo "Starting Redka server..."
     mkdir -p /data/redka
     redka -h 0.0.0.0 -p 6379 /data/redka/data.db &
     sleep 5
-    
+
     # Check if redka is running
     if pgrep -x "redka" > /dev/null; then
         echo "Redka server started successfully"
