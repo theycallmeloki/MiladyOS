@@ -11,7 +11,7 @@ spec:
     path: deploy/miladyos-self
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: miladyos
   syncPolicy:
     automated:
       prune: true

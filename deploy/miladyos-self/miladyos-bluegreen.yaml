@@ -2,6 +2,7 @@ apiVersion: ctl.enisoc.com/v1
 kind: BlueGreenDeployment
 metadata:
   name: miladyos
+  namespace: miladyos
   labels:
     app: miladyos
 spec:
