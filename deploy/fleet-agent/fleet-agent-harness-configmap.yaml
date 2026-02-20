@@ -462,9 +462,12 @@ data:
                 log.info("No reply posted yet — nudging model to post to #%s", target)
                 emit({"type": "nudge", "target": target})
                 messages.append({"role": "user",
-                                  "content": f"STOP. You MUST call mattermost_post RIGHT NOW. "
-                                             f"channel=\"{target}\". Do not call any other tool first. "
-                                             f"Post a concise summary of what you found or did."})
+                                  "content": f"STOP. Review the PLAN you wrote at the start. "
+                                             f"Have you completed every step? "
+                                             f"If any steps remain, complete them now before posting. "
+                                             f"Once ALL planned steps are done, call "
+                                             f"mattermost_post(channel=\"{target}\") with a comprehensive "
+                                             f"summary of what you did and found. Do not skip unfinished steps."})
                 try:
                     r2 = llm.chat.completions.create(model=MODEL, messages=messages,
                                                       tools=tools or None, max_tokens=512)
