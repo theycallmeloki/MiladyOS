@@ -176,7 +176,11 @@ spec:
                       except Exception as e:
                           return {"message": str(e)}, 0
 
-                  # ── Per-model test via temp routing entry ────────────────────
+                  # ── Per-model test via LiteLLM passthrough ──────────────────
+                  # LiteLLM routes any "openrouter/..." model path directly using
+                  # its configured OPENROUTER_API_KEY — no /model/new needed and
+                  # no direct internet access required from the auditor pod.
+                  # For bare-metal entries (have api_base), use their model_name.
                   FAIL_THRESHOLD = int(os.environ.get("FAIL_THRESHOLD", "3"))
                   SLEEP_S        = int(os.environ.get("SLEEP_BETWEEN_TESTS", "3"))
 
@@ -194,26 +198,25 @@ spec:
 
                   def test_model(entry, timeout=60):
                       """
-                      Test a model in isolation: create a uniquely-named temp routing
-                      entry in LiteLLM, test it, then clean up. LiteLLM uses its own
-                      credentials and egress — auditor needs no internet access.
+                      Test a model via LiteLLM passthrough routing:
+                      - OpenRouter models: use litellm_params.model path directly
+                        (e.g. "openrouter/openai/gpt-oss-120b:free") — LiteLLM
+                        routes via its own OPENROUTER_API_KEY, no entry needed.
+                      - Bare-metal models (have api_base): use their model_name
+                        which IS configured in litellm-config.yaml.
                       """
-                      temp_name = f"audit-{uuid.uuid4().hex[:12]}"
-                      temp_id   = f"tmp-{temp_name}"
+                      params   = entry.get("litellm_params", {})
+                      api_base = params.get("api_base")
 
-                      # Register temp entry
-                      _, add_s = ll("POST", "/model/new", {
-                          "model_name":     temp_name,
-                          "litellm_params": entry["litellm_params"],
-                          "model_info":     {"id": temp_id},
-                      })
-                      if add_s not in (200, 201):
-                          return {"ok": False, "latency": 0,
-                                  "error": f"temp add failed HTTP {add_s}"}
+                      if api_base:
+                          # Bare-metal / in-cluster — model_name is configured
+                          model_name = entry["model_name"]
+                      else:
+                          # OpenRouter — use full provider path as passthrough
+                          model_name = params.get("model", "")
 
-                      # Test
                       payload = json.dumps({
-                          "model": temp_name, "messages": MESSAGES, "tools": TOOL,
+                          "model": model_name, "messages": MESSAGES, "tools": TOOL,
                           "tool_choice": "auto", "max_tokens": 128, "temperature": 0
                       }).encode()
                       req = urllib.request.Request(f"{LITELLM}/v1/chat/completions",
@@ -228,20 +231,16 @@ spec:
                               body = json.loads(r.read())
                               ch   = body["choices"][0]
                               called = bool(ch["message"].get("tool_calls"))
-                              result = {"ok": True, "tool_call": called, "latency": lat,
-                                        "finish": ch.get("finish_reason")}
+                              return {"ok": True, "tool_call": called, "latency": lat,
+                                      "finish": ch.get("finish_reason")}
                       except urllib.error.HTTPError as e:
                           lat = round(time.time()-t0, 2)
-                          result = ({"ok": None, "latency": lat, "error": "rate_limited"}
-                                    if e.code == 429
-                                    else {"ok": False, "latency": lat, "error": f"HTTP {e.code}"})
+                          return ({"ok": None, "latency": lat, "error": "rate_limited"}
+                                  if e.code == 429
+                                  else {"ok": False, "latency": lat, "error": f"HTTP {e.code}"})
                       except Exception as e:
-                          result = {"ok": False, "latency": round(time.time()-t0, 2),
-                                    "error": str(e)[:200]}
-
-                      # Clean up — best-effort
-                      ll("POST", "/model/delete", {"id": temp_id})
-                      return result
+                          return {"ok": False, "latency": round(time.time()-t0, 2),
+                                  "error": str(e)[:200]}
 
                   # ── Main ─────────────────────────────────────────────────────
                   print("=== Model Auditor starting ===", flush=True)
