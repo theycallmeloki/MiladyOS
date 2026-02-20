@@ -107,7 +107,7 @@ data:
       # StepFun Step 3.5 Flash: 256k context
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/stepfun-ai/step-3-5-flash:free"
+          model: "openrouter/stepfun/step-3.5-flash:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "step-3-5-flash-free"
@@ -139,7 +139,7 @@ data:
       # NVIDIA Nemotron Nano 12B V2: 128k context
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/nvidia/nemotron-nano-12b-v2:free"
+          model: "openrouter/nvidia/nemotron-nano-12b-v2-vl:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "nemotron-nano-12b-v2-free"
@@ -155,7 +155,7 @@ data:
       # Qwen3 Next 80B A3B Instruct: 262k context
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/qwen/qwen3-next-80b-a3b:free"
+          model: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "qwen3-next-80b-free"
@@ -163,7 +163,7 @@ data:
       # Qwen3 Coder 480B A35B: 262k context, strong at structured output
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/qwen/qwen3-coder-480b-a35b:free"
+          model: "openrouter/qwen/qwen3-coder:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "qwen3-coder-480b-free"
@@ -171,7 +171,7 @@ data:
       # Z.ai GLM 4.5 Air: 131k context
       - model_name: "fleet-agent"
         litellm_params:
-          model: "openrouter/z-ai/glm-4-5-air:free"
+          model: "openrouter/z-ai/glm-4.5-air:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "glm-4-5-air-free"
@@ -246,15 +246,15 @@ data:
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/llama-3.1-nemotron-70b-instruct:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-70b-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/openai/gpt-oss-20b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"gpt-oss-20b-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/deepseek/deepseek-r1-0528:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"deepseek-r1-0528-free"}},
-      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/stepfun-ai/step-3-5-flash:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"step-3-5-flash-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/stepfun/step-3.5-flash:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"step-3-5-flash-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/trinity-large-preview:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-large-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/arcee-ai/trinity-mini:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"arcee-trinity-mini-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-3-nano-30b-a3b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-3-nano-30b-free"}},
-      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-nano-12b-v2:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-nano-12b-v2-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-nano-12b-v2-vl:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-nano-12b-v2-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nvidia/nemotron-nano-9b-v2:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"nemotron-nano-9b-v2-free"}},
-      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/qwen/qwen3-next-80b-a3b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"qwen3-next-80b-free"}},
-      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/qwen/qwen3-coder-480b-a35b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"qwen3-coder-480b-free"}},
-      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/z-ai/glm-4-5-air:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"glm-4-5-air-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/qwen/qwen3-next-80b-a3b-instruct:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"qwen3-next-80b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/qwen/qwen3-coder:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"qwen3-coder-480b-free"}},
+      {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/z-ai/glm-4.5-air:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"glm-4-5-air-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/nousresearch/hermes-3-llama-3.1-405b:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"hermes-3-405b-free"}},
       {"model_name":"fleet-agent","litellm_params":{"model":"openrouter/meta-llama/llama-3.2-3b-instruct:free","api_key":"os.environ/OPENROUTER_API_KEY"},"model_info":{"id":"llama-3-2-3b-free"}},
       {"model_name":"Qwen/Qwen2.5-7B","litellm_params":{"model":"openai/Qwen/Qwen2.5-7B-Instruct-AWQ","api_base":"http://192.168.1.19:8000/v1","api_key":"not-needed"},"model_info":{"id":"qwen-25-7b-bare-metal"}},
