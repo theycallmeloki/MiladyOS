@@ -55,6 +55,7 @@ loki:
     volume_enabled: true
   compactor:
     retention_enabled: true
+    delete_request_store: filesystem
 
 # Disable caches (not needed for single binary)
 chunksCache:

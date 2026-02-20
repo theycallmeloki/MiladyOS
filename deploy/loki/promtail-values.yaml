@@ -5,20 +5,6 @@ config:
   snippets:
     pipelineStages:
       - cri: {}
-    extraScrapeConfigs: |
-      # Add kubernetes namespace and pod labels
-      - job_name: kubernetes-pods
-        pipeline_stages:
-          - cri: {}
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app]
-            target_label: app
-          - source_labels: [__meta_kubernetes_namespace]
-            target_label: namespace
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: pod
 
 # Tolerate all taints so promtail runs on every node
 tolerations:
