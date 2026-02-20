@@ -33,6 +33,8 @@ data:
     MAX_CTX_MSGS       = int(os.environ.get("AGENT_MAX_CTX_MSGS", "6"))
     MAX_TOOL_RESULT    = int(os.environ.get("AGENT_MAX_TOOL_RESULT", "2000"))  # chars
     MAX_TOOLS_PER_TURN = int(os.environ.get("AGENT_MAX_TOOLS_PER_TURN", "3"))
+    MAX_TOOL_RETRIES   = int(os.environ.get("AGENT_MAX_TOOL_RETRIES",   "3"))
+    MAX_LLM_RETRIES    = int(os.environ.get("AGENT_MAX_LLM_RETRIES",    "2"))
     DATUM_DIR          = DATA_DIR / "datums"
     TRACE_DIR          = DATA_DIR / "traces"
     QUEUE_CONCURRENCY  = int(os.environ.get("QUEUE_CONCURRENCY", "3"))
@@ -320,12 +322,40 @@ data:
                 iters_done = iteration + 1
                 emit({"type": "iter_start", "iter": iters_done})
 
-                response = llm.chat.completions.create(
-                    model=MODEL,
-                    messages=messages,
-                    tools=tools or None,
-                    max_tokens=2048,
-                )
+                # LLM call with retry + context truncation on length errors
+                response = None
+                llm_messages = messages[:]
+                for llm_attempt in range(MAX_LLM_RETRIES):
+                    try:
+                        response = llm.chat.completions.create(
+                            model=MODEL,
+                            messages=llm_messages,
+                            tools=tools or None,
+                            max_tokens=2048,
+                        )
+                        break
+                    except Exception as llm_err:
+                        err_str = str(llm_err).lower()
+                        is_ctx = any(k in err_str for k in
+                                     ("context", "token", "length", "too long", "maximum"))
+                        if is_ctx and llm_attempt < MAX_LLM_RETRIES - 1:
+                            # Truncate: keep system prompt + most recent messages
+                            keep = max(2, len(llm_messages) // 2)
+                            llm_messages = llm_messages[:1] + llm_messages[-keep:]
+                            log.warning("  [llm] context too long — truncated to %d msgs, retrying",
+                                        len(llm_messages))
+                            emit({"type": "ctx_truncated", "kept": len(llm_messages)})
+                        elif llm_attempt < MAX_LLM_RETRIES - 1:
+                            wait = 2 ** llm_attempt
+                            log.warning("  [llm] call failed (attempt %d): %s — retry in %ds",
+                                        llm_attempt + 1, llm_err, wait)
+                            emit({"type": "llm_retry", "attempt": llm_attempt + 1, "wait": wait})
+                            await asyncio.sleep(wait)
+                        else:
+                            raise
+                if response is None:
+                    break
+
                 msg = response.choices[0].message
                 actual_model = getattr(response, "model", MODEL)
                 usage = getattr(response, "usage", None)
@@ -372,13 +402,32 @@ data:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                     log.info("  [call] %s | args=%s", tc.function.name, json.dumps(args)[:200])
                     emit({"type": "tool_start", "name": tc.function.name, "input": args})
-                    try:
-                        result  = await session.call_tool(tc.function.name, args)
-                        content_items = result.get("content", [])
-                        content = content_items[0].get("text", "") if content_items else str(result)
-                    except Exception as e:
-                        content = f"Tool error: {e}"
-                        log.error("  [error] %s failed: %s", tc.function.name, e)
+                    content = None
+                    for tool_attempt in range(MAX_TOOL_RETRIES):
+                        try:
+                            result = await session.call_tool(tc.function.name, args)
+                            content_items = result.get("content", [])
+                            content = (content_items[0].get("text", "")
+                                       if content_items else str(result))
+                            if tool_attempt > 0:
+                                log.info("  [tool ok] %s succeeded on attempt %d",
+                                         tc.function.name, tool_attempt + 1)
+                                emit({"type": "tool_retry_ok", "name": tc.function.name,
+                                      "attempt": tool_attempt + 1})
+                            break
+                        except Exception as e:
+                            log.warning("  [tool retry] %s attempt %d: %s",
+                                        tc.function.name, tool_attempt + 1, e)
+                            if tool_attempt < MAX_TOOL_RETRIES - 1:
+                                wait = 2 ** tool_attempt
+                                emit({"type": "tool_retry", "name": tc.function.name,
+                                      "attempt": tool_attempt + 1, "wait": wait})
+                                await asyncio.sleep(wait)
+                            else:
+                                content = f"Tool error after {MAX_TOOL_RETRIES} attempts: {e}"
+                                log.error("  [tool fail] %s: %s", tc.function.name, e)
+                                emit({"type": "tool_error", "name": tc.function.name,
+                                      "error": str(e)})
                     if len(content) > MAX_TOOL_RESULT:
                         content = content[:MAX_TOOL_RESULT] + f"\n... [truncated, {len(content)} chars total]"
                     log.info("  [result] %s | %s%s",

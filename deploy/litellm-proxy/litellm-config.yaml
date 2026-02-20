@@ -6,7 +6,9 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      # ── Free OpenRouter models — 70B+ only, tool-calling confirmed ─────────
+      # ── Free OpenRouter models — tool-calling confirmed ────────────────────
+      # Usage-based routing distributes across all of these; exhausted/rate-
+      # limited models are cooled down and others absorb the load.
 
       - model_name: "fleet-agent"
         litellm_params:
@@ -22,13 +24,69 @@ data:
         model_info:
           id: "llama-3-3-70b-free"
 
-      # Solar Pro 3: 128k context window, useful for long-context tasks
+      # Solar Pro 3: 128k context
       - model_name: "fleet-agent"
         litellm_params:
           model: "openrouter/upstage/solar-pro-3:free"
           api_key: "os.environ/OPENROUTER_API_KEY"
         model_info:
           id: "solar-pro-3-free"
+
+      # DeepSeek R1: strong reasoning, 164k context
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/deepseek/deepseek-r1:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "deepseek-r1-free"
+
+      # DeepSeek V3: fast, 64k context
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/deepseek/deepseek-chat-v3-0324:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "deepseek-v3-free"
+
+      # Gemini 2.0 Flash: 1M context window, very fast
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/google/gemini-2.0-flash-exp:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "gemini-2-flash-free"
+
+      # Gemma 3 27B: 131k context
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/google/gemma-3-27b-it:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "gemma-3-27b-free"
+
+      # Mistral Small 3.1: 128k context
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/mistralai/mistral-small-3.1-24b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "mistral-small-3-1-free"
+
+      # Qwen3 235B: large, strong tool use
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/qwen/qwen3-235b-a22b:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "qwen3-235b-free"
+
+      # NVIDIA Llama Nemotron 70B: 131k context, tool-calling
+      - model_name: "fleet-agent"
+        litellm_params:
+          model: "openrouter/nvidia/llama-3.1-nemotron-70b-instruct:free"
+          api_key: "os.environ/OPENROUTER_API_KEY"
+        model_info:
+          id: "nemotron-70b-free"
 
       # ── Dedicated inference (fallbacks) ───────────────────────────────────
       # Bare-metal RTX 3080 Ti (AWQ 4-bit, low latency, no cloud dependency)
@@ -58,11 +116,11 @@ data:
       health_check_interval: 0   # disable background health-check model calls
 
     router_settings:
-      num_retries: 1
-      timeout: 60
+      num_retries: 3
+      timeout: 90
       routing_strategy: "usage-based-routing-v2"
-      allowed_fails: 1          # mark model unhealthy after 1 failure
-      cooldown_time: 120        # seconds before retrying a failed model
+      allowed_fails: 2          # tolerate transient errors before cooling down
+      cooldown_time: 60         # shorter cooldown — free tier resets quickly
       fallbacks:
         - "fleet-agent": ["Nanbeige/Nanbeige4.1-3B", "Nanbeige/Nanbeige4.1-3B-fallback"]
         - "Nanbeige/Nanbeige4.1-3B": ["Nanbeige/Nanbeige4.1-3B-fallback"]
