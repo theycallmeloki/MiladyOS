@@ -87,6 +87,8 @@ spec:
           value: "localhost"
         - name: REDIS_PORT
           value: "6379"
+        - name: USE_EXTERNAL_REDIS
+          value: "true"
         volumeMounts:
         - name: miladyos-home
           mountPath: /var/jenkins_home
