@@ -1,0 +1,321 @@
+# Model Auditor — automatically maintains litellm-config-live
+#
+# Reads seed candidate pool from litellm-config (git-managed),
+# tests every model for tool-calling correctness + latency,
+# and writes litellm-config-live (runtime-managed) with only
+# passing models. LiteLLM prefers the live config on restart.
+#
+# Flow:
+#   litellm-config (git/ArgoCD) — candidate pool, never shrinks
+#         ↓ read
+#   model-auditor (CronJob, every 4h) — test + prune
+#         ↓ write
+#   litellm-config-live (K8s only) — active model list + tracking
+#         ↓ preferred by init-container
+#   LiteLLM Deployment
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-auditor
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: model-auditor
+  namespace: default
+rules:
+  # Read seed config + callbacks
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["litellm-config", "litellm-callbacks-config"]
+    verbs: ["get"]
+  # Read/create/patch the live config (auditor owns this)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["litellm-config-live"]
+    verbs: ["get", "create", "patch"]
+  # Allow creating litellm-config-live if it doesn't exist yet
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  # Restart litellm deployment when model list changes
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["litellm-proxy"]
+    verbs: ["get", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-auditor
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: model-auditor
+subjects:
+  - kind: ServiceAccount
+    name: model-auditor
+    namespace: default
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: model-auditor
+  namespace: default
+  labels:
+    app: model-auditor
+spec:
+  # Every 4 hours. To trigger manually:
+  # kubectl create job -n default audit-manual --from=cronjob/model-auditor
+  schedule: "0 */4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 7200
+      template:
+        spec:
+          serviceAccountName: model-auditor
+          restartPolicy: OnFailure
+          containers:
+            - name: auditor
+              image: python:3.12-slim
+              env:
+                - name: LITELLM_BASE
+                  value: "http://litellm.default.svc.cluster.local:4000/v1"
+                - name: FAIL_THRESHOLD
+                  value: "3"
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              command:
+                - python3
+                - -c
+                - |
+                  import subprocess, sys
+                  subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyyaml"], check=True)
+
+                  import json, os, time, urllib.request, urllib.error, ssl, yaml
+                  from datetime import datetime, timezone
+
+                  # ── K8s API via service account ──────────────────────────────
+                  K8S  = "https://kubernetes.default.svc"
+                  TOK  = open("/var/run/secrets/kubernetes.io/serviceaccount/token").read().strip()
+                  CA   = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+                  NS   = open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
+                  CTX  = ssl.create_default_context(cafile=CA)
+
+                  def k8s(method, path, body=None, ct="application/json"):
+                      data = json.dumps(body).encode() if body else None
+                      hdrs = {"Authorization": f"Bearer {TOK}"}
+                      if data: hdrs["Content-Type"] = ct
+                      req  = urllib.request.Request(f"{K8S}{path}", data=data, headers=hdrs, method=method)
+                      try:
+                          with urllib.request.urlopen(req, context=CTX, timeout=15) as r:
+                              return json.loads(r.read()), r.status
+                      except urllib.error.HTTPError as e:
+                          try:    err = json.loads(e.read())
+                          except: err = {"message": str(e)}
+                          return err, e.code
+
+                  def cm_get(name):
+                      d, s = k8s("GET", f"/api/v1/namespaces/{NS}/configmaps/{name}")
+                      return d if s == 200 else None
+
+                  def cm_apply(name, data):
+                      """Create or patch a ConfigMap."""
+                      existing = cm_get(name)
+                      if existing:
+                          k8s("PATCH", f"/api/v1/namespaces/{NS}/configmaps/{name}",
+                              body={"data": data}, ct="application/merge-patch+json")
+                          print(f"  Patched ConfigMap {name}", flush=True)
+                      else:
+                          k8s("POST", f"/api/v1/namespaces/{NS}/configmaps",
+                              body={"apiVersion":"v1","kind":"ConfigMap",
+                                    "metadata":{"name":name,"namespace":NS},"data":data})
+                          print(f"  Created ConfigMap {name}", flush=True)
+
+                  def deployment_restart(name):
+                      ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                      _, s = k8s("PATCH", f"/apis/apps/v1/namespaces/{NS}/deployments/{name}",
+                          body={"spec":{"template":{"metadata":{"annotations":{
+                              "kubectl.kubernetes.io/restartedAt": ts}}}}},
+                          ct="application/merge-patch+json")
+                      if s in (200, 201):
+                          print(f"  Triggered rollout restart for {name}", flush=True)
+                      else:
+                          print(f"  WARNING: restart patch returned HTTP {s}", flush=True)
+
+                  # ── Model test ───────────────────────────────────────────────
+                  LITELLM = os.environ.get("LITELLM_BASE", "http://litellm.default.svc.cluster.local:4000/v1")
+                  FAIL_THRESHOLD = int(os.environ.get("FAIL_THRESHOLD", "3"))
+
+                  TOOL = [{
+                      "type": "function",
+                      "function": {
+                          "name": "kubectl_get",
+                          "description": "Run kubectl get on the cluster",
+                          "parameters": {
+                              "type": "object",
+                              "properties": {
+                                  "resource":  {"type": "string"},
+                                  "namespace": {"type": "string"}
+                              },
+                              "required": ["resource"]
+                          }
+                      }
+                  }]
+                  MESSAGES = [
+                      {"role": "system", "content":
+                          "You are a Kubernetes ops agent. Always use the provided tools when asked to perform cluster operations."},
+                      {"role": "user", "content":
+                          "Get all pods in the default namespace using your tools right now."}
+                  ]
+
+                  def test_model(model_id, timeout=60):
+                      payload = json.dumps({
+                          "model": model_id, "messages": MESSAGES, "tools": TOOL,
+                          "tool_choice": "auto", "max_tokens": 128, "temperature": 0
+                      }).encode()
+                      req = urllib.request.Request(f"{LITELLM}/chat/completions", data=payload,
+                          headers={"Content-Type": "application/json",
+                                   "Authorization": "Bearer sk-milady"},
+                          method="POST")
+                      t0 = time.time()
+                      try:
+                          with urllib.request.urlopen(req, timeout=timeout) as r:
+                              lat   = round(time.time() - t0, 2)
+                              body  = json.loads(r.read())
+                              ch    = body["choices"][0]
+                              called = bool(ch["message"].get("tool_calls"))
+                              return {"ok": True, "tool_call": called, "latency": lat,
+                                      "finish": ch.get("finish_reason")}
+                      except Exception as e:
+                          return {"ok": False, "latency": round(time.time()-t0, 2), "error": str(e)[:200]}
+
+                  # ── Load seed config (candidate pool) ───────────────────────
+                  print("=== Model Auditor starting ===", flush=True)
+                  seed_cm = cm_get("litellm-config")
+                  if not seed_cm:
+                      print("ERROR: litellm-config seed not found — aborting", flush=True)
+                      sys.exit(1)
+
+                  seed_cfg   = yaml.safe_load(seed_cm["data"]["config.yaml"])
+                  candidates = seed_cfg.get("model_list", [])
+                  print(f"Seed: {len(candidates)} candidate models", flush=True)
+
+                  # ── Load tracking data from previous run ─────────────────────
+                  live_cm  = cm_get("litellm-config-live")
+                  tracking = {}
+                  if live_cm:
+                      raw = (live_cm.get("data") or {}).get("tracking.json", "")
+                      if raw:
+                          tracking = json.loads(raw)
+                  print(f"Tracking: {len(tracking)} models from previous audit", flush=True)
+
+                  # ── Test every candidate ──────────────────────────────────────
+                  now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                  for entry in candidates:
+                      mid = (entry.get("model_info") or {}).get("id")
+                      if not mid:
+                          continue
+                      print(f"  [{mid}] ... ", end="", flush=True)
+                      r = test_model(mid)
+
+                      t = tracking.get(mid, {
+                          "consecutive_failures": 0, "total_passes": 0, "total_tests": 0
+                      })
+                      t["total_tests"]  = t.get("total_tests", 0) + 1
+                      t["last_checked"] = now
+                      t["last_latency"] = r.get("latency")
+
+                      if r["ok"] and r.get("tool_call"):
+                          t["consecutive_failures"] = 0
+                          t["total_passes"]         = t.get("total_passes", 0) + 1
+                          t["last_result"]          = "pass"
+                          print(f"PASS  {r['latency']}s", flush=True)
+                      elif r["ok"]:
+                          t["consecutive_failures"] = t.get("consecutive_failures", 0) + 1
+                          t["last_result"]          = "text-only"
+                          print(f"TEXT-ONLY  {r['latency']}s  (no tool call)", flush=True)
+                      else:
+                          t["consecutive_failures"] = t.get("consecutive_failures", 0) + 1
+                          t["last_result"]          = "fail"
+                          t["last_error"]           = r.get("error", "")
+                          print(f"FAIL  {r.get('error','')[:100]}", flush=True)
+
+                      tracking[mid] = t
+                      time.sleep(2)  # gentle on rate limits
+
+                  # ── Build live config (exclude consistently failing models) ───
+                  passing = []
+                  pruned  = []
+                  for entry in candidates:
+                      mid = (entry.get("model_info") or {}).get("id")
+                      cf  = tracking.get(mid, {}).get("consecutive_failures", 0)
+                      if cf >= FAIL_THRESHOLD:
+                          pruned.append(mid)
+                      else:
+                          passing.append(entry)
+
+                  print(f"\nResult: {len(passing)} passing, {len(pruned)} pruned", flush=True)
+                  if pruned:
+                      print(f"Pruned: {pruned}", flush=True)
+
+                  # Preserve all non-model config sections from seed
+                  live_cfg = {
+                      "model_list":        passing,
+                      "litellm_settings":  seed_cfg.get("litellm_settings",  {}),
+                      "general_settings":  seed_cfg.get("general_settings",  {}),
+                      "router_settings":   seed_cfg.get("router_settings",   {}),
+                  }
+                  live_yaml = yaml.dump(live_cfg, default_flow_style=False,
+                                        allow_unicode=True, sort_keys=False)
+
+                  cm_apply("litellm-config-live", {
+                      "config.yaml":   live_yaml,
+                      "tracking.json": json.dumps(tracking, indent=2),
+                  })
+
+                  # Restart LiteLLM only if something was actually pruned
+                  if pruned:
+                      print("Restarting litellm-proxy to apply pruned model list...", flush=True)
+                      deployment_restart("litellm-proxy")
+                  else:
+                      print("No models pruned — no restart needed", flush=True)
+
+                  # ── Print summary ────────────────────────────────────────────
+                  pruned_set = set(pruned)
+                  pass_ids   = {(e.get("model_info") or {}).get("id") for e in passing}
+
+                  print("\n=== AUDIT SUMMARY ===")
+                  buckets = {"pass": [], "text-only": [], "fail": [], "pruned": []}
+                  for mid, t in sorted(tracking.items()):
+                      if mid in pruned_set:
+                          buckets["pruned"].append((mid, t))
+                      else:
+                          buckets.get(t.get("last_result","fail"), buckets["fail"]).append((mid, t))
+
+                  icons = {"pass":"✅", "text-only":"⚠️ ", "fail":"❌", "pruned":"🗑️ "}
+                  for bucket, entries in buckets.items():
+                      for mid, t in entries:
+                          p   = t.get("total_passes", 0)
+                          n   = t.get("total_tests",  0)
+                          lat = t.get("last_latency", "?")
+                          cf  = t.get("consecutive_failures", 0)
+                          print(f"{icons[bucket]} {mid}: {p}/{n} passes, cf={cf}, last={lat}s")
+
+                  print(f"\nDone. Live config: {len(passing)} models active.", flush=True)
