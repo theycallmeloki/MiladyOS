@@ -235,6 +235,18 @@ data:
                     max_tokens=2048,
                 )
                 msg = response.choices[0].message
+                actual_model = getattr(response, "model", MODEL)
+                usage = getattr(response, "usage", None)
+                usage_str = (f"in={usage.prompt_tokens} out={usage.completion_tokens}"
+                             if usage else "usage=?")
+                log.info("--- iter %d/%d | model=%s | %s ---",
+                         iteration + 1, MAX_ITERS, actual_model, usage_str)
+
+                # Log reasoning/text content if present
+                if msg.content:
+                    preview = msg.content.replace("\n", " ")[:300]
+                    log.info("  [reasoning] %s%s", preview,
+                             " ..." if len(msg.content) > 300 else "")
 
                 assistant_msg = {"role": "assistant", "content": msg.content or ""}
                 if msg.tool_calls:
@@ -250,7 +262,7 @@ data:
                 new_msgs.append(assistant_msg)
 
                 if not msg.tool_calls:
-                    log.info("Agent done after %d iteration(s)", iteration + 1)
+                    log.info("  [done] no more tool calls after %d iteration(s)", iteration + 1)
                     if msg.content:
                         append_log(channel, {"role": "assistant", "content": msg.content})
                     break
@@ -259,21 +271,25 @@ data:
                 active_calls = msg.tool_calls[:MAX_TOOLS_PER_TURN]
                 skipped = len(msg.tool_calls) - len(active_calls)
                 if skipped:
-                    log.info("Skipping %d tool calls (limit %d/turn)", skipped, MAX_TOOLS_PER_TURN)
+                    log.info("  [skip] %d tool calls over limit (%d/turn)", skipped, MAX_TOOLS_PER_TURN)
 
                 for tc in active_calls:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                    log.info("  -> %s(%s)", tc.function.name, list(args.keys()))
+                    log.info("  [call] %s | args=%s", tc.function.name, json.dumps(args)[:200])
                     try:
                         result  = await session.call_tool(tc.function.name, args)
                         content_items = result.get("content", [])
                         content = content_items[0].get("text", "") if content_items else str(result)
                     except Exception as e:
                         content = f"Tool error: {e}"
-                        log.error("Tool %s failed: %s", tc.function.name, e)
+                        log.error("  [error] %s failed: %s", tc.function.name, e)
                     # Truncate long results to stay within context window
                     if len(content) > MAX_TOOL_RESULT:
                         content = content[:MAX_TOOL_RESULT] + f"\n... [truncated, {len(content)} chars total]"
+                    log.info("  [result] %s | %s%s",
+                             tc.function.name,
+                             content[:200].replace("\n", " "),
+                             " ..." if len(content) > 200 else "")
                     tool_msg = {"role": "tool", "tool_call_id": tc.id, "content": content}
                     messages.append(tool_msg)
                     new_msgs.append(tool_msg)
@@ -283,7 +299,7 @@ data:
                         break  # don't execute any more tools this turn
 
                 if replied:
-                    log.info("Reply posted — stopping agent loop")
+                    log.info("  [posted] reply sent — stopping loop")
                     break
 
                 # For skipped tool calls, add placeholder results

@@ -41,6 +41,37 @@ data:
         )
 
 
+    def notify_mattermost(job_name: str, message: str):
+        """Post a message to Mattermost if NOTIFY_CHANNEL is set."""
+        import sys
+        import urllib.request
+        notify_channel = os.environ.get("RLM_NOTIFY_CHANNEL", "")
+        mm_url = os.environ.get("MATTERMOST_URL", "")
+        mm_token = os.environ.get("MATTERMOST_BOT_TOKEN", "")
+        print(f"[notify] channel={notify_channel!r} mm_url={mm_url!r} token_len={len(mm_token)}", flush=True)
+        if not (notify_channel and mm_url and mm_token):
+            print("[notify] skipping — missing config", flush=True)
+            return
+        try:
+            headers = {"Authorization": f"Bearer {mm_token}", "Content-Type": "application/json"}
+            # Resolve team
+            req = urllib.request.Request(f"{mm_url}/api/v4/teams/name/milady", headers=headers)
+            team_id = json.loads(urllib.request.urlopen(req, timeout=10).read())["id"]
+            print(f"[notify] team_id={team_id}", flush=True)
+            # Resolve channel
+            req = urllib.request.Request(f"{mm_url}/api/v4/teams/{team_id}/channels/name/{notify_channel}", headers=headers)
+            channel_id = json.loads(urllib.request.urlopen(req, timeout=10).read())["id"]
+            print(f"[notify] channel_id={channel_id}", flush=True)
+            # Post
+            payload = json.dumps({"channel_id": channel_id, "message": message}).encode()
+            req = urllib.request.Request(f"{mm_url}/api/v4/posts", data=payload, headers=headers, method="POST")
+            resp = urllib.request.urlopen(req, timeout=10)
+            print(f"[notify] posted ok, status={resp.status}", flush=True)
+        except Exception as e:
+            print(f"[notify] ERROR: {e}", flush=True)
+            import traceback; traceback.print_exc(); sys.stdout.flush()
+
+
     def main():
         from kubernetes import client, config
 
@@ -89,12 +120,21 @@ data:
             )
 
             result = rlm.completion(prompt)
+            response_text = result.response if isinstance(result.response, str) else str(result.response or "")
+            print(f"[coordinator] completed, response_len={len(response_text)}", flush=True)
 
             patch_status(custom_api, namespace, job_name, {
                 "phase": "Completed",
-                "result": result.response,
+                "result": response_text,
                 "iterations": max_iterations,
             })
+
+            notify_mattermost(
+                job_name,
+                f"**RLM job `{job_name}` completed** ✓\n\n"
+                f"**Prompt:** {prompt[:200]}\n\n"
+                f"**Result:**\n{response_text[:2000] if response_text else '_(no result)_'}"
+            )
 
         except Exception:
             error_msg = traceback.format_exc()
@@ -105,6 +145,12 @@ data:
                 })
             except Exception:
                 pass
+            notify_mattermost(
+                job_name,
+                f"**RLM job `{job_name}` failed** ✗\n\n"
+                f"**Prompt:** {prompt[:200]}\n\n"
+                f"**Error:** {error_msg[-500:]}"
+            )
             raise
 
 
