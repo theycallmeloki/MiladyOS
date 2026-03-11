@@ -622,7 +622,6 @@ def metrics():
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    nft_auth.update_connection_metrics()
     return jsonify({"status": "healthy"})
 
 if __name__ == '__main__':
