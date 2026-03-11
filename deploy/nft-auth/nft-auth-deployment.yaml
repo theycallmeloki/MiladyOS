@@ -42,31 +42,40 @@ spec:
         command: ["/bin/bash", "-c"]
         args:
         - |
-          pip install flask web3 redis requests eth-account prometheus-client &&
+          pip install --no-cache-dir flask web3 redis requests eth-account prometheus-client &&
           python /app/nft-auth-service.py
         volumeMounts:
         - name: nft-auth-service
           mountPath: /app/nft-auth-service.py
           subPath: nft-auth-service.py
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
         livenessProbe:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 5
           periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 6
         resources:
           requests:
             memory: "128Mi"
             cpu: "100m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "512Mi"
+            cpu: "500m"
       volumes:
       - name: nft-auth-service
         configMap:
