@@ -53,21 +53,21 @@ spec:
             path: /health
             port: 8080
           periodSeconds: 5
-          timeoutSeconds: 2
+          timeoutSeconds: 5
           failureThreshold: 60
         livenessProbe:
           httpGet:
             path: /health
             port: 8080
           periodSeconds: 10
-          timeoutSeconds: 2
+          timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: 8080
           periodSeconds: 5
-          timeoutSeconds: 2
+          timeoutSeconds: 5
           failureThreshold: 6
         resources:
           requests:
