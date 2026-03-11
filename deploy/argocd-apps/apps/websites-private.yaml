@@ -6,8 +6,8 @@ metadata:
 spec:
   project: default
   source:
-    # Private repository for business logic (POC: welcome app)
-    # Credentials managed in ArgoCD: Applications -> welcome-private-poc -> Settings -> Git (Repository Settings)
+    # Private repository for websites-private business logic
+    # Credentials managed in ArgoCD: Applications -> websites-private -> Settings -> Git (Repository Settings)
     repoURL: https://github.com/theycallmeloki/self-hosted-k8s-private.git
     targetRevision: main
     path: deploy/websites
