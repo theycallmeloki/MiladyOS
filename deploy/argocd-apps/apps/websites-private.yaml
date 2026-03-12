@@ -6,11 +6,17 @@ metadata:
 spec:
   project: default
   source:
-    # Private repository for websites-private business logic
+    # Private repository for private manifests/apps.
+    # This scans deploy/** recursively so new private manifests can be added
+    # without changing MiladyOS app-of-apps each time.
     # Credentials managed in ArgoCD: Applications -> websites-private -> Settings -> Git (Repository Settings)
     repoURL: https://github.com/theycallmeloki/self-hosted-k8s-private.git
     targetRevision: main
-    path: deploy/websites
+    path: deploy
+    directory:
+      recurse: true
+      # Ignore non-Kubernetes YAML/docs used by Helm/app references.
+      exclude: '{**/*-values.yaml,**/*.md}'
   destination:
     server: https://kubernetes.default.svc
     namespace: default
