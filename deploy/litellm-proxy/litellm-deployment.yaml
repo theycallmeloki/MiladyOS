@@ -17,6 +17,8 @@ spec:
       labels:
         app: litellm-proxy
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: talos-0u4-tjd
       initContainers:
       - name: init-log-dir
         image: busybox
