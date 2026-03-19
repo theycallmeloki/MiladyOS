@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mirofish-env
+  namespace: miladyos
+type: Opaque
+stringData:
+  LLM_API_KEY: "sk-milady"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mirofish
+  namespace: miladyos
+  labels:
+    app: mirofish
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mirofish
+  template:
+    metadata:
+      labels:
+        app: mirofish
+    spec:
+      containers:
+      - name: mirofish
+        image: ghcr.io/666ghj/mirofish:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: LLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: mirofish-env
+              key: LLM_API_KEY
+        - name: LLM_BASE_URL
+          value: "https://litellm.transparentlyrotatableproxy.me/v1"
+        - name: LLM_MODEL_NAME
+          value: "fleet-agent"
+        ports:
+        - name: frontend
+          containerPort: 3000
+        - name: backend
+          containerPort: 5001
+        readinessProbe:
+          httpGet:
+            path: /
+            port: frontend
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: frontend
+          initialDelaySeconds: 30
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mirofish
+  namespace: miladyos
+  labels:
+    app: mirofish
+spec:
+  selector:
+    app: mirofish
+  ports:
+  - name: http
+    port: 80
+    targetPort: frontend
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mirofish
+  namespace: miladyos
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: mirofish.transparentlyrotatableproxy.me
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mirofish
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - mirofish.transparentlyrotatableproxy.me
+    secretName: mirofish-transparentlyrotatableproxy-me-tls
