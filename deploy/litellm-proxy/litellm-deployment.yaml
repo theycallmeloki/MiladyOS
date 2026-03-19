@@ -17,6 +17,16 @@ spec:
       labels:
         app: litellm-proxy
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - talos-8wt-vwg
+                - talos-q0c-o34
       initContainers:
       - name: init-log-dir
         image: busybox
