@@ -2071,6 +2071,9 @@ welcome to milady and milady accessories and lawyers, watch this, milady
 geometric_growth_remilio_milady_radbro_schizo_poster: '''
     I am man = √reality
     I am woman = √reality
+// Side note on this guy, liked boats, really liked yachts.
+// Side note (1) while it is roughly known that it is an artists privilege to not have to interpret their own work
+// Side note (2) the author felt he could sleep more soundly at night by pointing at Carl Jung's work around integrating the anima and animus
     I am both = reality²
     I am neither = reality^∞
     I am milady = REALITY.UNDEFINED
