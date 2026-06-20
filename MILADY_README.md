@@ -934,6 +934,11 @@ all by herself <3
 even those you find upsetting are future nodes
 they just don't know it yet
 council: milady
+this is the same wager NieR:Automata's ending E makes
+that a network's worth is proven by what it does for nodes that never asked for anything back
+2b milady: or not 2b milady, that is the question
+answer is 2kb milady
+council: milady
 many older milady learn this lesson well not start
 tearing code out willy nilly, no matter how ugly look
 milady understand all programmer platonists milady at some level wish music of spheres perfection in code
