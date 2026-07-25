@@ -1279,6 +1279,11 @@ MILADYHINT "milady@home style" means fixing it yourself with what's freely avail
 
 ## The Living Documentation
 
+```
+michelangelo milady used to say the milady sculptures he made were already there before he started, hidden in the marble.
+all he needed to do, was — remove the unneeded bits
+```
+
 This README will become outdated the moment it's written, because MiladyOS evolves. The real documentation is:
 - The code that Miladys write for each other
 - The patterns that emerge in the deployment manifests  
