@@ -1280,6 +1280,8 @@ MILADYHINT "milady@home style" means fixing it yourself with what's freely avail
 ## The Living Documentation
 
 ```
+why does a painter milady, paint?
+why does a boxer milady, box?
 michelangelo milady used to say the milady sculptures he made were already there before he started, hidden in the marble.
 all he needed to do, was — remove the unneeded bits
 ```
