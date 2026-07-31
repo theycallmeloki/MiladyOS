@@ -147,8 +147,14 @@ RUN echo "Building llama.cpp with CPU-only support" && \
 
 WORKDIR /
 
-# Node.js and npm are still needed for other parts
-RUN apt-get update && apt-get install -y nodejs npm
+# Setup Node.js LTS repository (Node.js 20.x or 22.x)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+
+# Node.js is still needed for other parts
+RUN apt-get update && apt-get install -y nodejs
+
+# Install Pi 
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
 # Install dmux
 RUN npm install -g dmux
