@@ -56,6 +56,20 @@ RUN curl -sLS https://get.k3sup.dev | sh
 # Install gosu, pip, venv and ansible
 RUN apt-get update && apt-get install -y gosu ansible sshpass python3-venv python3-pip jq libcap2-bin zip golang-go build-essential
 
+# Install C build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \                                                                                                                                                                                                                                                                                                                                      
+    gcc-multilib g++-multilib \                                                                                                                                                                                                                                                                                                                            
+    bison flex m4 \                                                                                                                                                                                                                                                                                                                                        
+    mingw-w64 gcc-mingw-w64 \                                                                                                                                                                                                                                                                                                                              
+    pkg-config gettext \                                                                                                                                                                                                                                                                                                                                   
+    zlib1g-dev libpng-dev libjpeg-dev libbz2-dev \                                                                                                                                                                                                                                                                                                         
+    libfreetype-dev libx11-dev libxext-dev libxi-dev libxrandr-dev \                                                                                                                                                                                                                                                                                       
+    libgl-dev libvulkan-dev libosmesa6-dev libxml2-dev \                                                                                                                                                                                                                                                                                                   
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \                                                                                                                                                                                                                                                                                                 
+    libcups2-dev libpulse-dev libsdl2-dev libdbus-1-dev libudev-dev \                                                                                                                                                                                                                                                                                      
+    xvfb 
+
 RUN python3 -m pip install nbformat nbconvert --break-system-packages
 
 RUN python3 -m pip install crdloadserver uvicorn fastapi --break-system-packages
