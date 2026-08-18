@@ -182,7 +182,7 @@ The monitoring stack (Prometheus, Grafana, Alertmanager) is deployed automatical
 
 ### Access Grafana
 
-Grafana is available via ingress at `grafana.transparentlyrotatableproxy.me`.
+Grafana is available via ingress at `grafana.transparentlyrotatableproxy.site`.
 - No login required (anonymous admin access is enabled)
 
 ## Values Files Reference
@@ -274,14 +274,14 @@ All domains have `@` and `*` A records pointing to the static ISP IP:
 - radbrocorp.com
 - theycallmeloki.site
 - tiniercorp.com
-- transparentlyrotatableproxy.me
+- transparentlyrotatableproxy.site
 
-Service subdomains use `transparentlyrotatableproxy.me`:
-- `argocd.transparentlyrotatableproxy.me` — ArgoCD
-- `grafana.transparentlyrotatableproxy.me` — Grafana
-- `ha.transparentlyrotatableproxy.me` — Home Assistant
-- `litellm.transparentlyrotatableproxy.me` — LiteLLM Proxy
-- `pachd.transparentlyrotatableproxy.me` — Pachyderm
+Service subdomains use `transparentlyrotatableproxy.site`:
+- `argocd.transparentlyrotatableproxy.site` — ArgoCD
+- `grafana.transparentlyrotatableproxy.site` — Grafana
+- `ha.transparentlyrotatableproxy.site` — Home Assistant
+- `litellm.transparentlyrotatableproxy.site` — LiteLLM Proxy
+- `pachd.transparentlyrotatableproxy.site` — Pachyderm
 
 ## Next Steps
 

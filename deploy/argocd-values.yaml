@@ -19,7 +19,7 @@ server:
   ingress:
     enabled: true
     ingressClassName: nginx
-    hostname: argocd.transparentlyrotatableproxy.me
+    hostname: argocd.transparentlyrotatableproxy.site
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"

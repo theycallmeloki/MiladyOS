@@ -25,11 +25,11 @@ grafana:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-    - grafana.transparentlyrotatableproxy.me
+    - grafana.transparentlyrotatableproxy.site
     tls:
     - secretName: grafana-transparentlyrotatableproxy-me-tls
       hosts:
-      - grafana.transparentlyrotatableproxy.me
+      - grafana.transparentlyrotatableproxy.site
   sidecar:
     dashboards:
       enabled: true

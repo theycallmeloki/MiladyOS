@@ -11,7 +11,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: ha.transparentlyrotatableproxy.me
+  - host: ha.transparentlyrotatableproxy.site
     http:
       paths:
       - path: /
@@ -23,5 +23,5 @@ spec:
               number: 8123
   tls:
   - hosts:
-    - ha.transparentlyrotatableproxy.me
+    - ha.transparentlyrotatableproxy.site
     secretName: ha-transparentlyrotatableproxy-me-tls
