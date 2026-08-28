@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sandman
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # Sandman worker fleet (metacontroller DecoratorController + hook)
+    # and the control-plane Prometheus scrape config.
+    repoURL: https://github.com/theycallmeloki/sandman
+    targetRevision: main
+    path: deploy/k8s
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
