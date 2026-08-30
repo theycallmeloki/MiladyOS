@@ -1,0 +1,34 @@
+# Least-privilege access for Jenkins (in-cluster deployment uses the miladyos
+# default SA; the host container mounts the operator kubeconfig for now).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-builder
+  namespace: sandman
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kanikobuilds-admin
+  namespace: sandman
+rules:
+  - apiGroups: [build.miladyos.io]
+    resources: [kanikobuilds, kanikobuilds/status]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-builder
+  namespace: sandman
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-builder
+    namespace: sandman
+  - kind: ServiceAccount
+    name: default
+    namespace: miladyos
+roleRef:
+  kind: Role
+  name: kanikobuilds-admin
+  apiGroup: rbac.authorization.k8s.io

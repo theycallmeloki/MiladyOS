@@ -1,0 +1,77 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kanikobuilds.build.miladyos.io
+spec:
+  group: build.miladyos.io
+  names:
+    kind: KanikoBuild
+    listKind: KanikoBuildList
+    plural: kanikobuilds
+    singular: kanikobuild
+    shortNames:
+      - kb
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Destination
+          type: string
+          jsonPath: .spec.destination
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - contextBase64
+              properties:
+                image:
+                  type: string
+                  description: "Image repository name (default: <registry>/<image>:<tag>)"
+                tag:
+                  type: string
+                  description: "Image tag (default: latest)"
+                destination:
+                  type: string
+                  description: Full destination ref, overrides image/tag (e.g. 192.168.1.202:5000/foo:1)
+                contextBase64:
+                  type: string
+                  description: Build context as base64-encoded tar.gz (must contain Dockerfile at root)
+                authSecret:
+                  type: string
+                  description: Optional docker-registry secret (dockerconfigjson) for authenticated registries
+                timeoutSeconds:
+                  type: integer
+                  minimum: 60
+                  default: 900
+                resources:
+                  type: object
+                  description: Resource requests/limits for the kaniko pod
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Building, Succeeded, Failed]
+                pod:
+                  type: string
+                message:
+                  type: string
+                startTime:
+                  type: string
+                  format: date-time
+                completionTime:
+                  type: string
+                  format: date-time

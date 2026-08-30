@@ -1,0 +1,65 @@
+# In-cluster image store for sandman pipeline builds (NOT ogmiladyloki — that
+# account is MiladyOS-only). registry:2 on a longhorn PVC, exposed on the LAN
+# via metallb so the control-plane host and Jenkins can pull built images.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandman
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kaniko-registry-data
+  namespace: sandman
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kaniko-registry
+  namespace: sandman
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kaniko-registry
+  template:
+    metadata:
+      labels:
+        app: kaniko-registry
+    spec:
+      containers:
+        - name: registry
+          image: registry:2.8.3
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: kaniko-registry-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kaniko-registry
+  namespace: sandman
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 192.168.1.202
+  selector:
+    app: kaniko-registry
+  ports:
+    - port: 5000
+      targetPort: 5000

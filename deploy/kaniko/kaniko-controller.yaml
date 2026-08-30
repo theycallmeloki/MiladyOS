@@ -1,0 +1,21 @@
+# metacontroller composite controller: watches KanikoBuild CRs, sync hook
+# runs on the control workstation (192.168.1.147:8090) with the operator
+# kubeconfig — no in-cluster hook deployment, no custom images to store.
+apiVersion: metacontroller.k8s.io/v1alpha1
+kind: CompositeController
+metadata:
+  name: kaniko-build-controller
+spec:
+  parentResource:
+    apiVersion: build.miladyos.io/v1alpha1
+    resource: kanikobuilds
+  childResources:
+    - apiVersion: v1
+      resource: pods
+      updateStrategy:
+        method: InPlace
+  generateSelector: true
+  hooks:
+    sync:
+      webhook:
+        url: http://192.168.1.147:8090/sync
