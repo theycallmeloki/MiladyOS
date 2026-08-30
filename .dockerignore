@@ -1,0 +1,21 @@
+# Keep the build context small: only files COPYed by the Dockerfile are needed.
+.git
+.gitignore
+**/.git
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/venv/
+**/unsloth_compiled_cache/
+
+# Training artifacts (regenerated at runtime; huge)
+AutoDidact/lore_training_1b/
+**/*.safetensors
+
+# Node
+**/node_modules/
+
+# Workspace notes
+memory/
