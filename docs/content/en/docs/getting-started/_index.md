@@ -161,7 +161,7 @@ kubectl get pods -n default
 | Jenkins | http://localhost:8080 | CI/CD pipelines |
 | Grafana | http://localhost:3000 | Monitoring |
 | Gatus | http://localhost:8080 | Health checks |
-| NoVNC (TempleOS) | http://localhost:6080 | Divine computing |
+| TempleOS (loader) | stdio pipes | Divine computing |
 | MCP Server | http://localhost:6000 | AI agent interface |
 | Docs | http://localhost:8081 | Documentation |
 

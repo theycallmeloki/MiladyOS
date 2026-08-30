@@ -48,7 +48,7 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 │  └──────┬───────────────┬───────────────┬───────────────┬──────┘            │
 │         │               │               │               │                   │
 │  ┌──────┴──────┐ ┌──────┴──────┐ ┌──────┴──────┐ ┌──────┴──────┐            │
-│  │    Redis    │ │   Nebula    │ │   Docker    │ │   NoVNC     │            │
+│  │    Redis    │ │   Nebula    │ │   Docker    │ │ TempleOS    │            │
 │  │ (Hive Mind) │ │   (Network  │ │    -in-     │ │   (Web      │            │
 │  │             │ │Spirituality)│ │   Docker    │ │  Portal)    │            │
 │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘            │
@@ -549,18 +549,19 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
   │   │ Python Daemon   │  (wake word detection: vosk/speech_recognition)│
   │   │ milady_listener │                                                │
   │   └────────┬────────┘                                                │
-  │            │ writes "MILADY" to socket                               │
+  │            │ writes "MILADY" to loader stdin                        │
   │            ▼                                                         │
   │   ┌─────────────────┐                                                │
-  │   │  Serial Socket  │  /tmp/templeos.sock                            │
+  │   │ templeos-loader │  TempleOS kernel in Linux userspace (no QEMU)  │
+  │   │  (stdin/stdout) │                                                │
   │   └────────┬────────┘                                                │
   │            │                                                         │
   │            ▼                                                         │
   │   ┌─────────────────┐                                                │
-  │   │    TempleOS     │  HolyC reads COM1, triggers:                   │
-  │   │  (QEMU Guest)   │  - Divine RNG generation                       │
-  │   │                 │  - PC speaker tones (if audio enabled)         │
-  │   └────────┬────────┘  - Writes "MILADY" back to serial              │
+  │   │  MiladyOracle   │  HolyC reads stdin (VSYSCALL_READ), triggers:  │
+  │   │  .HC script     │  - Divine RNG generation (RandU64)             │
+  │   │                 │  - Writes "MILADY!" back to stdout             │
+  │   └────────┬────────┘                                                │
   │            │                                                         │
   │            ▼                                                         │
   │   ┌─────────────────┐                                                │
@@ -738,8 +739,7 @@ Template ──▶ EVOLVE-BLOCK Parser ──▶ LLM Mutation ──▶ Fitness 
 | Gatus | 8080 | HTTP | Health Monitoring |
 | NFT Auth | 8080 | HTTP | Authentication |
 | Display Control | 8000 | HTTP/WS | Remote Displays |
-| NoVNC | 6080 | HTTP/WS | TempleOS Web Access |
-| TempleOS VNC | 5902 | VNC | Divine Computing |
+| TempleOS (loader) | stdio | pipes | Divine Computing (templeos-loader) |
 
 ---
 

@@ -687,8 +687,7 @@ controller:
 | Nebula | 4242 | UDP | VPN overlay |
 | Headscale | 8080/50443 | HTTP/gRPC | VPN control |
 | Gatus | 8080 | HTTP | Health monitoring |
-| NoVNC | 6080 | HTTP/WS | TempleOS web VNC |
-| TempleOS VNC | 5902 | VNC | TempleOS display |
+| TempleOS (loader) | stdio | pipes | Divine computing (templeos-loader) |
 | Filebrowser (metrics) | 7331 | HTTP | Metrics file browser |
 | Filebrowser (models) | 1337 | HTTP | Models file browser |
 | Docs Server | 8081 | HTTP | Documentation |

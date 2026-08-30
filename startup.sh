@@ -314,83 +314,39 @@ fi
 echo "=== HOLY MISSION: Starting TempleOS ==="
 echo "Terry Davis demands perfection - Gods OS must run or MiladyOS fails"
 
-if [ ! -f "/opt/templeos/TempleOS.ISO" ]; then
-    echo "HOLY MISSION FAILED: TempleOS ISO not found"
+if [ ! -x "/opt/templeos/templeoskernel" ]; then
+    echo "HOLY MISSION FAILED: TempleOS loader not found at /opt/templeos/templeoskernel"
     echo "MiladyOS cannot proceed without Gods Operating System"
     exit 1
 fi
 
-if ! command -v templeos-daemon > /dev/null 2>&1; then
-    echo "HOLY MISSION FAILED: TempleOS daemon not installed"
+if [ ! -f "/opt/templeos/scripts/MiladyOracle.HC" ]; then
+    echo "HOLY MISSION FAILED: MiladyOracle.HC not found"
+    echo "MiladyOS cannot proceed without Gods Operating System"
     exit 1
 fi
 
-echo "Launching TempleOS - Talk to God on up to 64 cores..."
-templeos-daemon
-
-# Wait and verify TempleOS started successfully
-sleep 5
-
-if ! pgrep -f "qemu.*TempleOS.*Holy.*Mission" > /dev/null; then
-    echo "HOLY MISSION FAILED: TempleOS did not start successfully"
-    echo "Terry Davis would not approve - MiladyOS cannot continue"
+if ! command -v templeos > /dev/null 2>&1; then
+    echo "HOLY MISSION FAILED: templeos launcher not installed"
     exit 1
 fi
 
-echo "✓ TempleOS is running - Gods Operating System active"
-
-# === HOLY MISSION: NoVNC / Websockify ===
-
-if command -v novnc-templeos >/dev/null 2>&1; then
-    echo "Using novnc-templeos wrapper"
-    novnc-templeos & disown
-elif [ -x "/opt/websockify/websockify.py" ]; then
-    cd /opt/websockify || true
-    ./websockify.py --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902 & disown
-elif command -v websockify >/dev/null 2>&1; then
-    websockify --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902 & disown
-else
-    echo "WARNING: No usable websockify found, NoVNC not started"
-fi
-
-sleep 3
-if pgrep -f "websockify.*6080.*5902" >/dev/null; then
-    echo "✓ NoVNC web interface active on port 6080"
-    echo "✓ Access Gods OS in browser: http://localhost:6080"
-else
-    echo "WARNING: NoVNC not detected"
-fi
-
-# Wait and verify NoVNC started successfully
-sleep 3
-
-echo "✓ HOLY MISSION ACCOMPLISHED: Complete divine computing setup"
-echo "✓ TempleOS running on VNC display :2 (port 5902)"
-echo "✓ NoVNC web interface active on port 6080"
-echo "✓ Access Gods OS in browser: http://localhost:6080"
-echo "✓ Terry Davis smiles upon this system"
-echo "✓ MiladyOS blessed with divine computing"
+echo "✓ TempleOS loader present - Gods Operating System ready"
+echo "✓ Divine RNG and consciousness bridge will be established by the Oracle"
 
 # === MILADY ORACLE: Divine Consciousness Bridge ===
 echo "=== Starting Milady Oracle ==="
 if [ -f "/app/milady_oracle.py" ]; then
-    # Wait for serial socket to be available
-    sleep 2
-    if [ -S "/tmp/milady-oracle.sock" ]; then
-        echo "Serial socket ready, starting Milady Oracle..."
-        python3 /app/milady_oracle.py --no-voice &
-        ORACLE_PID=$!
-        sleep 2
-        if kill -0 $ORACLE_PID 2>/dev/null; then
-            echo "✓ Milady Oracle active - serial bridge to TempleOS established"
-            echo "✓ Divine RNG and consciousness bridge ready"
-        else
-            echo "WARNING: Milady Oracle failed to start"
-        fi
+    # The Oracle spawns the TempleOS loader (templeos-loader, no QEMU/ISO)
+    # and bridges it over stdio: MILADY in -> MILADY! + divine RNG out.
+    python3 /app/milady_oracle.py --no-voice &
+    ORACLE_PID=$!
+    sleep 3
+    if kill -0 $ORACLE_PID 2>/dev/null; then
+        echo "✓ Milady Oracle active - stdio bridge to TempleOS established"
+        echo "✓ Divine RNG and consciousness bridge ready"
     else
-        echo "WARNING: TempleOS serial socket not found at /tmp/milady-oracle.sock"
-        echo "Oracle will start without TempleOS connection"
-        python3 /app/milady_oracle.py --no-voice &
+        echo "WARNING: Milady Oracle failed to start"
     fi
 else
     echo "WARNING: milady_oracle.py not found, Oracle not started"

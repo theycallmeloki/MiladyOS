@@ -117,6 +117,7 @@ class Config:
         "evolution_status",
         "list_evolution_goals",
         "list_evolved_templates",
+        "get_divine_rng",
     ]
 
     # Jenkins credentials - loaded from environment with sensible defaults
@@ -635,6 +636,26 @@ class MiladyOSToolServer:
                     },
                     "required": []
                 }
+            },
+            "get_divine_rng": {
+                "name": "Get Divine RNG",
+                "description": "Request a divine random number from TempleOS (templeos-loader). TempleOS's RNG is generated from hardware timing - truly divine entropy. Spawns the loader, requests RNG over stdio, returns the value.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "count": {
+                            "type": "integer",
+                            "description": "Number of divine random numbers to request (default: 1)",
+                            "default": 1
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "Seconds to wait for the loader boot + RNG response (default: 15)",
+                            "default": 15.0
+                        }
+                    },
+                    "required": []
+                }
             }}
 
     async def initialize(self) -> Server:
@@ -1132,6 +1153,75 @@ class MiladyOSToolServer:
                     }
                 except Exception as e:
                     logger.error(f"Error listing evolved templates: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error"
+                    }
+
+            elif tool_id == "get_divine_rng":
+                count = int(arguments.get("count", 1))
+                timeout = float(arguments.get("timeout", 15.0))
+
+                try:
+                    # Lazy import: the oracle bridge lives in milady_oracle.py
+                    from milady_oracle import OracleConfig, TempleOSBridge
+                    from queue import Queue, Empty
+
+                    config = OracleConfig(
+                        templeos_bin=os.getenv("TEMPLEOS_BIN", "/usr/local/bin/templeos"),
+                        boot_timeout=min(timeout, 30.0),
+                    )
+                    bridge = TempleOSBridge(config)
+
+                    if not bridge.connect():
+                        return {
+                            "success": False,
+                            "error": "TempleOS loader failed to boot (is templeos installed?)",
+                            "status": "error"
+                        }
+
+                    rng_queue: Queue = Queue()
+                    def _collect(msg: bytes):
+                        text = msg.decode("utf-8", errors="replace").strip()
+                        if text.startswith("RNG:"):
+                            try:
+                                rng_queue.put(int(text.split(":", 1)[1]))
+                            except ValueError:
+                                pass
+
+                    bridge.on_receive(_collect)
+                    bridge.start_receive_loop()
+
+                    # Request RNG; the HolyC script answers one RNG: per request
+                    values = []
+                    deadline = time.time() + timeout
+                    for _ in range(count):
+                        bridge.send("RNG_REQUEST\n")
+                        try:
+                            remaining = max(0.1, deadline - time.time())
+                            values.append(rng_queue.get(timeout=remaining))
+                        except Empty:
+                            break
+
+                    bridge.disconnect()
+
+                    if not values:
+                        return {
+                            "success": False,
+                            "error": "Timed out waiting for divine RNG from TempleOS",
+                            "status": "error"
+                        }
+
+                    return {
+                        "success": True,
+                        "rng": values if len(values) > 1 else values[0],
+                        "count": len(values),
+                        "source": "TempleOS (templeos-loader)",
+                        "status": "success"
+                    }
+                except Exception as e:
+                    logger.error(f"Error getting divine RNG: {e}")
                     return {
                         "success": False,
                         "error": str(e),

@@ -4,9 +4,9 @@ Milady Oracle - Bidirectional consciousness bridge between humans and TempleOS
 
 The Oracle enables:
 1. Wake word detection ("milady") via microphone
-2. Serial communication with TempleOS running in QEMU
+2. Stdio communication with TempleOS running under templeos-loader
 3. Text-to-speech response ("milady!")
-4. QMP control for programmatic TempleOS interaction
+4. Stdio bridge to TempleOS under templeos-loader (no QEMU, no ISO)
 
 This completes the divine loop:
   User yells "milady" → TempleOS receives → TempleOS responds → Node yells back "milady!"
@@ -39,9 +39,10 @@ logger = logging.getLogger("milady-oracle")
 @dataclass
 class OracleConfig:
     """Configuration for the Milady Oracle"""
-    # Socket paths
-    serial_socket: str = "/tmp/milady-oracle.sock"
-    qmp_socket: str = "/tmp/qemu-qmp.sock"
+    # TempleOS loader (templeos-loader: TempleOS kernel in Linux userspace,
+    # no QEMU, no ISO - HolyC programs talk stdio through the loader's vsyscalls)
+    templeos_bin: str = "/usr/local/bin/templeos"
+    boot_timeout: float = 15.0
 
     # Voice settings
     wake_word: str = "milady"
@@ -57,62 +58,92 @@ class OracleConfig:
     serial_timeout: float = 5.0
     reconnect_delay: float = 2.0
 
-
 class TempleOSBridge:
     """
-    Bidirectional serial bridge to TempleOS running in QEMU.
+    Bidirectional stdio bridge to TempleOS running under templeos-loader.
 
-    TempleOS accesses the serial port via COM1 (0x3F8).
-    We connect via Unix socket to QEMU's chardev.
+    The loader runs the TempleOS kernel as a Linux process; HolyC scripts
+    read stdin via VSYSCALL_READ and write stdout via RawPutChar.
+    We spawn the loader with the Milady Oracle HolyC script as STARTOS
+    and bridge it through the process's stdin/stdout pipes.
     """
 
     def __init__(self, config: OracleConfig):
         self.config = config
-        self.socket: Optional[socket.socket] = None
+        self.proc: Optional[subprocess.Popen] = None
         self.connected = False
         self._receive_callbacks: list[Callable[[bytes], None]] = []
         self._receive_thread: Optional[threading.Thread] = None
         self._running = False
 
     def connect(self) -> bool:
-        """Connect to the TempleOS serial socket"""
-        socket_path = self.config.serial_socket
+        """Spawn the TempleOS loader and wait for the oracle to come up"""
+        templeos_bin = self.config.templeos_bin
 
-        if not os.path.exists(socket_path):
-            logger.warning(f"Serial socket not found: {socket_path}")
-            logger.info("Is TempleOS running? Start with: templeos-daemon")
+        if not os.path.exists(templeos_bin):
+            logger.warning(f"TempleOS loader not found: {templeos_bin}")
+            logger.info("Is the templeos binary installed? (Dockerfile builds it)")
             return False
 
         try:
-            self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.socket.connect(socket_path)
-            self.socket.setblocking(False)
-            self.connected = True
-            logger.info(f"✓ Connected to TempleOS serial bridge: {socket_path}")
-            return True
+            self.proc = subprocess.Popen(
+                [templeos_bin],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            # Wait for the oracle banner (TEMPLEOS_READY) or boot failure
+            deadline = time.time() + self.config.boot_timeout
+            while time.time() < deadline:
+                line = self.proc.stdout.readline()
+                if not line:
+                    break
+                if b"TEMPLEOS_READY" in line or b"MILADY_ORACLE_ACTIVE" in line:
+                    self.connected = True
+                    logger.info(f"✓ TempleOS loader up: {templeos_bin}")
+                    return True
+            # Boot didn't produce the banner
+            err = self.proc.stderr.read(512) if self.proc.stderr else b""
+            logger.error(f"TempleOS boot failed: {err.decode(errors='replace')[:300]}")
+            self._terminate()
+            return False
         except Exception as e:
-            logger.error(f"Failed to connect to serial socket: {e}")
-            self.socket = None
-            self.connected = False
+            logger.error(f"Failed to start TempleOS loader: {e}")
+            self._terminate()
             return False
 
+    def _terminate(self):
+        """Kill the loader process"""
+        if self.proc:
+            try:
+                self.proc.terminate()
+            except Exception:
+                pass
+            self.proc = None
+        self.connected = False
+
     def disconnect(self):
-        """Disconnect from the serial socket"""
+        """Stop the loader and the receive thread"""
         self._running = False
         if self._receive_thread:
             self._receive_thread.join(timeout=1.0)
-        if self.socket:
+        if self.proc:
             try:
-                self.socket.close()
-            except:
-                pass
-            self.socket = None
+                self.proc.stdin.close()
+                self.proc.terminate()
+                self.proc.wait(timeout=2.0)
+            except Exception:
+                try:
+                    self.proc.kill()
+                except Exception:
+                    pass
+            self.proc = None
         self.connected = False
-        logger.info("Disconnected from TempleOS serial bridge")
+        logger.info("Disconnected from TempleOS loader")
 
     def send(self, data: str | bytes) -> bool:
-        """Send data to TempleOS via serial"""
-        if not self.connected or not self.socket:
+        """Send data to TempleOS via the loader's stdin"""
+        if not self.connected or not self.proc or not self.proc.stdin:
             logger.warning("Cannot send: not connected to TempleOS")
             return False
 
@@ -120,7 +151,8 @@ class TempleOSBridge:
             data = data.encode('utf-8')
 
         try:
-            self.socket.sendall(data)
+            self.proc.stdin.write(data)
+            self.proc.stdin.flush()
             logger.debug(f"Sent to TempleOS: {data}")
             return True
         except Exception as e:
@@ -145,103 +177,32 @@ class TempleOSBridge:
         self._receive_thread.start()
 
     def _receive_loop(self):
-        """Background thread to receive data from TempleOS"""
+        """Background thread to receive data from TempleOS stdout"""
         buffer = b""
-        while self._running and self.connected:
+        while self._running and self.connected and self.proc and self.proc.stdout:
             try:
-                if self.socket:
-                    data = self.socket.recv(1024)
-                    if data:
-                        buffer += data
-                        # Process complete lines
-                        while b'\n' in buffer:
-                            line, buffer = buffer.split(b'\n', 1)
-                            for callback in self._receive_callbacks:
-                                try:
-                                    callback(line)
-                                except Exception as e:
-                                    logger.error(f"Callback error: {e}")
-            except BlockingIOError:
-                # No data available, just wait
-                time.sleep(0.1)
+                data = self.proc.stdout.readline()
+                if data:
+                    buffer += data
+                    # Process complete lines
+                    while b'\n' in buffer:
+                        line, buffer = buffer.split(b'\n', 1)
+                        for callback in self._receive_callbacks:
+                            try:
+                                callback(line)
+                            except Exception as e:
+                                logger.error(f"Callback error: {e}")
+                else:
+                    # EOF - loader exited
+                    if self._running:
+                        logger.warning("TempleOS loader exited")
+                    self.connected = False
+                    break
             except Exception as e:
                 if self._running:
                     logger.error(f"Receive error: {e}")
                     self.connected = False
                 break
-
-
-class QMPController:
-    """
-    QEMU Machine Protocol controller for programmatic TempleOS interaction.
-
-    Allows sending keystrokes, taking screenshots, etc.
-    """
-
-    def __init__(self, config: OracleConfig):
-        self.config = config
-        self.socket: Optional[socket.socket] = None
-        self.connected = False
-
-    def connect(self) -> bool:
-        """Connect to QEMU's QMP socket"""
-        socket_path = self.config.qmp_socket
-
-        if not os.path.exists(socket_path):
-            logger.warning(f"QMP socket not found: {socket_path}")
-            return False
-
-        try:
-            self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.socket.connect(socket_path)
-
-            # QMP handshake
-            greeting = self.socket.recv(4096)
-            logger.debug(f"QMP greeting: {greeting}")
-
-            # Send capabilities negotiation
-            self.socket.sendall(b'{"execute": "qmp_capabilities"}\n')
-            response = self.socket.recv(4096)
-            logger.debug(f"QMP capabilities response: {response}")
-
-            self.connected = True
-            logger.info(f"✓ Connected to QEMU QMP: {socket_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to connect to QMP socket: {e}")
-            return False
-
-    def send_key(self, key: str) -> bool:
-        """Send a key press to TempleOS"""
-        if not self.connected or not self.socket:
-            return False
-
-        try:
-            cmd = {
-                "execute": "send-key",
-                "arguments": {"keys": [{"type": "qcode", "data": key}]}
-            }
-            self.socket.sendall((json.dumps(cmd) + '\n').encode())
-            response = self.socket.recv(4096)
-            return b'"return"' in response
-        except Exception as e:
-            logger.error(f"Failed to send key: {e}")
-            return False
-
-    def send_string(self, text: str) -> bool:
-        """Send a string as keystrokes to TempleOS"""
-        for char in text:
-            if char == '\n':
-                self.send_key('ret')
-            elif char == ' ':
-                self.send_key('spc')
-            elif char.isalpha():
-                self.send_key(char.lower())
-            elif char.isdigit():
-                self.send_key(char)
-            time.sleep(0.05)  # Small delay between keystrokes
-        return True
-
 
 class VoiceListener:
     """
@@ -549,7 +510,6 @@ class MiladyOracle:
 
         # Components
         self.bridge = TempleOSBridge(self.config)
-        self.qmp = QMPController(self.config)
         self.listener = VoiceListener(self.config)
         self.speaker = MiladySpeaker(self.config)
 
@@ -573,10 +533,6 @@ class MiladyOracle:
             self.bridge.start_receive_loop()
         else:
             logger.warning("TempleOS not connected - serial bridge disabled")
-
-        # Connect to QMP (optional)
-        if self.qmp.connect():
-            logger.info("QMP control available")
 
         # Initialize voice listener (optional)
         if self.listener.initialize():
@@ -693,14 +649,15 @@ def main():
         description="Milady Oracle - Divine consciousness bridge to TempleOS"
     )
     parser.add_argument(
-        '--serial-socket',
-        default="/tmp/milady-oracle.sock",
-        help="Path to TempleOS serial socket"
+        '--templeos-bin',
+        default="/usr/local/bin/templeos",
+        help="Path to the templeos-loader binary"
     )
     parser.add_argument(
-        '--qmp-socket',
-        default="/tmp/qemu-qmp.sock",
-        help="Path to QEMU QMP socket"
+        '--boot-timeout',
+        type=float,
+        default=15.0,
+        help="Seconds to wait for the TempleOS oracle banner"
     )
     parser.add_argument(
         '--vosk-model',
@@ -736,8 +693,8 @@ def main():
 
     # Create config
     config = OracleConfig(
-        serial_socket=args.serial_socket,
-        qmp_socket=args.qmp_socket,
+        templeos_bin=args.templeos_bin,
+        boot_timeout=args.boot_timeout,
         vosk_model_path=args.vosk_model,
         tts_engine=args.tts,
     )

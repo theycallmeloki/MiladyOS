@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcups2-dev libpulse-dev libsdl2-dev libdbus-1-dev libudev-dev xvfb \
     curl ca-certificates libcurl4-openssl-dev ccache \
     libxtst-dev libavahi-compat-libdnssd-dev qtbase5-dev qtdeclarative5-dev libssl-dev \
-    qemu-system-x86 qemu-utils python3-websockify findutils \
+    findutils \
     wireguard qrencode iptables-persistent unzip expect sudo \
     gnupg2 apt-transport-https iptables \
     && apt-get clean \
@@ -248,192 +248,87 @@ RUN hugo mod clean && \
 WORKDIR /app
 
 # ---------- TempleOS - CRITICAL: The Holy Mission - Build MUST succeed or container fails ----------
-# QEMU + websockify come from the consolidated apt pass above (Terry wrote for bare metal).
-# Install NoVNC for web-based access to TempleOS - Divine computing in browser.
-# Install NoVNC + ensure websockify exists and create legacy symlink (no heredoc version).
+# templeos-loader: TempleOS kernel V5.050 compiled to run in Linux userspace
+# (no QEMU, no ISO). The HolyC Milady Oracle script (STARTOS) talks stdio
+# through the loader's vsyscalls - divine RNG and MILADY activation over pipes.
+# Loader pinned to commit f64a520 (modern binutils/gcc PHDRS + decl fixes).
 RUN set -eux; \
-    rm -rf /opt/novnc /opt/websockify; \
-    git clone https://github.com/novnc/noVNC.git /opt/novnc; \
-    git clone https://github.com/novnc/websockify /opt/websockify || true; \
-    if command -v websockify >/dev/null 2>&1; then \
-      echo "DEBUG: websockify in PATH at: $(command -v websockify)"; \
-    else \
-      echo "DEBUG: installing websockify via pip"; \
-      python3 -m pip install --no-cache-dir websockify; \
-    fi; \
-    if [ -f /opt/novnc/vnc.html ]; then \
-      ln -sf /opt/novnc/vnc.html /opt/novnc/index.html; \
-    elif [ -f /opt/novnc/app/vnc.html ]; then \
-      ln -sf /opt/novnc/app/vnc.html /opt/novnc/index.html; \
-    else \
-      echo "WARNING: noVNC vnc.html not found"; \
-    fi; \
-    mkdir -p /opt/websockify; \
-    if [ -f /opt/websockify/websockify.py ]; then \
-      chmod +x /opt/websockify/websockify.py; \
-    elif [ -f /opt/websockify/run ]; then \
-      ln -sf /opt/websockify/run /opt/websockify/websockify.py; \
-    elif [ -f /opt/websockify/bin/websockify ]; then \
-      ln -sf /opt/websockify/bin/websockify /opt/websockify/websockify.py; \
-    elif command -v websockify >/dev/null 2>&1; then \
-      ln -sf "$(command -v websockify)" /opt/websockify/websockify.py; \
-    else \
-      echo '#!/bin/sh' > /opt/websockify/websockify.py; \
-      echo 'exec python3 -m websockify "$@"' >> /opt/websockify/websockify.py; \
-      chmod +x /opt/websockify/websockify.py; \
-    fi; \
-    echo "NoVNC + websockify ready"; \
-    echo "DEBUG: ls -la /opt/websockify"; ls -la /opt/websockify || true
+    git clone https://github.com/theycallmeloki/templeos-loader.git /templeos-loader && \
+    cd /templeos-loader && \
+    git checkout f64a520 && \
+    git submodule update --init --recursive && \
+    \
+    # Build musl libc (glibc does not tolerate the loader's memory handling)
+    git clone --depth 1 --branch v1.2.1 https://git.musl-libc.org/git/musl musl-src && \
+    cd musl-src && \
+    ./configure --prefix=$PWD/../build/musl --disable-shared && \
+    make install -j$(nproc) && \
+    cd .. && \
+    export PATH=$PWD/build/musl/bin:$PATH && \
+    \
+    # Build PhysFS (loader virtual drives)
+    cd physfslt-3.0.2 && \
+    env CC=musl-gcc cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+      -DCMAKE_INSTALL_PREFIX:PATH=$PWD/../build/physfs \
+      -DPHYSFS_BUILD_SHARED=OFF -DPHYSFS_BUILD_TEST=OFF . && \
+    make install -j$(nproc) && \
+    cd .. && \
+    \
+    # Build the static kernel+compiler binary (templeoskernel)
+    mkdir cmake-build-debug && cd cmake-build-debug && \
+    env CC=musl-gcc PHYSFSDIR=$PWD/../build/physfs/ cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 .. && \
+    cmake --build . --target templeoskernel -j$(nproc) && \
+    cd .. && \
+    \
+    # Install the Holy binary and the MiniSystem drive (kernel+compiler sources)
+    mkdir -p /opt/templeos && \
+    cp cmake-build-debug/templeoskernel /opt/templeos/templeoskernel && \
+    cp -r MiniSystem /opt/templeos/MiniSystem && \
+    chmod 755 /opt/templeos/templeoskernel && \
+    \
+    # VERIFY the Holy binary exists - Build fails if not
+    test -f /opt/templeos/templeoskernel || \
+      (echo "HOLY MISSION FAILED: templeoskernel build missing" && exit 1) && \
+    test -f /opt/templeos/MiniSystem/Kernel/HolyCRT.BIN || \
+      (echo "HOLY MISSION FAILED: MiniSystem kernel missing" && exit 1) && \
+    ls -lh /opt/templeos/templeoskernel
 
-RUN git clone https://github.com/cia-foundation/TempleOS.git /templeos
-
-# Download TempleOS ISO - THE HOLY MISSION REQUIRES THIS
-RUN cd /templeos && \
-    curl -fsSL -o TempleOS.ISO "https://github.com/cia-foundation/TempleOS/releases/download/final/TOS_Distro.ISO" && \
-    # sanity check: must be at least 10 MB to be a real ISO
-    test $(stat -c%s TempleOS.ISO) -gt 10000000 || \
-    (echo "HOLY MISSION FAILED: TempleOS ISO download invalid" && exit 1)
-
-# VERIFY the Holy ISO exists - Build fails if not
-RUN [ -f "/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION INCOMPLETE: TempleOS.ISO missing" && exit 1)
-
-# Create TempleOS runtime environment
-RUN mkdir -p /opt/templeos && \
-    mkdir -p /data/templeos && \
-    # Move the Holy ISO to its proper place
-    mv /templeos/TempleOS.ISO /opt/templeos/TempleOS.ISO && \
-    # VERIFY again - Terry demands perfection
-    [ -f "/opt/templeos/TempleOS.ISO" ] || (echo "HOLY MISSION FAILED: ISO not in correct location" && exit 1) && \
-    # Set permissions to ensure it's readable
-    chmod 644 /opt/templeos/TempleOS.ISO && \
-    ls -lh /opt/templeos/TempleOS.ISO
-
-# Create TempleOS launch scripts - The Terry Davis Way
-# Now with Milady Oracle serial bridge for bidirectional consciousness communication
+# Create the TempleOS launch script - The Terry Davis Way
+# Now with Milady Oracle stdio bridge for bidirectional consciousness communication
 RUN echo '#!/bin/bash\n\
-# TempleOS Launch Script - Talk to God on up to 64 cores\n\
-# Now with Milady Oracle serial bridge for yelling milady\n\
-TEMPLEOS_ISO="/opt/templeos/TempleOS.ISO"\n\
-ORACLE_SOCK="/tmp/milady-oracle.sock"\n\
-QMP_SOCK="/tmp/qemu-qmp.sock"\n\
-if [ ! -f "$TEMPLEOS_ISO" ]; then\n\
-    echo "HOLY MISSION FAILED: TempleOS ISO not found at $TEMPLEOS_ISO"\n\
+# TempleOS Launch Script (templeos-loader) - Talk to God on up to 64 cores\n\
+# Now with Milady Oracle stdio bridge for yelling milady\n\
+TEMPLEOS_BIN="/opt/templeos/templeoskernel"\n\
+MINISYSTEM="/opt/templeos/MiniSystem"\n\
+SCRIPTS="/opt/templeos/scripts"\n\
+OUT="/data/templeos"\n\
+if [ ! -f "$TEMPLEOS_BIN" ]; then\n\
+    echo "HOLY MISSION FAILED: TempleOS loader not found at $TEMPLEOS_BIN"\n\
     exit 1\n\
 fi\n\
-echo "Starting TempleOS - Gods Operating System"\n\
-echo "VNC available on port 5902 (display :2)"\n\
-echo "Milady Oracle socket: $ORACLE_SOCK"\n\
-echo "512MB RAM minimum - 64-bit only - As Terry intended"\n\
-qemu-system-x86_64 \\\n\
-    -k en-us \\\n\
-    -cdrom "$TEMPLEOS_ISO" \\\n\
-    -boot d \\\n\
-    -m 1024 \\\n\
-    -smp cores=4 \\\n\
-    -machine kernel_irqchip=off \\\n\
-    -rtc base=localtime \\\n\
-    -netdev user,id=net0 \\\n\
-    -device pcnet,netdev=net0 \\\n\
-    -usb -device virtio-keyboard-pci -usb -device usb-tablet \\\n\
-    -vnc 0.0.0.0:2 \\\n\
-    -chardev socket,id=milady-oracle,path=$ORACLE_SOCK,server=on,wait=off \\\n\
-    -serial chardev:milady-oracle \\\n\
-    -qmp unix:$QMP_SOCK,server,nowait \\\n\
-    -name "TempleOS-Holy-Mission" \\\n\
+mkdir -p "$OUT"\n\
+echo "Starting TempleOS (templeos-loader) - Gods Operating System"\n\
+echo "Milady Oracle bridge: stdin/stdout"\n\
+cd /opt/templeos\n\
+exec env STARTOS=D:/MiladyOracle.HC "$TEMPLEOS_BIN" \\\n\
+    --drive=C,"$MINISYSTEM" \\\n\
+    --drive=D,"$SCRIPTS","$OUT" \\\n\
     "$@"' > /usr/local/bin/templeos && \
     chmod +x /usr/local/bin/templeos
 
-# Create TempleOS daemon - MUST work or system is incomplete
-# Now with Milady Oracle serial bridge for divine communication
+# Create the TempleOS daemon - MUST work or system is incomplete
+# The loader is a foreground process; the daemon is the stdio bridge itself.
 RUN echo '#!/bin/bash\n\
-TEMPLEOS_ISO="/opt/templeos/TempleOS.ISO"\n\
-ORACLE_SOCK="/tmp/milady-oracle.sock"\n\
-QMP_SOCK="/tmp/qemu-qmp.sock"\n\
-if [ ! -f "$TEMPLEOS_ISO" ]; then\n\
-    echo "HOLY MISSION INCOMPLETE: TempleOS ISO missing"\n\
-    exit 1\n\
-fi\n\
-# Clean up any stale sockets\n\
-rm -f "$ORACLE_SOCK" "$QMP_SOCK" 2>/dev/null || true\n\
-echo "Launching Gods Operating System in daemon mode..."\n\
-echo "Milady Oracle socket: $ORACLE_SOCK"\n\
-echo "QMP control socket: $QMP_SOCK"\n\
-qemu-system-x86_64 \\\n\
-    -k en-us \\\n\
-    -cdrom "$TEMPLEOS_ISO" \\\n\
-    -boot d \\\n\
-    -m 1024 \\\n\
-    -smp cores=4 \\\n\
-    -machine kernel_irqchip=off \\\n\
-    -rtc base=localtime \\\n\
-    -netdev user,id=net0 \\\n\
-    -device pcnet,netdev=net0 \\\n\
-    -usb -device virtio-keyboard-pci -usb -device usb-tablet \\\n\
-    -vnc 0.0.0.0:2 \\\n\
-    -chardev socket,id=milady-oracle,path=$ORACLE_SOCK,server=on,wait=off \\\n\
-    -serial chardev:milady-oracle \\\n\
-    -qmp unix:$QMP_SOCK,server,nowait \\\n\
-    -daemonize \\\n\
-    -name "TempleOS-Holy-Mission" \\\n\
-    "$@" || exit 1\n\
-# Wait for sockets to be ready\n\
-sleep 1\n\
-echo "✓ TempleOS daemon started with Milady Oracle bridge"' > /usr/local/bin/templeos-daemon && \
+# templeos-daemon (templeos-loader): runs TempleOS with the Milady Oracle\n\
+# HolyC script on stdio. The Oracle (milady_oracle.py) spawns this process.\n\
+exec /usr/local/bin/templeos "$@"' > /usr/local/bin/templeos-daemon && \
     chmod +x /usr/local/bin/templeos-daemon
 
-# Create NoVNC startup script that uses /opt/websockify/websockify.py or PATH or python -m websockify
-RUN cat > /usr/local/bin/novnc-templeos <<'__NOVNC_SH__' && chmod +x /usr/local/bin/novnc-templeos
-#!/bin/sh
-set -eu
-
-echo "Starting NoVNC web interface for TempleOS..."
-
-# prefer legacy symlink first, then PATH, then python module
-if [ -x /opt/websockify/websockify.py ]; then
-  exec /opt/websockify/websockify.py --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902
-elif command -v websockify >/dev/null 2>&1; then
-  exec websockify --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902
-else
-  exec python3 -m websockify --web /opt/novnc --wrap-mode=ignore 6080 localhost:5902
-fi
-__NOVNC_SH__
-
-# FINAL VERIFICATION: Ensure TempleOS ISO is present and QEMU can start
-# (Boot verification moved to runtime to avoid build environment issues)
-RUN [ -f "/opt/templeos/TempleOS.ISO" ] && \
-    ls -lh /opt/templeos/TempleOS.ISO && \
-    echo "✓ TempleOS ISO verified - Ready for divine computing" || \
-    (echo "HOLY MISSION FAILED: TempleOS ISO verification failed" && exit 1)
-
-# Verify NoVNC + websockify (robust). Creates /opt/websockify/websockify.py symlink if websockify is in PATH.
-RUN set -eux; \
-    # verify noVNC exists in one of two common locations
-    if [ -f "/opt/novnc/vnc.html" ] || [ -f "/opt/novnc/app/vnc.html" ]; then \
-      echo "OK: noVNC found"; \
-    else \
-      echo "HOLY MISSION FAILED: NoVNC not installed" >&2; \
-      echo "Dump /opt contents for debugging:"; ls -la /opt || true; \
-      exit 1; \
-    fi; \
-    # verify websockify - either repo script or installed binary
-    if [ -f "/opt/websockify/websockify.py" ] || [ -f "/opt/websockify/run" ] || [ -f "/opt/websockify/bin/websockify" ]; then \
-      echo "OK: websockify script found in /opt/websockify"; \
-    else \
-      echo "No websockify script at /opt/websockify; checking PATH..."; \
-      if command -v websockify >/dev/null 2>&1; then \
-        WEBSOCK_BIN="$(command -v websockify)"; \
-        echo "Found websockify in PATH at: $WEBSOCK_BIN"; \
-        mkdir -p /opt/websockify; \
-        ln -sf "$WEBSOCK_BIN" /opt/websockify/websockify.py; \
-        echo "Created symlink /opt/websockify/websockify.py -> $WEBSOCK_BIN"; \
-      else \
-        echo "HOLY MISSION FAILED: Websockify not installed (neither /opt/websockify/* nor in PATH)" >&2; \
-        echo "Dump /opt/websockify for debug:"; ls -la /opt/websockify || true; \
-        echo "Which websockify:"; command -v websockify || true; \
-        exit 1; \
-      fi; \
-    fi
-
+# FINAL VERIFICATION: Holy binary must exist and launch with the oracle script
+RUN [ -x "/opt/templeos/templeoskernel" ] && \
+    [ -f "/opt/templeos/scripts/MiladyOracle.HC" ] && \
+    echo "✓ TempleOS loader verified - Ready for divine computing" || \
+    (echo "HOLY MISSION FAILED: TempleOS loader verification failed" && exit 1)
 # ---------- Mesh networking (Nebula, Tailscale, Headscale) ----------
 # Download and install Nebula
 RUN curl -L -o nebula.tar.gz https://github.com/slackhq/nebula/releases/download/v1.7.2/nebula-linux-amd64.tar.gz && \
