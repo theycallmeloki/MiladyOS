@@ -129,7 +129,6 @@ class Config:
         "list_pipeline_runs",
         "hello_world",
         "create_jenkins_job",
-        "run_jenkins_job",
         "execute_command",
         "read_query",
         "list_db_tables",
@@ -785,30 +784,7 @@ class MiladyOSToolServer:
                     },
                     "required": ["job_name", "jenkinsfile_content"]
                 }
-            },
-            "run_jenkins_job": {
-                "name": "Run Jenkins Job",
-                "description": "Trigger a Jenkins job build (uses parameter defaults when omitted)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "job_name": {
-                            "type": "string",
-                            "description": "Name of the Jenkins job to run"
-                        },
-                        "parameters": {
-                            "type": "object",
-                            "description": "Optional build parameters (defaults used when omitted)"
-                        },
-                        "server_name": {
-                            "type": "string",
-                            "description": "Jenkins server name (default: default)"
-                        }
-                    },
-                    "required": ["job_name"]
-                }
-            },
-            "view_template": {
+            },            "view_template": {
                 "name": "View Template",
                 "description": "View content of a template with line numbers",
                 "parameters": {
@@ -1312,42 +1288,6 @@ class MiladyOSToolServer:
                         "success": False,
                         "status": "error",
                         "error": f"Failed to create job {job_name}: {str(e)}"
-                    }
-                
-            elif tool_id == "run_jenkins_job":
-                job_name = arguments.get("job_name")
-                server_name = arguments.get("server_name", "default")
-                parameters = arguments.get("parameters") or None
-
-                if not job_name:
-                    return {
-                        "success": False,
-                        "error": "job_name is required",
-                        "status": "error"
-                    }
-
-                try:
-                    server = JenkinsUtils.connect_to_jenkins(server_name)
-                    result = await JenkinsUtils.start_jenkins_job(server, job_name, parameters)
-                    if isinstance(result, dict) and result.get("status") == "error":
-                        return {
-                            "success": False,
-                            "status": "error",
-                            "error": result.get("error", "unknown error"),
-                            "job_name": job_name
-                        }
-                    return {
-                        "success": True,
-                        "status": "success",
-                        "data": result,
-                        "job_name": job_name
-                    }
-                except Exception as e:
-                    logger.error(f"Error running Jenkins job {job_name}: {e}")
-                    return {
-                        "success": False,
-                        "status": "error",
-                        "error": f"Failed to run job {job_name}: {str(e)}"
                     }
                 
             elif tool_id == "view_template":
