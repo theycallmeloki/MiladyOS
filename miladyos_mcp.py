@@ -129,6 +129,7 @@ class Config:
         "list_pipeline_runs",
         "hello_world",
         "create_jenkins_job",
+        "run_jenkins_job",
         "execute_command",
         "read_query",
         "list_db_tables",
@@ -412,11 +413,30 @@ class JenkinsUtils:
                 logger.error(f"Error checking if job {job_name} exists: {check_error}")
                 # Try to continue anyway
             
-            # Start the job
-            if parameters:
-                queue_number = server.build_job(job_name, parameters)
-            else:
-                queue_number = server.build_job(job_name)
+            # Start the job. python-jenkins build_job appends params to the
+            # query string here, which Jenkins rejects (400) — use a direct
+            # crumb'd POST with form-encoded params instead.
+            import requests as _requests
+            from urllib.parse import quote as _quote
+            cfg = Config.get_jenkins_servers().get("default", {})
+            base = cfg.get("url", "http://localhost:8080")
+            _sess = _requests.Session()
+            _sess.auth = (Config.JENKINS_USER, Config.JENKINS_PASSWORD)
+            _crumb = _sess.get(f"{base}/crumbIssuer/api/json", timeout=10).json()
+            _hdr = {_crumb["crumbRequestField"]: _crumb["crumb"]}
+            _url = f"{base}/job/{_quote(job_name)}/buildWithParameters"
+            _resp = _sess.post(_url, data=parameters or {}, headers=_hdr, timeout=30)
+            if _resp.status_code == 400 and "not parameterized" in _resp.text:
+                # job has no parameters block -> plain /build trigger
+                _resp = _sess.post(f"{base}/job/{_quote(job_name)}/build", headers=_hdr, timeout=30)
+            if _resp.status_code not in (200, 201, 202):
+                return {
+                    "status": "error",
+                    "error": f"build trigger failed: {_resp.status_code} {_resp.text[:200]}",
+                    "job_name": job_name
+                }
+            _loc = _resp.headers.get("Location", "")
+            queue_number = int(_loc.rstrip("/").split("/")[-1]) if _loc else None
             logger.info(f"Job {job_name} build started. Queue number: {queue_number}")
             
             # Wait for job to start
@@ -764,6 +784,28 @@ class MiladyOSToolServer:
                         }
                     },
                     "required": ["job_name", "jenkinsfile_content"]
+                }
+            },
+            "run_jenkins_job": {
+                "name": "Run Jenkins Job",
+                "description": "Trigger a Jenkins job build (uses parameter defaults when omitted)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "job_name": {
+                            "type": "string",
+                            "description": "Name of the Jenkins job to run"
+                        },
+                        "parameters": {
+                            "type": "object",
+                            "description": "Optional build parameters (defaults used when omitted)"
+                        },
+                        "server_name": {
+                            "type": "string",
+                            "description": "Jenkins server name (default: default)"
+                        }
+                    },
+                    "required": ["job_name"]
                 }
             },
             "view_template": {
@@ -1241,7 +1283,7 @@ class MiladyOSToolServer:
                     "message": "milady!",
                     "status": "success"
                 }
-                
+                                
             elif tool_id == "create_jenkins_job":
                 job_name = arguments.get("job_name")
                 jenkinsfile_content = arguments.get("jenkinsfile_content")
@@ -1270,6 +1312,42 @@ class MiladyOSToolServer:
                         "success": False,
                         "status": "error",
                         "error": f"Failed to create job {job_name}: {str(e)}"
+                    }
+                
+            elif tool_id == "run_jenkins_job":
+                job_name = arguments.get("job_name")
+                server_name = arguments.get("server_name", "default")
+                parameters = arguments.get("parameters") or None
+
+                if not job_name:
+                    return {
+                        "success": False,
+                        "error": "job_name is required",
+                        "status": "error"
+                    }
+
+                try:
+                    server = JenkinsUtils.connect_to_jenkins(server_name)
+                    result = await JenkinsUtils.start_jenkins_job(server, job_name, parameters)
+                    if isinstance(result, dict) and result.get("status") == "error":
+                        return {
+                            "success": False,
+                            "status": "error",
+                            "error": result.get("error", "unknown error"),
+                            "job_name": job_name
+                        }
+                    return {
+                        "success": True,
+                        "status": "success",
+                        "data": result,
+                        "job_name": job_name
+                    }
+                except Exception as e:
+                    logger.error(f"Error running Jenkins job {job_name}: {e}")
+                    return {
+                        "success": False,
+                        "status": "error",
+                        "error": f"Failed to run job {job_name}: {str(e)}"
                     }
                 
             elif tool_id == "view_template":
