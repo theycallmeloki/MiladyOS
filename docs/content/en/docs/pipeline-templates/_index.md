@@ -369,58 +369,20 @@ stage('Test') {
 
 ## Template Management
 
-### List Templates
+Templates are plain Jenkinsfiles in the `templates/` directory of the
+sandman-pipelines repo. Seed a job into Jenkins from any template via the
+`create_jenkins_job` MCP tool (or `miladyos mcp` + an SSE/MCP client):
 
 ```bash
-# Via CLI
-miladyos list-templates
-
 # Via MCP
-# Use the list_templates tool
-```
-
-### View Template
-
-```bash
-# Via CLI
-miladyos view-template --template example-build
-
-# Via MCP
-# Use the view_template tool with template_name parameter
-```
-
-### Create Template
-
-```bash
-# Via MCP - auto-generate from description
-# Use create_template tool:
-{
-  "template_name": "my-python-app",
-  "description": "Build and test a Python application with pytest"
-}
-```
-
-### Edit Template
-
-```bash
-# Via MCP - use edit_template tool
-{
-  "template_name": "example-build",
-  "line_edits": [
-    {"line": 20, "content": "        sh 'npm ci --prefer-offline'"}
-  ]
-}
-```
-
-### Deploy to Jenkins
-
-```bash
-miladyos deploy --template example-build --job-name my-project-build
+# Use the create_jenkins_job tool with job_name + jenkinsfile_content
 ```
 
 ### Run Pipeline
 
 ```bash
+# Trigger the seeded job (params via buildWithParameters once materialized,
+# otherwise plain /build uses the Jenkinsfile defaults)
 miladyos run --job-name my-project-build
 ```
 
