@@ -22,7 +22,8 @@ import asyncio
 from typing import List, Tuple, Optional, Union, Dict, Any
 from enum import Enum
 from pydantic import BaseModel
-from langchain.vectorstores import FAISS
+import faiss
+import numpy as np
 from datasets import Dataset
 from embeddings import CustomHuggingFaceEmbeddings
 
@@ -33,16 +34,17 @@ from embeddings import CustomHuggingFaceEmbeddings
 
 # Load pre-saved vectorstore
 def load_vectorstore():
-    """Load the pre-saved FAISS index"""
+    """Load the pre-saved FAISS index (plain faiss, normalized IP)"""
     try:
         import os
+        base = os.path.dirname(os.path.abspath(__file__))
+        index = faiss.read_index(os.path.join(base, "faiss_index/index.faiss"))
+        with open(os.path.join(base, "faiss_index/index.pkl"), "rb") as f:
+            data = pickle.load(f)
+        chunks = data["chunks"] if isinstance(data, dict) else data
         embeddings = CustomHuggingFaceEmbeddings()
-        # Load the FAISS index with absolute path
-        index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "faiss_index")
-        print(f"Loading FAISS index from: {index_path}")
-        vectorstore = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-        print("Successfully loaded FAISS index")
-        return vectorstore
+        print(f"Loaded FAISS index: {len(chunks)} chunks")
+        return {"index": index, "chunks": chunks, "embeddings": embeddings}
     except Exception as e:
         print(f"Error loading vectorstore: {e}")
         import traceback
@@ -61,29 +63,31 @@ except Exception as e:
 def search(query: str, return_type=str, results: int = 5) -> Union[str, List[str]]:
     """
     Search for relevant chunks using similarity search.
-    
+
     Args:
         query: The search query
         return_type: Return as string or list (default: str)
         results: Number of results to return (default: 5)
-        
+
     Returns:
         Results as string or list depending on return_type
     """
     if vectorstore is None:
         raise ValueError("Vectorstore not loaded. Please ensure FAISS index exists.")
-        
-    search_results = vectorstore.similarity_search(query, k=results)
-    
+
+    qvec = np.asarray([vectorstore["embeddings"].embed_query(query)], dtype="float32")
+    qvec /= np.linalg.norm(qvec, axis=1, keepdims=True) + 1e-9
+    scores, idxs = vectorstore["index"].search(qvec, results)
+    found = [vectorstore["chunks"][i] for i in idxs[0] if i >= 0]
+
     if return_type == str:
         str_results = ""
-        for idx, result in enumerate(search_results, start=1):
-            str_results += f"Result {idx}:\n"
-            str_results += result.page_content + "\n"
+        for idx, chunk in enumerate(found, start=1):
+            str_results += f"Result {idx}:\n{chunk}\n"
             str_results += "------\n"
         return str_results
     elif return_type == list:
-        return [result.page_content for result in search_results]
+        return found
     else:
         raise ValueError("Invalid return_type. Use str or list.")
 

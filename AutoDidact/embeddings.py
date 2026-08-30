@@ -11,12 +11,11 @@ from typing import List, Union
 import torch
 import torch.nn.functional as F
 from transformers import AutoModel, AutoTokenizer
-from langchain.embeddings.base import Embeddings
 
 # Set a default model here
 DEFAULT_MODEL_NAME = "avsolatorio/NoInstruct-small-Embedding-v0"
 
-class CustomHuggingFaceEmbeddings(Embeddings):
+class CustomHuggingFaceEmbeddings:
     """
     A custom embeddings class that wraps a Hugging Face model for generating embeddings.
     

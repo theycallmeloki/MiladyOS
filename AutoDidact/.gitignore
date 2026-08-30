@@ -6,8 +6,7 @@
 wandb/
 *.bin
 outputs/
-grpo_saved_lora/
-grpo_trainer_lora_model*
+lore_training_1b/
 rwd_code/
 saved_data
 saved_data_old/
