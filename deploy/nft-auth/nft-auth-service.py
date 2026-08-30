@@ -46,7 +46,7 @@ nft_auth_info.info({
 class NFTAuthService:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(ETHEREUM_RPC_URL))
-        self.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+        self.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True, protocol=2)
         self.contract_address = Web3.to_checksum_address(HIGH_INTEGRITY_MILADY_CONTRACT)
         self.update_connection_metrics()
         
