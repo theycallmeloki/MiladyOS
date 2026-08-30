@@ -128,6 +128,7 @@ class Config:
         "get_pipeline_status",
         "list_pipeline_runs",
         "hello_world",
+        "create_jenkins_job",
         "execute_command",
         "read_query",
         "list_db_tables",
@@ -743,6 +744,28 @@ class MiladyOSToolServer:
                     "required": []
                 }
             },
+            "create_jenkins_job": {
+                "name": "Create Jenkins Job",
+                "description": "Create a Jenkins pipeline job from Jenkinsfile content",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "job_name": {
+                            "type": "string",
+                            "description": "Name of the Jenkins job to create"
+                        },
+                        "jenkinsfile_content": {
+                            "type": "string",
+                            "description": "Full Jenkinsfile pipeline script content"
+                        },
+                        "server_name": {
+                            "type": "string",
+                            "description": "Jenkins server name (default: default)"
+                        }
+                    },
+                    "required": ["job_name", "jenkinsfile_content"]
+                }
+            },
             "view_template": {
                 "name": "View Template",
                 "description": "View content of a template with line numbers",
@@ -1129,81 +1152,83 @@ class MiladyOSToolServer:
 
     def _create_server(self) -> Server:
         """Create and configure the MCP server with all tools."""
-        app = Server("miladyos-mcp-server")
+        return Server(
+            "miladyos-mcp-server",
+            on_list_tools=self._list_tools,
+            on_call_tool=self._call_tool,
+        )
 
-        @app.list_tools()
-        async def list_tools() -> List[types.Tool]:
-            """List all available tools."""
-            return [
-                types.Tool(
-                    name=tool_id,
-                    description=tool_info["description"],
-                    inputSchema=tool_info["parameters"],
-                )
-                for tool_id, tool_info in self.tool_registry.items()
-            ]
+    async def _list_tools(self, ctx, params) -> types.ListToolsResult:
+        """List all available tools."""
+        return types.ListToolsResult(tools=[
+            types.Tool(
+                name=tool_id,
+                description=tool_info["description"],
+                inputSchema=tool_info["parameters"],
+            )
+            for tool_id, tool_info in self.tool_registry.items()
+        ])
 
-        @app.call_tool()
-        async def call_tool(name: str, arguments: dict) -> List[types.TextContent]:
-            """Call the specified tool with the given arguments."""
+    async def _call_tool(self, ctx, params) -> types.CallToolResult:
+        """Call the specified tool with the given arguments."""
+        name = params.name
+        arguments = params.arguments or {}
+        try:
+            if name not in self.tool_registry:
+                logger.error(f"Unknown tool: {name}")
+                error_response = create_error_response(f"Unknown tool: {name}", tool=name)
+                return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(error_response, indent=2))])
+
+            # Execute the appropriate tool function
             try:
-                if name not in self.tool_registry:
-                    logger.error(f"Unknown tool: {name}")
-                    error_response = create_error_response(f"Unknown tool: {name}", tool=name)
-                    return [types.TextContent(type="text", text=json.dumps(error_response, indent=2))]
-
-                # Execute the appropriate tool function
-                try:
-                    result = await self._execute_tool(name, arguments)
-                except Exception as tool_error:
-                    import traceback
-                    logger.error(f"Error executing tool {name}: {tool_error}")
-                    error_response = create_error_response(
-                        f"Error executing tool: {str(tool_error)}", 
-                        tool=name, 
-                        additional_info={"arguments": arguments}
-                    )
-                    return [types.TextContent(type="text", text=json.dumps(error_response, indent=2))]
-
-                # Convert result to TextContent
-                try:
-                    if isinstance(result, dict) or isinstance(result, list):
-                        formatted_result = json.dumps(result, indent=2)
-                    else:
-                        formatted_result = str(result)
-                    
-                    # Ensure we never return None or empty responses which cause "undefined" errors
-                    if not formatted_result or formatted_result.strip() == "":
-                        formatted_result = json.dumps({
-                            "status": "success",
-                            "message": "Operation completed successfully, but returned no data",
-                            "tool": name
-                        }, indent=2)
-                    
-                    return [types.TextContent(type="text", text=formatted_result)]
-                except Exception as format_error:
-                    logger.error(f"Error formatting result: {format_error}")
-                    error_response = {
-                        "error": f"Error formatting result: {str(format_error)}",
-                        "status": "error",
-                        "tool": name
-                    }
-                    return [types.TextContent(type="text", text=json.dumps(error_response, indent=2))]
-            except Exception as e:
+                result = await self._execute_tool(name, arguments)
+            except Exception as tool_error:
                 import traceback
-                error_traceback = traceback.format_exc()
-                logger.error(f"Unexpected error in call_tool for {name}: {e}")
+                logger.error(f"Error executing tool {name}: {tool_error}")
+                error_response = create_error_response(
+                    f"Error executing tool: {str(tool_error)}", 
+                    tool=name, 
+                    additional_info={"arguments": arguments}
+                )
+                return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(error_response, indent=2))])
+
+            # Convert result to TextContent
+            try:
+                if isinstance(result, dict) or isinstance(result, list):
+                    formatted_result = json.dumps(result, indent=2)
+                else:
+                    formatted_result = str(result)
                 
-                # Always return a valid response, never raise an exception
+                # Ensure we never return None or empty responses which cause "undefined" errors
+                if not formatted_result or formatted_result.strip() == "":
+                    formatted_result = json.dumps({
+                        "status": "success",
+                        "message": "Operation completed successfully, but returned no data",
+                        "tool": name
+                    }, indent=2)
+                
+                return types.CallToolResult(content=[types.TextContent(type="text", text=formatted_result)])
+            except Exception as format_error:
+                logger.error(f"Error formatting result: {format_error}")
                 error_response = {
-                    "error": f"Failed to call tool {name}: {str(e)}",
+                    "error": f"Error formatting result: {str(format_error)}",
                     "status": "error",
                     "tool": name
                 }
-                
-                return [types.TextContent(type="text", text=json.dumps(error_response, indent=2))]
-
-        return app
+                return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(error_response, indent=2))])
+        except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
+            logger.error(f"Unexpected error in call_tool for {name}: {e}")
+            
+            # Always return a valid response, never raise an exception
+            error_response = {
+                "error": f"Failed to call tool {name}: {str(e)}",
+                "status": "error",
+                "tool": name
+            }
+            
+            return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(error_response, indent=2))])
     
     async def _execute_tool(self, tool_id: str, arguments: Dict[str, Any]) -> Any:
         """Execute the specified tool with the given arguments."""
@@ -1216,6 +1241,36 @@ class MiladyOSToolServer:
                     "message": "milady!",
                     "status": "success"
                 }
+                
+            elif tool_id == "create_jenkins_job":
+                job_name = arguments.get("job_name")
+                jenkinsfile_content = arguments.get("jenkinsfile_content")
+                server_name = arguments.get("server_name", "default")
+
+                if not job_name or not jenkinsfile_content:
+                    return {
+                        "success": False,
+                        "error": "job_name and jenkinsfile_content are required",
+                        "status": "error"
+                    }
+
+                try:
+                    server = JenkinsUtils.connect_to_jenkins(server_name)
+                    await JenkinsUtils.delete_job_if_exists(server, job_name)
+                    await JenkinsUtils.create_job(server, job_name, jenkinsfile_content)
+                    return {
+                        "success": True,
+                        "status": "success",
+                        "message": f"Job {job_name} created successfully",
+                        "job_name": job_name
+                    }
+                except Exception as e:
+                    logger.error(f"Error creating Jenkins job {job_name}: {e}")
+                    return {
+                        "success": False,
+                        "status": "error",
+                        "error": f"Failed to create job {job_name}: {str(e)}"
+                    }
                 
             elif tool_id == "view_template":
                 # Extract parameters
@@ -2356,7 +2411,7 @@ class MiladyOSToolServer:
                         if REDIS_AVAILABLE:
                             try:
                                 redis_host, redis_port = get_redis_config()
-                                r = redis.Redis(host=redis_host, port=redis_port)
+                                r = redis.Redis(host=redis_host, port=redis_port, protocol=2)
                                 r.hset(f"miladyos:evolve:running:{evolution_id}", mapping={
                                     "template_name": template_name,
                                     "goal": goal,
@@ -2414,7 +2469,7 @@ class MiladyOSToolServer:
                 try:
                     if REDIS_AVAILABLE:
                         redis_host, redis_port = get_redis_config()
-                        r = redis.Redis(host=redis_host, port=redis_port)
+                        r = redis.Redis(host=redis_host, port=redis_port, protocol=2)
 
                         # Check running evolutions
                         running_key = f"miladyos:evolve:running:{evolution_id}"

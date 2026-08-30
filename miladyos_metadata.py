@@ -74,7 +74,8 @@ class RedkaMetadataManager:
         self.redis = redis.Redis(
             host=self.redis_host, 
             port=self.redis_port, 
-            decode_responses=True
+            decode_responses=True,
+            protocol=2  # Redka speaks RESP2 only; RESP3 HELLO handshake fails
         )
         
         # Test Redis connection
