@@ -29,7 +29,7 @@ COPY embeddings.py .
 COPY search_module.py .
 COPY UnslothGRPOTrainerTemp.py .
 COPY rl_helpers.py .
-COPY train.py .
+COPY train_lore.py .
 
 # Create directories for data
 RUN mkdir -p saved_data faiss_index
