@@ -188,7 +188,7 @@ Let's run a simple "hello world" pipeline to verify everything works.
 miladyos mcp  # Start MCP server in one terminal
 
 # In another terminal, or via Claude/AI agent:
-# Use the create_template tool to create a hello-world pipeline
+# Use the create_jenkins_job tool to seed a job from a Jenkinsfile
 ```
 
 Or create manually:
@@ -283,10 +283,10 @@ async def main():
             tools = await session.list_tools()
             print(f"Available tools: {[t.name for t in tools.tools]}")
 
-            # Run a pipeline
+            # Seed a job
             result = await session.call_tool(
-                "run_pipeline",
-                {"template_name": "hello-world"}
+                "create_jenkins_job",
+                {"job_name": "hello-world", "jenkinsfile_content": "pipeline { agent any }"}
             )
             print(result)
 

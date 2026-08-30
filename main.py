@@ -41,11 +41,6 @@ def cli():
     help="Directory containing pipeline templates",
 )
 @click.option(
-    "--metadata-dir",
-    default="metadata",
-    help="Directory to store metadata files",
-)
-@click.option(
     "--redis-host",
     default="localhost",
     help="Redis server hostname",
@@ -78,12 +73,7 @@ def cli():
     default="",
     help="Base path for URL construction (only used with sse transport)",
 )
-@click.option(
-    "--sqlite-db-path",
-    default="/data/redka/data.db",
-    help="Path to SQLite database file",
-)
-def mcp(all_tools, templates_dir, metadata_dir, redis_host, redis_port, transport, host, port, base_path, sqlite_db_path):
+def mcp(all_tools, templates_dir, redis_host, redis_port, transport, host, port, base_path):
     """Run the MiladyOS MCP server.
 
     Provides MCP-compatible tools for MiladyOS pipeline management.
@@ -98,13 +88,7 @@ def mcp(all_tools, templates_dir, metadata_dir, redis_host, redis_port, transpor
     
     # Configure MCP
     Config.TEMPLATES_DIR = templates_dir
-    Config.METADATA_DIR = metadata_dir
-    Config.SQLITE_DB_PATH = sqlite_db_path
-    
-    # Set environment variables for SQLite configuration
-    os.environ["SQLITE_DB_PATH"] = sqlite_db_path
-    
-    # Set up metadata manager with the right directories
+
     from miladyos_mcp import MiladyOSToolServer
     
     # Create and run the server

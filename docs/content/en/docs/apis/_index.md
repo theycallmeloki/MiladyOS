@@ -56,9 +56,9 @@ Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json`
 
 ## MCP Tools Reference
 
-MiladyOS exposes **18 MCP tools** across 4 categories:
+MiladyOS exposes **7 MCP tools**:
 
-### Pipeline Management (8 tools)
+### Pipeline Tools
 
 #### hello_world
 
@@ -73,207 +73,6 @@ Test connectivity to MiladyOS.
   "success": true,
   "message": "milady!",
   "status": "success"
-}
-```
-
----
-
-#### view_template
-
-View a pipeline template with line numbers.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `template_name` | string | Yes | Template name (without .Jenkinsfile) |
-
-```json
-// Request
-{"template_name": "example-build"}
-
-// Response
-{
-  "success": true,
-  "template_name": "example-build",
-  "path": "templates/example-build.Jenkinsfile",
-  "formatted_content": "   1 | // Jenkinsfile for example-build\n   2 | pipeline {\n...",
-  "raw_content": "// Jenkinsfile for example-build\npipeline {..."
-}
-```
-
----
-
-#### create_template
-
-Create a new Jenkins pipeline template. Can auto-generate from description.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `template_name` | string | Yes | Name for the new template |
-| `description` | string | Yes | What the pipeline should do |
-| `content` | string | No | Full Jenkinsfile content (auto-generates if omitted) |
-| `agent` | string | No | Agent specification (default: "any") |
-| `environment_vars` | object | No | Environment variables to set |
-
-```json
-// Request - Auto-generate
-{
-  "template_name": "my-node-app",
-  "description": "Build and test a Node.js application with Docker"
-}
-
-// Request - Manual content
-{
-  "template_name": "custom-pipeline",
-  "description": "Custom CI/CD pipeline",
-  "content": "pipeline {\n    agent any\n    stages {...}\n}"
-}
-
-// Response
-{
-  "success": true,
-  "template_name": "my-node-app",
-  "path": "templates/my-node-app.Jenkinsfile",
-  "generated": true,
-  "message": "Template created successfully"
-}
-```
-
----
-
-#### edit_template
-
-Modify an existing pipeline template.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `template_name` | string | Yes | Template to edit |
-| `new_content` | string | No | Complete new content (replaces entire file) |
-| `line_edits` | array | No | Line-specific edits `[{line: N, content: "..."}]` |
-| `insert_lines` | array | No | Lines to insert `[{after: N, content: "..."}]` |
-| `delete_lines` | array | No | Line numbers to delete `[5, 6, 7]` |
-
-```json
-// Request - Full replacement
-{
-  "template_name": "example-build",
-  "new_content": "pipeline {\n    agent { label 'docker' }\n    ..."
-}
-
-// Request - Line edits
-{
-  "template_name": "example-build",
-  "line_edits": [
-    {"line": 5, "content": "        sh 'npm ci --prefer-offline'"}
-  ],
-  "insert_lines": [
-    {"after": 10, "content": "        sh 'npm run lint'"}
-  ]
-}
-
-// Response
-{
-  "success": true,
-  "template_name": "example-build",
-  "changes_made": ["Modified line 5", "Inserted after line 10"],
-  "diff_preview": "..."
-}
-```
-
----
-
-#### list_templates
-
-List all available pipeline templates.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `include_content` | boolean | No | Include template content (default: false) |
-
-```json
-// Response
-{
-  "success": true,
-  "templates": [
-    {
-      "name": "example-build",
-      "path": "templates/example-build.Jenkinsfile",
-      "description": "Example build pipeline that can be evolved",
-      "has_evolve_blocks": true
-    },
-    {
-      "name": "docker-deploy",
-      "path": "templates/docker-deploy.Jenkinsfile",
-      "description": "Docker image build and deployment",
-      "has_evolve_blocks": true
-    }
-  ],
-  "count": 5
-}
-```
-
----
-
-#### deploy_pipeline
-
-Register a template with Jenkins (creates/updates the job).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `template_name` | string | Yes | Template to deploy |
-| `job_name` | string | No | Jenkins job name (defaults to template name) |
-| `server_name` | string | No | Jenkins server (default: "default") |
-| `username` | string | No | Jenkins username |
-| `password` | string | No | Jenkins password |
-
-```json
-// Request
-{
-  "template_name": "example-build",
-  "job_name": "my-project-build"
-}
-
-// Response
-{
-  "success": true,
-  "deployment_id": "dep-abc123",
-  "template_name": "example-build",
-  "job_name": "my-project-build",
-  "jenkins_url": "http://localhost:8080/job/my-project-build",
-  "status": "deployed"
-}
-```
-
----
-
-#### run_pipeline
-
-Execute a deployed pipeline.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `job_name` | string | Yes | Jenkins job to run |
-| `parameters` | object | No | Build parameters |
-| `wait_for_completion` | boolean | No | Wait for build to finish (default: false) |
-| `stream_output` | boolean | No | Stream console output (default: true) |
-| `server_name` | string | No | Jenkins server |
-
-```json
-// Request
-{
-  "job_name": "my-project-build",
-  "parameters": {"BRANCH": "main", "DEPLOY_ENV": "staging"},
-  "wait_for_completion": true
-}
-
-// Response
-{
-  "success": true,
-  "execution_id": "exec-xyz789",
-  "job_name": "my-project-build",
-  "build_number": 42,
-  "status": "SUCCESS",
-  "duration_seconds": 127,
-  "console_output": "..."
 }
 ```
 
@@ -308,150 +107,31 @@ Execute arbitrary CLI commands (with session tracking).
 
 ---
 
-### Execution Status (3 tools)
+#### create_jenkins_job
 
-#### get_pipeline_status
-
-Query execution status from metadata system.
+Create a Jenkins pipeline job from Jenkinsfile content.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `execution_id` | string | Yes | Execution ID to check |
-
-```json
-// Response
-{
-  "success": true,
-  "execution_id": "exec-xyz789",
-  "status": "complete",
-  "result": "SUCCESS",
-  "job_name": "my-project-build",
-  "build_number": 42,
-  "started_at": "2024-01-15T10:30:00Z",
-  "finished_at": "2024-01-15T10:32:07Z",
-  "duration_seconds": 127
-}
-```
-
----
-
-#### list_pipeline_runs
-
-Show execution history with filtering.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `template_name` | string | No | Filter by template |
-| `status` | string | No | Filter by status: running, complete, failed |
-| `limit` | integer | No | Max results (default: 10) |
+| `job_name` | string | Yes | Name of the Jenkins job to create |
+| `jenkinsfile_content` | string | Yes | Full Jenkinsfile pipeline script content |
+| `server_name` | string | No | Jenkins server (default: default) |
 
 ```json
 // Request
 {
-  "template_name": "example-build",
-  "status": "complete",
-  "limit": 5
+  "job_name": "youtube-dl",
+  "jenkinsfile_content": "pipeline { agent any; stages { stage('x') { steps { echo 'hi' } } } }"
 }
 
 // Response
 {
   "success": true,
-  "executions": [
-    {
-      "execution_id": "exec-xyz789",
-      "template_name": "example-build",
-      "job_name": "my-project-build",
-      "status": "complete",
-      "result": "SUCCESS",
-      "build_number": 42,
-      "duration_seconds": 127
-    }
-  ],
-  "count": 1
+  "message": "Job youtube-dl created successfully"
 }
 ```
 
 ---
-
-### Database Access (3 tools)
-
-#### read_query
-
-Execute SELECT queries on MiladyOS's internal SQLite database.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | string | Yes | SELECT SQL query |
-
-```json
-// Request
-{
-  "query": "SELECT key, value FROM redka_hash WHERE key LIKE 'miladyos:template:%' LIMIT 10"
-}
-
-// Response
-{
-  "success": true,
-  "columns": ["key", "value"],
-  "rows": [
-    ["miladyos:template:example-build", "..."],
-    ["miladyos:template:docker-deploy", "..."]
-  ],
-  "row_count": 2
-}
-```
-
----
-
-#### list_db_tables
-
-List all tables in the internal database.
-
-```json
-// Response
-{
-  "success": true,
-  "tables": [
-    "redka_key",
-    "redka_hash",
-    "redka_zset",
-    "redka_string"
-  ],
-  "count": 4
-}
-```
-
----
-
-#### describe_db_table
-
-Get schema information for a table.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table_name` | string | Yes | Table to describe |
-
-```json
-// Request
-{"table_name": "redka_hash"}
-
-// Response
-{
-  "success": true,
-  "table_name": "redka_hash",
-  "schema": [
-    {"name": "id", "type": "INTEGER", "pk": true},
-    {"name": "key", "type": "TEXT", "pk": false},
-    {"name": "field", "type": "TEXT", "pk": false},
-    {"name": "value", "type": "BLOB", "pk": false}
-  ],
-  "column_count": 4
-}
-```
-
----
-
-### AlphaEvolve Tools (4 tools)
 
 #### evolve_template
 
