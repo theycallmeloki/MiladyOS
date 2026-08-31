@@ -5,7 +5,7 @@
 > First node acquires the server role; the rest join it as agents. Fleet nodes
 > replace the current Talos fleet once proven.
 
-Status: **D1–D4 RULED** (operator): Debian 13 live-build + Calamares installer (live + install both), k3s `--docker`, manual role selection with clean lifecycle switching + LAN master discovery. Foundation unblocked; D5–D12 defaults in §3.
+Status: **D1–D4 RULED** (operator): Debian 13 live-build + Calamares installer (live + install both), k3s `--docker`, manual role selection (**master | worker | desktop**) with clean lifecycle switching + LAN master discovery. Foundation unblocked; D5–D12 defaults in §3.
 
 ---
 
@@ -49,7 +49,7 @@ Cluster formation (D4):
 ```
  node-01  boots → role=server → k3s server --cluster-init (sqlite)
             ├─ Avahi: advertises _kubernetes._tcp (startup.sh already queries it)
-            └─ prints join token to console / /etc/miladyos/node-token
+            └─ prints join token to console / /etc/milady/node-token
  node-02+ boots → role=agent → Avahi discovers server → join with token
             └─ MiladyOS container runs on every node (docker.sock = host)
 ```
@@ -73,7 +73,7 @@ cluster as the target; Jenkins-in-container drives the same KanikoBuild CRs
   "normal ISO" feel + Calamares install-to-disk for fleet persistence.
   [RULED D2 — both.]
 - GRUB with UEFI + BIOS boot; squashfs rootfs; persistence optional.
-- Hostname scheme `miladyos-NN`; autologin console banner; no X needed
+- Hostname scheme `milady-NN`; autologin console banner; no X needed
   (headless appliance; GoTTY already provides web shell via container).
 - ISO layout target in this repo:
 
@@ -90,10 +90,10 @@ ISO/
 ├── payload/                   # build-time staging
 │   └── miladyos-image.tar.zst # docker save ogmiladyloki/miladyos → zstd
 ├── systemd/                   # first-boot units (installed into rootfs)
-│   ├── miladyos-load.service
-│   ├── miladyos-container.service
-│   ├── k3s-role.service
-│   └── miladyos-firstboot.service
+│   ├── milady-role.service
+│   ├── milady-container.service
+│   ├── k3s-agent.service      # static agent unit (--docker, env-driven join)
+│   └── kubernetes.service.avahi
 ├── firstboot/                 # role election + join scripts
 │   ├── role-detect.sh         # kernel cmdline / config file / TUI
 │   ├── role-switch.sh         # clean teardown when role changes
@@ -129,9 +129,9 @@ ISO/
 - Build-time: `docker pull ogmiladyloki/miladyos:latest` (the exact image the
   `docker_build_push.yml` workflow produces) → `docker save` → `zstd` →
   `/payload/miladyos-image.tar.zst` in the ISO.
-- First boot: `miladyos-load.service` → `docker load` (compressed, cached;
-  idempotent).
-- `miladyos-container.service` mirrors the proven run flags from
+- First boot: `milady-container.service` `ExecStartPre` (`milady-ensure-image`)
+  → `docker load` from payload (compressed, cached; idempotent).
+- `milady-container.service` mirrors the proven run flags from
   `install_miladyos.sh` + `scripts/builder.sh`:
 
 ```
@@ -152,11 +152,16 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
 ### L4 — Cluster layer (k3s formation)
 
 - **Role selection (RULED D4 — manual, operator-decided per node):**
-  - Kernel cmdline `miladyos.role=server|agent` (deterministic fleet ops) or
-    `/etc/miladyos/node.conf`, or interactive first-boot prompt. The operator
-    decides "is this node a master or a worker" — no auto-election.
+  - Kernel cmdline `milady.role=server|agent|desktop` (deterministic fleet
+    ops) or `/etc/milady/node.conf`, or the Calamares install question. The
+    operator decides the node's role — no auto-election.
+  - **Desktop mode (RULED):** `role=desktop` — no k3s, no control-plane
+    container. Boots to a super-thin default environment (no WM preinstalled);
+    the user installs what they need (WM/compositor/apps) from there. The
+    Calamares role page offers master | worker | desktop; desktop answers
+    seed nothing k3s-related.
   - **Role switching is explicit and clean:** `role-switch.sh` tears down the
-    current lifecycle before starting the new one — stop k3s + miladyos
+    current lifecycle before starting the new one — stop k3s + the milady
     container, reset `/var/lib/rancher/k3s` state (server→agent: remove
     server datastore; agent→server: purge agent state), restore service
     enablement, then start in the new role. Switching must never leave a
@@ -164,7 +169,7 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
 - **Masters:** assume one master, or a small group behind a VIP. First server
   boots with `k3s server --cluster-init` (sqlite). For HA, 3+ servers with
   embedded etcd behind a fixed registration address — keepalived VIP
-  (`miladyos-<cluster>.lan`) in front; agents use the VIP as the API
+  (`milady-<cluster>.lan`) in front; agents use the VIP as the API
   endpoint, so they don't care how many masters are behind it.
 - **Agents (the common case):** on boot, Avahi-discover the LAN
   (`_kubernetes._tcp` — `startup.sh`'s `discover_k8s_server()` already
@@ -174,8 +179,8 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
   told `role=server`).
 - **Join token (D7-sec):** server prints/persists
   `/var/lib/rancher/k3s/server/node-token`; agent join prompts once
-  (or reads pre-seeded `/etc/miladyos/join-token` from USB label
-  `miladyos-join`). Never kernel cmdline (visible in /proc).
+  (or reads pre-seeded `/etc/milady/join-token` from USB label
+  `milady-join`). Never kernel cmdline (visible in /proc).
 - **Networking:** k3s servicelb vs MetalLB [D10]; Nebula overlay stays
   container-side (LAN cluster for now).
 - **Storage:** Longhorn with storage-node labels
@@ -245,7 +250,7 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
 | D1 | ISO base | Debian 13 live-build / Arch mkarchiso (Omarchy-literal) / Ubuntu | **RULED: Debian 13 live-build** — upstream Debian, mkarchiso-class toolchain confirmed |
 | D2 | Delivery | live-only / install-to-disk only / both | **RULED: Both** — live + Calamares installer |
 | D3 | k3s runtime | `--docker` / default containerd | **RULED: `--docker`** — one runtime, docker.sock coherence |
-| D4 | Role election | kernel cmdline / config file / interactive TUI / auto-first-boot | **RULED: manual selection + clean role-switch; workers Avahi-discover an existing master and insist on joining it; small master group behind keepalived VIP** |
+| D4 | Role election | kernel cmdline / config file / interactive TUI / auto-first-boot | **RULED: manual selection (master|worker|desktop) + clean role-switch; workers Avahi-discover an existing master and insist on joining it; small master group behind keepalived VIP** |
 | D5 | k3s version | latest stable at build / pinned | **Latest stable** — get.k3s.io default; `K3S_VERSION` honored if an operator exports it (no repo-level pin) |
 | D6 | Topology | single server + agents / 3-server HA | **Single server first; expand to 3-server embedded-etcd behind VIP** (RULED D4 direction) |
 | D7 | Image source | embedded docker save / registry pull at first boot | **Embedded** (air-gapped), registry as override |
@@ -302,11 +307,28 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
   10.42.x), agents advertising as masters (now server-only), avahi-browse
   -t cold-cache race (now retried), and duplicate hostnames (every node
   boots "debian"; k3s rejects the second registration) — RULED: random
-  hostname `miladyos-<1..10000>` at first boot. Token stays
+  hostname `milady-<1..10000>` at first boot. Token stays
   operator-mediated by design (secrecy); the only manual step.
 - **Role-switch both ways verified live**: agent→server (datastore init) and
   server→agent (k3s stop, server datastore backed up to
   `/var/lib/rancher/k3s-role-switch-backup`, agent joins fresh).
+
+## Naming — `milady` vs `miladyos`
+
+Internal paths, tools, units, and hostnames use **`milady`**: `/etc/milady/`,
+`/usr/local/sbin/milady-*`, `milady-*.service`, hostnames
+`milady-<1..10000>`, `br-milady`, dev image tags `milady-qemu` /
+`milady-iso-builder`, kernel cmdline `milady.role=`.
+
+**`miladyos`** is reserved for the published product surface:
+`ogmiladyloki/miladyos` image, `miladyosregistry.*` domain, ISO/release
+artifact prefix `miladyos-<version>`, the 5-octet version scheme, and
+`MILADYOS_*` env vars.
+
+The `milady` binary (LLM bridge) is the only host binary with that exact
+name today; native host tooling (`milady-*` scripts) coexists under
+`/usr/local/sbin`. Revisit namespacing if the bridge ever installs natively
+on the host (currently it lives inside the container only).
 
 ## Versioning — 5-octet agentic semver
 

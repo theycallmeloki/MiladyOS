@@ -1,0 +1,18 @@
+[Unit]
+Description=MiladyOS role decision (server or agent)
+Before=k3s.service k3s-agent.service milady-container.service
+After=avahi-daemon.service
+Wants=avahi-daemon.service
+ConditionPathExists=!/etc/milady/role-applied
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/milady-set-hostname
+ExecStart=/usr/local/sbin/milady-hostname-banner
+ExecStart=/usr/local/sbin/milady-gpu-detect
+ExecStart=/usr/local/sbin/milady-role-detect
+ExecStartPost=/usr/bin/touch /etc/milady/role-applied
+
+[Install]
+WantedBy=multi-user.target

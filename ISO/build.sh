@@ -18,7 +18,7 @@ OUT_DIR="${OUT_DIR:-$ISO_DIR/out}"
 VERSION="${VERSION:-$(bash "$ISO_DIR/version.sh")}"
 
 MILADYOS_IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/miladyos:latest}"
-BUILDER_TAG="miladyos-iso-builder:13.4"
+BUILDER_TAG="milady-iso-builder:13.4"
 MILADYOS_ROLE="${MILADYOS_ROLE:-server}"   # seed node.conf: server|agent
 
 NO_PAYLOAD=0

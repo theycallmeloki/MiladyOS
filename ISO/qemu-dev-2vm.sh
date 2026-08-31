@@ -16,7 +16,7 @@
 #       agent  02:00:00:00:00:02 -> 172.20.0.11
 #
 # Guests (both boot ROLE=agent by default — D4 manual selection):
-#   VM1 (server):  telnet localhost 5555 -> miladyos-role-switch server
+#   VM1 (server):  telnet localhost 5555 -> milady-role-switch server
 #                  (k3s server + Avahi advert; node-token on console)
 #   VM2 (agent):   telnet localhost 5556 -> boots, Avahi-discovers VM1,
 #                  joins as agent with the token
@@ -27,7 +27,7 @@ ISO="${1:-out/miladyos-$(bash version.sh).iso}"
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ISO="$(cd "$ISO_DIR" && realpath "$ISO")"
 
-QEMU_IMG="miladyos-qemu:13.4"
+QEMU_IMG="milady-qemu:13.4"
 if ! docker image inspect "$QEMU_IMG" >/dev/null 2>&1; then
     docker build -q -t "$QEMU_IMG" - <<'EOF'
 FROM debian:13.4
@@ -43,7 +43,7 @@ AGENT_IP=172.20.0.11
 UPLINK="${UPLINK:-enp6s0}"
 
 DHCP_PID=""
-DNSMASQ_DROPIN=/etc/dnsmasq.d/miladyos-br.conf
+DNSMASQ_DROPIN=/etc/dnsmasq.d/milady-br.conf
 
 cleanup() {
     set +e
@@ -98,10 +98,10 @@ start_dhcp() {
             --dhcp-range=172.20.0.50,172.20.0.99,12h \
             --dhcp-host=02:00:00:00:00:01,172.20.0.10 \
             --dhcp-host=02:00:00:00:00:02,172.20.0.11 \
-            --dhcp-leasefile=/run/miladyos-dhcp.leases \
-            --pid-file=/run/miladyos-dhcp.pid >/dev/null 2>&1 &
+            --dhcp-leasefile=/run/milady-dhcp.leases \
+            --pid-file=/run/milady-dhcp.pid >/dev/null 2>&1 &
         sleep 1
-        DHCP_PID=$(sudo cat /run/miladyos-dhcp.pid 2>/dev/null || true)
+        DHCP_PID=$(sudo cat /run/milady-dhcp.pid 2>/dev/null || true)
         echo "dnsmasq: own instance pid $DHCP_PID"
     fi
 }
@@ -112,7 +112,7 @@ echo "bridge:    $BR $GW/24 (multicast on)"
 echo "server VM: telnet localhost 5555 | ssh root@$SERVER_IP"
 echo "agent VM:  telnet localhost 5556 | ssh root@$AGENT_IP"
 echo
-echo "1. VM1 console:  miladyos-role-switch server   (wait for node-token)"
+echo "1. VM1 console:  milady-role-switch server   (wait for node-token)"
 echo "2. boot VM2 fresh -> it Avahi-discovers VM1 and joins as agent"
 echo "3. VM1: k3s kubectl get nodes   (both Ready)"
 echo
