@@ -22,9 +22,8 @@ for s in firstboot/*.sh; do
     install -m 0755 "$s" "$INC/usr/local/sbin/miladyos-$name"
 done
 cp systemd/*.service "$INC/usr/lib/systemd/system/"
-# k3s drop-ins: live-boot has no network-online.target completion
-mkdir -p "$INC/etc/systemd/system/k3s.service.d"
-cp systemd/k3s-network-dropin.conf "$INC/etc/systemd/system/k3s.service.d/network.conf"
+mkdir -p "$INC/etc/systemd/system/k3s-agent.service.d"
+cp systemd/k3s-network-dropin.conf "$INC/etc/systemd/system/k3s-agent.service.d/network.conf"
 # Avahi advertises the k3s master as _kubernetes._tcp for agent discovery
 mkdir -p "$INC/etc/avahi/services"
 cp systemd/kubernetes.service.avahi "$INC/etc/avahi/services/kubernetes.service"

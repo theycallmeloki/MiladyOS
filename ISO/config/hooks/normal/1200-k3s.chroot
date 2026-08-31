@@ -6,7 +6,11 @@
 set -e
 
 # Docker is the k3s runtime (D3) — baked into the unit at install time.
+# SKIP_ENABLE: the unit is defined but NOT started/enabled at install —
+# role-detect enables exactly one of k3s.service (server) or
+# k3s-agent.service (agent, staged from ISO/systemd/) at first boot.
 export INSTALL_K3S_EXEC="server --docker"
+export INSTALL_K3S_SKIP_ENABLE=true
 
 if [ -n "${K3S_VERSION:-}" ]; then
     export INSTALL_K3S_VERSION="$K3S_VERSION"
