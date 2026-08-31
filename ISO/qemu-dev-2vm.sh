@@ -129,8 +129,20 @@ SERIAL_A="$ISO_DIR/out/.2vm-server.serial"
 SERIAL_B="$ISO_DIR/out/.2vm-agent.serial"
 touch "$SERIAL_A" "$SERIAL_B"
 
-run_vm() { # name tap mac serialport logfile
-    local name="$1" tap="$2" mac="$3" sport="$4" log="$5"
+# scratch disks: docker store (vfs-on-tmpfs can't hold the image — see
+# persist-docker + var-lib-docker.mount); persist across VM restarts
+DEV_SERVER_DISK="$ISO_DIR/out/.2vm-server-docker.qcow2"
+DEV_AGENT_DISK="$ISO_DIR/out/.2vm-agent-docker.qcow2"
+for img in "$DEV_SERVER_DISK" "$DEV_AGENT_DISK"; do
+    if [ ! -f "$img" ]; then
+        docker run --rm -v "$ISO_DIR/out":/work "$QEMU_IMG" \
+            qemu-img create -f qcow2 "/work/$(basename "$img")" 40G >/dev/null
+        echo "created scratch disk: $img"
+    fi
+done
+
+run_vm() { # name tap mac serialport logfile disk
+    local name="$1" tap="$2" mac="$3" sport="$4" log="$5" disk="$6"
     docker run --rm -i \
         --device /dev/kvm \
         --device /dev/net/tun \
@@ -141,6 +153,7 @@ run_vm() { # name tap mac serialport logfile
         "$QEMU_IMG" \
         qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 32768 \
             -drive file=/boot.iso,media=cdrom,readonly=on \
+            -drive file="$disk",if=virtio,format=qcow2 \
             -boot d -nographic \
             -chardev socket,id=ser,host=0.0.0.0,port="$sport",server=on,wait=off \
             -serial chardev:ser \
@@ -151,8 +164,8 @@ run_vm() { # name tap mac serialport logfile
     echo "$name: pid $! (serial $sport, log $log)"
 }
 
-run_vm server tap0 02:00:00:00:00:01 5555 "$SERIAL_A"
-run_vm agent  tap1 02:00:00:00:00:02 5556 "$SERIAL_B"
+run_vm server tap0 02:00:00:00:00:01 5555 "$SERIAL_A" "/work/$(basename "$DEV_SERVER_DISK")"
+run_vm agent  tap1 02:00:00:00:00:02 5556 "$SERIAL_B" "/work/$(basename "$DEV_AGENT_DISK")"
 
 echo
 echo "VMs launched. Ctrl-C stops everything."
