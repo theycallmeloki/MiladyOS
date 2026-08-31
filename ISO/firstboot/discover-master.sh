@@ -22,8 +22,16 @@ esac
 # Own addresses — an agent must never "discover" itself as master.
 OWN_PAT=$(ip -4 addr show 2>/dev/null | awk '/inet / {ip=$2; sub(/\/.*/, "", ip); printf "%s%s", sep, ip; sep="|"}')
 
-avahi-browse -tpr _kubernetes._tcp 2>/dev/null | \
-    awk -F';' -v p="$LOCAL_PREFIX" -v own="$OWN_PAT" '
-        $1=="=" && $3=="IPv4" && $8 ~ "^" p && $8 !~ "^(" own ")$" && $8 !~ /^127\./ {print $8; exit}
-        $1=="=" && $3=="IPv4" && $8 !~ /^(127\.|172\.1[78]\.|10\.42\.)/ && $8 !~ "^(" own ")$" {print $8; exit}
-    '
+# Retry: avahi-browse -t dumps "a more or less complete list" — with a cold
+# daemon cache it can exit empty before the mDNS query/response round-trip
+# lands (VERIFIED race at first boot). Re-query until the master answers.
+for i in 1 2 3 4 5; do
+    RES=$(avahi-browse -tpr _kubernetes._tcp 2>/dev/null | \
+        awk -F';' -v p="$LOCAL_PREFIX" -v own="$OWN_PAT" '
+            $1=="=" && $3=="IPv4" && $8 ~ "^" p && $8 !~ "^(" own ")$" && $8 !~ /^127\./ {print $8; exit}
+            $1=="=" && $3=="IPv4" && $8 !~ /^(127\.|172\.1[78]\.|10\.42\.)/ && $8 !~ "^(" own ")$" {print $8; exit}
+        ')
+    [ -n "$RES" ] && { echo "$RES"; exit 0; }
+    sleep 2
+done
+exit 1
