@@ -1,0 +1,8 @@
+[Unit]
+Description=Prepare MILADY_DOCKER scratch disk for docker store
+Before=var-lib-docker.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/milady-persist-docker
+RemainAfterExit=yes
