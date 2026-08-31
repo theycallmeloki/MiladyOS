@@ -130,8 +130,8 @@ SERIAL_A="$ISO_DIR/out/.2vm-server.serial"
 SERIAL_B="$ISO_DIR/out/.2vm-agent.serial"
 touch "$SERIAL_A" "$SERIAL_B"
 
-# scratch disks: docker store (vfs-on-tmpfs can't hold the image — see
-# persist-docker + var-lib-docker.mount); persist across VM restarts
+# scratch disks: /var/lib on real disk (tmpfs overlay can't hold the
+# image — see persist-docker + var-lib.mount); persist across VM restarts
 DEV_SERVER_DISK="$ISO_DIR/out/.2vm-server-docker.qcow2"
 DEV_AGENT_DISK="$ISO_DIR/out/.2vm-agent-docker.qcow2"
 for img in "$DEV_SERVER_DISK" "$DEV_AGENT_DISK"; do
