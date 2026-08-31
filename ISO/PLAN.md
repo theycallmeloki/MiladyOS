@@ -119,8 +119,9 @@ ISO/
 - **Longhorn prereqs:** `open-iscsi` + `util-linux` (the exact packages that
   are "Talos system extensions" today — plain apt on Debian).
 - **Tooling baked into ISO** (matches Dockerfile pins): docker CLI,
-  kubectl, helm, k3sup, talosctl (legacy ops), jq, curl, tmux, git,
-  qrencode (token QR), avahi-utils (discovery), zstd.
+  kubectl, helm, talosctl (legacy ops), jq, curl, tmux, git, qrencode
+  (token QR), avahi-utils (discovery), zstd. No k3sup — the ISO installs
+  k3s at build time, so the remote-bootstrap tool is obsolete (see L4).
 - Avahi-daemon enabled — startup.sh's `discover_k8s_server()` already
   queries `_kubernetes._tcp`; the ISO extends this into join logic.
 
@@ -180,16 +181,18 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
 - **Storage:** Longhorn with storage-node labels
   (`longhorn.io/node=true`) applied by role script; default storage class
   like current `longhorn-values.yaml`.
-- k3s version pin [D5]: current stable at build time; old Dockerfile pin
-  (`v1.26.10+k3s2`) is container-side k3sup tooling, not the node runtime —
-  ISO uses its own pinned k3s binary.
+- k3s version pin [D5]: `ISO/build.sh` sets `K3S_VERSION` (default
+  `v1.36.4+k3s1`, the current stable channel) and passes it to the
+  `1200-k3s.chroot` hook. The old Dockerfile `v1.26.10+k3s2` env is gone —
+  the container never ran k3s, and k3sup (remote bootstrap) was removed;
+  the node runtime lives on the host only.
 
 ### L5 — Fleet ops layer (replacing Talos)
 - New k3s Jenkinsfile templates (this repo `templates/`):
   - `k3s-server-bootstrap.Jenkinsfile` — replaces
     `talos-cluster-bootstrap.Jenkinsfile`: poll Avahi/API, confirm server
-    up, fetch kubeconfig via `k3sup install --k3s-extra-args '--docker'` or
-    direct scp of `/etc/rancher/k3s/k3s.yaml`.
+    up, fetch kubeconfig via scp of `/etc/rancher/k3s/k3s.yaml` (no k3sup —
+    the ISO already installed and started k3s on the host).
   - `k3s-agent-join.Jenkinsfile` — replaces `talos-add-worker.Jenkinsfile`:
     role=agent + token injection, GPU/storage labels identical
     (`nvidia.com/gpu.present`, `longhorn.io/node`).

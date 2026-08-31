@@ -61,8 +61,6 @@ FROM jenkins/jenkins:lts-jdk21
 
 ENV PACHCTL_TAG_VER=1.12.5
 ENV CADDY_TAG_VER=2.4.6
-ENV K3S_VERSION=v1.26.10+k3s2
-ENV K3SUP_VERSION=0.6.3
 ENV HEADSCALE_VERSION=0.26.1
 ENV SANDMAN_VERSION=0.2.42
 ENV MILADY_LLM_BRIDGE_VERSION=0.0.15
@@ -121,7 +119,12 @@ RUN set -e; \
     sh ollama-install.sh && \
     rm ollama-install.sh
 
-# ---------- Kubernetes & cluster tooling (kubectl, helm, k3sup, pachctl) ----------
+# ---------- Kubernetes & cluster tooling (kubectl, helm, pachctl) ----------
+# The container is a cluster *client*: kubectl + helm talk to the host k3s
+# via the mounted kubeconfig (KUBERNETES_MODE=true). k3sup was removed — it
+# bootstraps k3s over SSH on fresh nodes, which the ISO already does at
+# build time (see ISO/PLAN.md D3); nothing invoked it. k3s itself lives on
+# the host, never in the container.
 RUN set -e; \
     ARCH=$(dpkg --print-architecture); \
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl" && \
@@ -131,9 +134,6 @@ RUN set -e; \
     chmod +x get_helm.sh && \
     ./get_helm.sh && \
     rm get_helm.sh; \
-    curl -sLS -o k3sup-install.sh https://get.k3sup.dev && \
-    sh k3sup-install.sh && \
-    rm k3sup-install.sh; \
     if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
         curl -o /tmp/pachctl.deb -L "https://github.com/pachyderm/pachyderm/releases/download/v${PACHCTL_TAG_VER}/pachctl_${PACHCTL_TAG_VER}_amd64.deb" && \
         dpkg -i /tmp/pachctl.deb || true; \
