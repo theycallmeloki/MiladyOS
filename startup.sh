@@ -315,7 +315,7 @@ if command -v hermes > /dev/null 2>&1; then
     echo "Starting Hermes agent..."
     mkdir -p "${HERMES_HOME:-/opt/data/hermes}"
     # Web UI dashboard on :9119 (prebuilt web_dist ships in the wheel)
-    hermes dashboard --port 9119 > /var/log/hermes-dashboard.log 2>&1 &
+    hermes dashboard --port 9119 > "${HERMES_HOME:-/opt/data/hermes}/dashboard.log" 2>&1 &
     sleep 3
     if pgrep -f "hermes dashboard" > /dev/null; then
         echo "Hermes dashboard started on port 9119"
@@ -323,7 +323,7 @@ if command -v hermes > /dev/null 2>&1; then
         echo "WARNING: Hermes dashboard did not start successfully"
     fi
     # Messaging gateway on :8090 (optional; needs platform config)
-    hermes gateway run > /var/log/hermes-gateway.log 2>&1 &
+    hermes gateway run > "${HERMES_HOME:-/opt/data/hermes}/gateway.log" 2>&1 &
     sleep 3
     if pgrep -f "hermes gateway" > /dev/null; then
         echo "Hermes gateway started"

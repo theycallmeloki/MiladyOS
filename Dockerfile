@@ -65,22 +65,6 @@ ENV K3S_VERSION=v1.26.10+k3s2
 ENV K3SUP_VERSION=0.6.3
 ENV HEADSCALE_VERSION=0.26.1
 ENV SANDMAN_VERSION=0.2.42
-# Prefer the fixed SQLite over Debian's vulnerable libsqlite3.so.0. Keep the
-# public library name stable so both the system interpreter and the uv-created
-# venv resolve the replacement without changing Python import paths.
-COPY --from=sqlite_build /opt/sqlite-fixed/lib/libsqlite3.so.3.53.4 /usr/local/lib/
-RUN ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so.0 && \
-    ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so && \
-    printf '/usr/local/lib\n' > /etc/ld.so.conf.d/000-sqlite-fixed.conf && \
-    ldconfig && \
-    python3 -c "import sqlite3, sys; \
-v = sqlite3.sqlite_version_info; \
-sys.exit(f'linked SQLite {sqlite3.sqlite_version} still has the WAL-reset bug') if v < (3, 51, 3) else None; \
-db = sqlite3.connect(':memory:'); \
-db.execute(\"CREATE VIRTUAL TABLE docs USING fts5(content, tokenize='trigram')\"); \
-db.execute(\"INSERT INTO docs VALUES ('hermes')\"); \
-sys.exit('SQLite FTS5 trigram self-test failed') if db.execute(\"SELECT count(*) FROM docs WHERE docs MATCH 'erm'\").fetchone()[0] != 1 else None; \
-db.close()"
 
 # ---------- System packages (single consolidated apt pass) ----------
 USER root
@@ -105,6 +89,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg2 apt-transport-https iptables \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Prefer the fixed SQLite over Debian's vulnerable libsqlite3.so.0. Keep the
+# public library name stable so both the system interpreter and the uv-created
+# venv resolve the replacement without changing Python import paths.
+COPY --from=sqlite_build /opt/sqlite-fixed/lib/libsqlite3.so.3.53.4 /usr/local/lib/
+RUN ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so.0 && \
+    ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so && \
+    printf '/usr/local/lib\n' > /etc/ld.so.conf.d/000-sqlite-fixed.conf && \
+    ldconfig && \
+    python3 -c "import sqlite3, sys; \
+v = sqlite3.sqlite_version_info; \
+sys.exit(f'linked SQLite {sqlite3.sqlite_version} still has the WAL-reset bug') if v < (3, 51, 3) else None; \
+db = sqlite3.connect(':memory:'); \
+db.execute(\"CREATE VIRTUAL TABLE docs USING fts5(content, tokenize='trigram')\"); \
+db.execute(\"INSERT INTO docs VALUES ('hermes')\"); \
+sys.exit('SQLite FTS5 trigram self-test failed') if db.execute(\"SELECT count(*) FROM docs WHERE docs MATCH 'erm'\").fetchone()[0] != 1 else None; \
+db.close()"
 
 # ---------- Container & runtime installers (Docker CLI, Talos, Ollama) ----------
 RUN set -e; \
@@ -196,6 +197,12 @@ RUN uv venv /opt/hermes/.venv && \
     uv pip install -p /opt/hermes/.venv/bin/python hermes-agent && \
     /opt/hermes/.venv/bin/hermes --version
 
+# Pre-create the hermes state dir and hand it to the jenkins user so the
+# dashboard/gateway (started by startup.sh) can write skills/memory/state.
+RUN mkdir -p /opt/data/hermes && chown -R jenkins:jenkins /opt/data
+
+# Put hermes on PATH (its own venv, not the /app venv) and point state at
+# /opt/data/hermes — writable by the jenkins user at runtime.
 ENV HERMES_HOME=/opt/data/hermes
 ENV PATH="/opt/hermes/.venv/bin:${PATH}"
 
