@@ -19,7 +19,7 @@ mkdir -p "$INC/usr/local/sbin" "$INC/usr/lib/systemd/system" "$INC/etc/milady"
 for s in firstboot/*.sh; do
     name="$(basename "$s" .sh)"
     name="${name#milady-}"          # avoid milady-milady-container
-    install -m 0755 "$s" "$INC/usr/local/sbin/milady-\$name"
+    install -m 0755 "$s" "$INC/usr/local/sbin/milady-$name"
 done
 cp systemd/*.service "$INC/usr/lib/systemd/system/"
 mkdir -p "$INC/etc/systemd/system/k3s-agent.service.d"
