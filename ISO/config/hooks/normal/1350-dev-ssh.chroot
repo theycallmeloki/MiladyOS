@@ -10,10 +10,7 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINEae9PnoluuQy1LSEGwp18PUOLZTD5ALlwfZCOia0Cg
 EOF
 chmod 0600 /root/.ssh/authorized_keys
 
-# Generate host keys at build time. In the live squashfs, sshd-keygen.service
-# (which normally runs at first boot) is unreliable — /etc/ssh is baked
-# read-only in the squashfs and the keygen unit ordering breaks in live
-# boots, leaving sshd unable to start per-connection. Bake keys in.
-mkdir -p /etc/ssh
-/usr/bin/ssh-keygen -A -q || true
-ls -la /etc/ssh/ssh_host_* >/dev/null 2>&1 && echo "host keys baked" || echo "keygen failed"
+# Host keys are NOT baked: the stock 8050 hygiene hook strips /etc/ssh
+# keys after config hooks run, and baked keys must not ship anyway.
+# milady-sshkeys.service regenerates them on the first boot that lacks
+# them (ConditionPathExists=!), ordered before ssh.service.
