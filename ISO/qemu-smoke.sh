@@ -8,7 +8,7 @@
 # Exits 0 on marker, 1 on timeout. Uses a throwaway docker qemu image.
 set -euo pipefail
 
-ISO="${1:-out/miladyos-test.iso}"
+ISO="${1:-out/miladyos-$(bash version.sh).iso}"
 MARKER="${2:-miladyos: role=server}"
 TIMEOUT="${3:-420}"
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
