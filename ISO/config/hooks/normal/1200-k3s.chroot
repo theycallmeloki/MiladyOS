@@ -1,0 +1,19 @@
+#!/bin/sh
+# MiladyOS ISO — install k3s (server|agent) with Docker as the runtime.
+# Pinned version via K3S_VERSION env (build.sh); default = stable channel.
+# The k3s systemd unit is NOT enabled here — role selection enables the
+# correct one at first boot (server vs agent).
+set -e
+
+# Docker is the k3s runtime (D3) — baked into the unit at install time.
+export INSTALL_K3S_EXEC="server --docker"
+
+if [ -n "${K3S_VERSION:-}" ]; then
+    export INSTALL_K3S_VERSION="$K3S_VERSION"
+fi
+
+curl -fsSL https://get.k3s.io -o /tmp/k3s-install.sh
+sh /tmp/k3s-install.sh
+rm -f /tmp/k3s-install.sh
+
+echo "k3s $(k3s --version 2>/dev/null | head -1) installed"

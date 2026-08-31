@@ -1,0 +1,15 @@
+[Unit]
+Description=MiladyOS role decision (server or agent)
+Before=k3s.service k3s-agent.service miladyos-container.service
+ConditionPathExists=!/etc/miladyos/role-applied
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/miladyos-hostname-banner
+ExecStart=/usr/local/sbin/miladyos-gpu-detect
+ExecStart=/usr/local/sbin/miladyos-role-detect
+ExecStartPost=/usr/bin/touch /etc/miladyos/role-applied
+
+[Install]
+WantedBy=multi-user.target

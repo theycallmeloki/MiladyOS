@@ -1,0 +1,28 @@
+#!/bin/sh
+# MiladyOS ISO — install Docker Engine (docker-ce preferred, docker.io fallback)
+# Runs in the live-build chroot before the rootfs is frozen.
+set -e
+
+export DEBIAN_FRONTEND=noninteractive
+
+# Docker's official repo for trixie. Add keyring + apt source.
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc 2>/dev/null || true
+if [ -s /etc/apt/keyrings/docker.asc ]; then
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" \
+        > /etc/apt/sources.list.d/docker.list
+    apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30
+    if apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+        echo "docker-ce installed"
+    else
+        echo "docker-ce failed, falling back to docker.io"
+        apt-get install -y --no-install-recommends docker.io
+    fi
+else
+    echo "docker keyring unavailable, using docker.io"
+    apt-get install -y --no-install-recommends docker.io
+fi
+
+# docker group so the console user can drive the daemon
+groupadd -f docker
