@@ -1,0 +1,28 @@
+# MiladyOS ISO — live-build presets
+#
+# auto/config is executed by `lb config` (live-build) to set defaults.
+# These flags mirror the plan (ISO/PLAN.md): Debian 13 trixie, amd64,
+# main+contrib+non-free-firmware (firmware for bare-metal NICs), hybrid
+# ISO (UEFI + BIOS), no desktop, live + installer (calamares via package
+# list), MiladyOS branding.
+
+set -e
+
+lb config noauto \
+    --distribution trixie \
+    --architectures amd64 \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --binary-images iso-hybrid \
+    --debian-installer-distribution trixie \
+    --bootappend-live "boot=live components net.ifnames=0 console=ttyS0,115200n8" \
+    --iso-volume "MiladyOS" \
+    --iso-publisher "MiladyOS" \
+    --iso-application "MiladyOS appliance" \
+    --memtest none \
+    --source false \
+    --linux-flavours amd64 \
+    --debian-installer live \
+    --debian-installer-gui true \
+    --win32-loader false \
+    --mode debian \
+    "${@}"

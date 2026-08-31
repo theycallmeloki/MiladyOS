@@ -1,0 +1,16 @@
+[Unit]
+Description=MiladyOS container (control plane) via Docker
+After=docker.service miladyos-role.service
+Requires=docker.service
+Wants=miladyos-role.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+ExecStartPre=/usr/local/sbin/miladyos-ensure-image
+ExecStart=/usr/local/sbin/miladyos-container
+ExecStopPost=/usr/bin/docker rm -f miladyos >/dev/null 2>&1 || true
+
+[Install]
+WantedBy=multi-user.target

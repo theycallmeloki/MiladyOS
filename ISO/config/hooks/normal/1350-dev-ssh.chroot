@@ -1,0 +1,19 @@
+#!/bin/sh
+# MiladyOS dev-ISO hook: bake the operator SSH key into the live rootfs.
+# This is the *dev* entry path into the appliance; fleet builds omit it
+# (key injection happens at first-boot via operator USB/console instead).
+set -e
+
+install -m 0700 -d /root/.ssh
+cat > /root/.ssh/authorized_keys <<'EOF'
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINEae9PnoluuQy1LSEGwp18PUOLZTD5ALlwfZCOia0Cg ogmiladyloki@gmail.com
+EOF
+chmod 0600 /root/.ssh/authorized_keys
+
+# Generate host keys at build time. In the live squashfs, sshd-keygen.service
+# (which normally runs at first boot) is unreliable — /etc/ssh is baked
+# read-only in the squashfs and the keygen unit ordering breaks in live
+# boots, leaving sshd unable to start per-connection. Bake keys in.
+mkdir -p /etc/ssh
+/usr/bin/ssh-keygen -A -q || true
+ls -la /etc/ssh/ssh_host_* >/dev/null 2>&1 && echo "host keys baked" || echo "keygen failed"

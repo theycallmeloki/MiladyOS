@@ -1,0 +1,47 @@
+# MiladyOS ISO — base system packages (chroot)
+# Minimal headless appliance: systemd, ssh, avahi (discovery), docker runtime
+# deps, k3s deps, Longhorn prereqs (open-iscsi), ops tooling.
+
+# --- core system ---
+linux-image-amd64
+systemd-sysv
+initramfs-tools
+openssh-server
+sudo
+curl
+ca-certificates
+gnupg
+wget
+locales
+
+# --- network: avahi discovery (workers find the master) ---
+avahi-daemon
+avahi-utils
+libnss-mdns
+
+# --- storage: Longhorn prerequisites (Talos "extensions" are apt pkgs here) ---
+open-iscsi
+util-linux
+nfs-common
+
+# --- ops tooling ---
+tmux
+git
+jq
+zstd
+qrencode
+htop
+iproute2
+iptables
+ethtool
+
+# --- keepalived: master group behind a VIP (D4) ---
+keepalived
+
+# --- docker runtime (engine itself via hook: docker-ce repo) ---
+# docker.io is the fallback; hook prefers docker-ce
+apt-transport-https
+
+# --- k3s needs procps + mount tooling at runtime ---
+procps
+kmod

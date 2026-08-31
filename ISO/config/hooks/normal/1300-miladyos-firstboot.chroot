@@ -1,0 +1,14 @@
+#!/bin/sh
+# MiladyOS ISO — enable first-boot services + seed node config.
+# Scripts/units were staged via includes.chroot (see build-in-container.sh).
+set -e
+
+# first boot applies role once (server|agent via cmdline/config/prompt)
+systemctl enable miladyos-role.service >/dev/null 2>&1 || true
+systemctl enable miladyos-container.service >/dev/null 2>&1 || true
+
+# sshd: allow key auth; password auth decided by console user at first boot
+systemctl enable ssh.service >/dev/null 2>&1 || true
+
+# avahi must run before role detection can discover a master
+systemctl enable avahi-daemon.service >/dev/null 2>&1 || true
