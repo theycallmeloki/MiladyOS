@@ -1,0 +1,16 @@
+#!/bin/sh
+# MiladyOS dev-ISO hook: autologin root on the serial console (ttyS0).
+# Dev-only entry path — the operator gets a root shell over serial/telnet
+# without knowing the live root password (live-build sets one; we don't
+# ship it). Fleet builds omit this hook (operator auth via SSH keys).
+set -e
+
+mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
+cat > /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud ttyS0 115200,38400,9600 vt220
+EOF
+
+# Verify the unit template exists (util-linux provides agetty via /sbin)
+test -x /sbin/agetty && echo "serial autologin: ttyS0 root" || echo "WARNING: agetty missing"
