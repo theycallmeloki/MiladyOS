@@ -11,7 +11,10 @@ case "$HOST" in
         ;;
 esac
 
-cat > /etc/issue <<'EOF'
+# 5-octet version baked at ISO build time (ISO/version.sh)
+VERSION="$(cat /etc/miladyos/version 2>/dev/null || echo dev)"
+
+cat > /etc/issue <<EOF
 ╔══════════════════════════════════════════════════════════════╗
 ║                     M I L A D Y O S                          ║
 ║               distributed milady infrastructure              ║
@@ -47,6 +50,7 @@ cat > /etc/issue <<'EOF'
 ║                                                              ║
 ║   Docker: ready   k3s: role-configured   MiladyOS: in ISO    ║
 ║   role: see /etc/miladyos/node.conf  (miladyos-role-switch)  ║
+║   version: $VERSION                                          ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
 echo "miladyos-firstboot: hostname=$HOST"

@@ -38,8 +38,9 @@ ROLE=agent
 # agent: discovered via Avahi (_kubernetes._tcp); token from master console
 # MILADYOS_IMAGE=ogmiladyloki/miladyos:latest
 EOF
-# deterministic role for this build (smoke tests); live boots may change it
-printf 'ROLE=%s\n' "${MILADYOS_ROLE:-server}" > "$INC/etc/miladyos/node.conf"
+# 5-octet version (version.sh: version.json prefix + git commit count) —
+# nodes report it on the banner and it traces the ISO to an exact commit
+printf '%s\n' "${VERSION:-dev}" > "$INC/etc/miladyos/version"
 
 # --- stage payload into the binary includes (ISO filesystem) ---------------
 if [ "${NO_PAYLOAD:-0}" -ne 1 ]; then
