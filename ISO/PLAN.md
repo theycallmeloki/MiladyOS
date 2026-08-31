@@ -294,11 +294,16 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
   D4 Avahi join path is untestable there), fixed MAC→IP dnsmasq leases
   (server 172.20.0.10, agent 172.20.0.11), NAT for registry pulls.
   sudo-based host setup, idempotent, cleaned up on exit.
-- 2-VM test flow (VERIFIED 0.0.0.575/576): VM1 boots → `role-switch server`
-  (k3s Ready control-plane + node-token) → VM2 boots fresh → role-detect
-  Avahi-discovers VM1 → join drop-in written → agent joins with token.
-  Found + fixed by this test: discover-master awk field bug, per-interface
-  address pick (flannel 10.42.x), and agents advertising as masters.
+- 2-VM test flow (VERIFIED 0.0.0.579, fully automatic except the token):
+  VM1 boots → `role-switch server` → VM2 boots fresh → role-detect
+  Avahi-discovers VM1 → join drop-in written → agent joins. Both nodes
+  Ready, docker runtime, distinct IPs. Found + fixed by this test:
+  discover-master awk field bug, per-interface address pick (flannel
+  10.42.x), agents advertising as masters (now server-only), avahi-browse
+  -t cold-cache race (now retried), and duplicate hostnames (every node
+  boots "debian"; k3s rejects the second registration) — RULED: random
+  hostname `miladyos-<1..10000>` at first boot. Token stays
+  operator-mediated by design (secrecy); the only manual step.
 - **Role-switch both ways verified live**: agent→server (datastore init) and
   server→agent (k3s stop, server datastore backed up to
   `/var/lib/rancher/k3s-role-switch-backup`, agent joins fresh).
