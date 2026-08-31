@@ -57,7 +57,7 @@ trap cleanup EXIT
 
 setup() {
     sudo ip link add dev "$BR" type bridge 2>/dev/null || true
-    sudo ip link set dev "$BR" type bridge multicast_snooping 0 2>/dev/null || true
+    sudo ip link set dev "$BR" type bridge mcast_snooping 0 2>/dev/null || true
     sudo ip addr replace "$GW/24" dev "$BR" 2>/dev/null || true
     sudo ip link set dev "$BR" up
     for t in tap0 tap1; do
