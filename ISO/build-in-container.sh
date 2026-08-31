@@ -22,10 +22,13 @@ for s in firstboot/*.sh; do
     install -m 0755 "$s" "$INC/usr/local/sbin/milady-$name"
 done
 cp systemd/*.service "$INC/usr/lib/systemd/system/"
-cp systemd/var-lib-docker.mount "$INC/usr/lib/systemd/system/"
+cp systemd/var-lib.mount "$INC/usr/lib/systemd/system/"
 mkdir -p "$INC/usr/lib/systemd/system/docker.service.d"
 cp systemd/docker-service.d/persist-docker.conf \
     "$INC/usr/lib/systemd/system/docker.service.d/"
+mkdir -p "$INC/usr/lib/systemd/system/k3s.service.d"
+cp systemd/k3s.service.d/persist-disk.conf \
+    "$INC/usr/lib/systemd/system/k3s.service.d/"
 mkdir -p "$INC/etc/systemd/system/k3s-agent.service.d"
 cp systemd/k3s-network-dropin.conf "$INC/etc/systemd/system/k3s-agent.service.d/network.conf"
 # k3s-master advertisement (_kubernetes._tcp) is staged as inert data:

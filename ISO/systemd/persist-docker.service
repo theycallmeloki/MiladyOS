@@ -1,6 +1,6 @@
 [Unit]
 Description=Prepare MILADY_DOCKER scratch disk for docker store
-Before=var-lib-docker.mount
+Before=var-lib.mount
 
 [Service]
 Type=oneshot

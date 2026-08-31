@@ -1,0 +1,21 @@
+# Mount the labeled MILADY_DOCKER scratch disk at /var/lib so the live-boot
+# docker store (docker + containerd image store) and k3s datastore live on
+# real disk, not the half-RAM tmpfs overlay. The miladyos image (~6.2GB, 67
+# layers) exceeds what the overlay can hold: measured ENOSPC death spiral on
+# 16GB overlays even with serial downloads; docker-ce on trixie stores image
+# blobs under /var/lib/containerd (containerd image store), so covering only
+# /var/lib/docker misses the real growth — the mount must be /var/lib.
+# nofail: absent disk = everything stays on tmpfs, boot must not break.
+[Unit]
+Description=Docker + k3s store on MILADY_DOCKER scratch disk
+Requires=persist-docker.service
+After=persist-docker.service
+
+[Mount]
+What=/dev/disk/by-label/MILADY_DOCKER
+Where=/var/lib
+Type=ext4
+Options=defaults,nofail
+
+[Install]
+WantedBy=multi-user.target
