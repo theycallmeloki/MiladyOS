@@ -26,11 +26,18 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    - name: Derive version
+      id: version
+      run: |
+        echo "version=$(ISO/version.sh)" >> "$GITHUB_OUTPUT"
+
     - name: Build and push
       uses: docker/build-push-action@v7
       with:
         push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:latest
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:${{ steps.version.outputs.version }}
         platforms: linux/amd64
         cache-from: type=gha
         cache-to: type=gha,mode=max
