@@ -4,7 +4,7 @@
 set -e
 
 # docker store on a labeled scratch disk (live mode; absent disk = tmpfs)
-systemctl enable var-lib-docker.mount >/dev/null 2>&1 || true
+systemctl enable var-lib.mount >/dev/null 2>&1 || true
 # first boot applies role once (server|agent via cmdline/config/prompt)
 systemctl enable milady-role.service >/dev/null 2>&1 || true
 systemctl enable milady-container.service >/dev/null 2>&1 || true

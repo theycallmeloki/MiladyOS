@@ -32,15 +32,15 @@ Status: **D1–D4 RULED** (operator): Debian 13 live-build + Calamares installer
 
 ```
 ┌────────────────────────── MiladyOS ISO (one artifact) ──────────────────────────┐
-│  Debian 13 live/install base (trixie — same family as the container base)      │
-│  ├─ systemd + GRUB (UEFI + BIOS)                                               │
-│  ├─ Docker Engine  (host runtime — the one real runtime)                       │
-│  ├─ k3s (server|agent) — runs ON Docker (--docker)                             │
-│  ├─ NVIDIA driver + nvidia-container-toolkit / ROCm (first-boot, per GPU)      │
-│  ├─ iscsi-tools + util-linux (Longhorn prereqs, apt — no Talos extensions)     │
-│  ├─ MiladyOS image payload  (/payload/miladyos-image.tar.zst, docker save)     │
-│  └─ first-boot systemd chain:                                                  │
-│       docker → docker load miladyos image → k3s (role) → miladyos container    │
+│  Debian 13 live/install base (trixie — same family as the container base)       │
+│  ├─ systemd + GRUB (UEFI + BIOS)                                                │
+│  ├─ Docker Engine  (host runtime — the one real runtime)                        │
+│  ├─ k3s (server|agent) — runs ON Docker (--docker)                              │
+│  ├─ NVIDIA driver + nvidia-container-toolkit / ROCm (first-boot, per GPU)       │
+│  ├─ iscsi-tools + util-linux (Longhorn prereqs, apt — no Talos extensions)      │
+│  ├─ MiladyOS image payload  (/payload/miladyos-image.tar.zst, docker save)      │
+│  └─ first-boot systemd chain:                                                   │
+│       docker → docker load miladyos image → k3s (role) → miladyos container     │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
