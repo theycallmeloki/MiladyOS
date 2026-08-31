@@ -246,7 +246,7 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
 | D2 | Delivery | live-only / install-to-disk only / both | **RULED: Both** — live + Calamares installer |
 | D3 | k3s runtime | `--docker` / default containerd | **RULED: `--docker`** — one runtime, docker.sock coherence |
 | D4 | Role election | kernel cmdline / config file / interactive TUI / auto-first-boot | **RULED: manual selection + clean role-switch; workers Avahi-discover an existing master and insist on joining it; small master group behind keepalived VIP** |
-| D5 | k3s version | latest stable at build / pinned | **Pinned at build, bump-able** |
+| D5 | k3s version | latest stable at build / pinned | **Latest stable** — get.k3s.io default; `K3S_VERSION` honored if an operator exports it (no repo-level pin) |
 | D6 | Topology | single server + agents / 3-server HA | **Single server first; expand to 3-server embedded-etcd behind VIP** (RULED D4 direction) |
 | D7 | Image source | embedded docker save / registry pull at first boot | **Embedded** (air-gapped), registry as override |
 | D8 | GPU driver | first-boot dkms install / pre-baked drivers | **First-boot dkms** (kernel match) |
@@ -272,7 +272,11 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
 
 ## 5. Risks
 
-- **ISO size / USB fit** — payload dominates; slim variant may be required.
+- **Live-boot tmpfs storage cap (VERIFIED in dev VM)** — root is a tmpfs
+  overlay sized to half RAM (8GB VM → ~4GB overlay). The ~3.8GB payload
+  tar unpacks to ~7-8GB in docker's vfs store → `no space left on device`
+  loading it. Dev loop uses `--no-payload` ISOs (registry pull); payload
+  ISOs need a persistent overlay disk or a larger VM (16GB+), TBD for fleet.
 - **dkms vs live-kernel** — driver build on first boot needs headers in ISO;
   failing that, bake driver matching the pinned ISO kernel (D8 fallback).
 - **Join-token secrecy** — console + file only; never cmdline.
