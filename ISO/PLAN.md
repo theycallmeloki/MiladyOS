@@ -73,7 +73,9 @@ cluster as the target; Jenkins-in-container drives the same KanikoBuild CRs
   "normal ISO" feel + Calamares install-to-disk for fleet persistence.
   [RULED D2 — both.]
 - GRUB with UEFI + BIOS boot; squashfs rootfs; persistence optional.
-- Hostname scheme `milady-NN`; autologin console banner; no X needed
+- Hostname scheme `milady-<10001..99999>` (public range; 1..10000
+  RESERVED for a future milady maker NFT identity mapping); autologin
+  console banner; no X needed
   (headless appliance; GoTTY already provides web shell via container).
 - ISO layout target in this repo:
 
@@ -270,18 +272,21 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
    `includes.chroot/`, Calamares modules, firstboot units + role-switch.
 2. Payload staging script (`docker save | zstd`) — works regardless of base.
 3. Minimal QEMU-bootable ISO with: Docker up, image loaded, container up,
-   k3s server ready. This is the first "done" milestone.
+   k3s server ready. **DONE (0.0.0.593)** — see Dev loop tooling below;
+   container-up on live boot needs the MILADY_DOCKER scratch disk.
 4. Agent join on a second VM (Avahi discover + token) — prove workers insist
    on joining the existing master, and `role-switch.sh` flips a node both
    ways without corrupting state.
 
 ## 5. Risks
 
-- **Live-boot tmpfs storage cap (VERIFIED in dev VM)** — root is a tmpfs
-  overlay sized to half RAM (8GB VM → ~4GB overlay). The ~3.8GB payload
-  tar unpacks to ~7-8GB in docker's vfs store → `no space left on device`
-  loading it. Dev loop uses `--no-payload` ISOs (registry pull); payload
-  ISOs need a persistent overlay disk or a larger VM (16GB+), TBD for fleet.
+- **Live-boot tmpfs storage cap (RESOLVED for dev loop)** — root is a
+  tmpfs overlay sized to half RAM; the 6.16GB/67-layer image peaks ~14GB
+  in the containerd store. Fix: MILADY_DOCKER-labeled scratch disk mounted
+  at /var/lib (persist-docker + var-lib.mount; absent disk → tmpfs
+  fallback). Payload ISOs get the same store — loading them also needs
+  the disk (or 32GB+ RAM with serial downloads). Installed nodes avoid
+  this entirely (writable root → disk-backed overlay2).
 - **dkms vs live-kernel** — driver build on first boot needs headers in ISO;
   failing that, bake driver matching the pinned ISO kernel (D8 fallback).
 - **Join-token secrecy** — console + file only; never cmdline.
@@ -307,8 +312,49 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
   10.42.x), agents advertising as masters (now server-only), avahi-browse
   -t cold-cache race (now retried), and duplicate hostnames (every node
   boots "debian"; k3s rejects the second registration) — RULED: random
-  hostname `milady-<1..10000>` at first boot. Token stays
-  operator-mediated by design (secrecy); the only manual step.
+  hostname `milady-<10001..99999>` at first boot (1..10000 reserved for
+  NFT identity mapping). Token stays operator-mediated by design
+  (secrecy); the only manual step.
+- **Container-up milestone VERIFIED (0.0.0.593)** — first "done" item of
+  the plan (§4.3): Docker up, image loaded, container up, k3s server
+  ready, all on one ISO. `miladyos` container Up on both nodes of the
+  bridge rig, Jenkins serving on :8080, image pulled from the registry
+  once and persisted on the scratch disk (reboot → no re-pull). Bugs
+  this milestone flushed out:
+  - **DNS**: rig dnsmasq was DHCP-only → guests had empty resolv.conf →
+    registry pull could never resolve. Own-instance dnsmasq now also
+    serves DNS (bound to br-milady only, upstream = host systemd-resolved;
+    the :67 drop-in fallback stays DHCP-only — it would touch the shared
+    host dnsmasq).
+  - **systemd start timeout**: 90s DefaultTimeoutStartSec killed the
+    multi-GB pull mid-flight ("Failed with result 'timeout'", restart
+    counter 228) — `TimeoutStartSec=0` on milady-container (k3s-agent
+    already had it).
+  - **tmpfs overlay cap** (PLAN §5 risk, hit for real): vfs/containerd
+    extraction of the 6.16GB/67-layer image peaks ~14GB + in-flight
+    blobs; 8→32GB RAM never fixed it (restart churn accumulates garbage
+    until ENOSPC at 16GB). Fixed per the PLAN's own answer: a labeled
+    scratch disk mounted at /var/lib — `milady-persist-docker` formats
+    the first unformatted VIRTIO disk (never /dev/sd* — that's the live
+    USB medium) as MILADY_DOCKER; `var-lib.mount` mounts it (nofail;
+    absent disk = tmpfs fallback). Must be /var/lib, NOT /var/lib/docker:
+    trixie docker-ce uses the containerd image store (blobs land in
+    /var/lib/containerd — measured 6.5G there while /var/lib/docker sat
+    at 232K).
+  - **concurrent downloads**: docker default max-concurrent-downloads=3
+    buffers 3 big blobs in tmp — serialized to 1 in 1100-docker.chroot
+    (keeps the tmpfs-fallback case viable).
+  - **ssh host keys**: dev hook baked keys at build time, but the stock
+    8050 hygiene hook strips them after config hooks — every boot had
+    none ("no hostkeys available"). `milady-sshkeys.service`
+    (ConditionPathExists=!ed25519) regenerates on first boot; ssh.service
+    gets After= drop-in so socket activation never races it.
+  - **staging `\$name` bug**: the naming sweep escaped the dollar in
+    build-in-container.sh's install loop → one file literally named
+    `milady-$name` instead of 8 binaries (582 showed it; 584+ fixed).
+  - qemu-dev scripts: 32GB VMs + 40G qcow2 scratch disks per VM
+    (persist across reboots — first pull is the only slow one; ~21 min
+    at the ~5MB/s link cap, both VMs sharing it).
 - **Role-switch both ways verified live**: agent→server (datastore init) and
   server→agent (k3s stop, server datastore backed up to
   `/var/lib/rancher/k3s-role-switch-backup`, agent joins fresh).
