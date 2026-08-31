@@ -61,4 +61,4 @@ jobs:
           tag_name: miladyos-${{ steps.version.outputs.version }}
           name: MiladyOS ISO ${{ steps.version.outputs.version }}
           draft: true
-          files: out/miladyos-${{ steps.version.outputs.version }}.iso
+          files: ISO/out/miladyos-${{ steps.version.outputs.version }}.iso
