@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # MiladyOS ISO build — orchestration (host side).
 #
-#   ISO/build.sh [--no-payload] [--version X.Y.Z] [--image ogmiladyloki/miladyos:latest]
+#   ISO/build.sh [--no-payload] [--version X.Y.Z.W.V] [--image ogmiladyloki/miladyos:latest]
 #
 # Pipeline (dockerized, deterministic — no host deps beyond docker + zstd):
 #   1. stage payload: docker save ogmiladyloki/miladyos | zstd -> out/payload/
@@ -15,7 +15,7 @@ ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$ISO_DIR/.." && pwd)"
 CACHE_DIR="${CACHE_DIR:-$ISO_DIR/.cache}"
 OUT_DIR="${OUT_DIR:-$ISO_DIR/out}"
-VERSION="${VERSION:-$(git -C "$REPO_DIR" describe --tags --always 2>/dev/null || date +%Y%m%d)}"
+VERSION="${VERSION:-$(bash "$ISO_DIR/version.sh")}"
 
 MILADYOS_IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/miladyos:latest}"
 BUILDER_TAG="miladyos-iso-builder:13.4"

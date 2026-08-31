@@ -1,0 +1,64 @@
+name: Build JIT MiladyOS ISO
+
+# Just-in-time ISO: build the current repo state into a bootable live ISO.
+# Version = version.json prefix + git commit count (see ISO/version.sh),
+# e.g. 0.0.0.0.562 -> out/miladyos-0.0.0.0.562.iso
+
+on:
+  workflow_dispatch:
+    inputs:
+      with_payload:
+        description: 'Embed the MiladyOS container image in the ISO (docker save | zstd; adds ~6GB / ~10 min). NOTE: GitHub release assets cap at 2GB/file — payload ISOs (~7-8GB) cannot attach here; keep false for JIT releases.'
+        type: boolean
+        default: false
+      miladyos_image:
+        description: 'Container image to embed (only used when with_payload is true)'
+        type: string
+        default: 'ogmiladyloki/miladyos:latest'
+      role:
+        description: 'Seed role for the ISO (server = cluster-init, agent = join via Avahi)'
+        type: choice
+        options:
+          - server
+          - agent
+        default: server
+
+permissions:
+  contents: write   # draft release + upload asset
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # commit count needs full history
+
+      - name: Derive version
+        id: version
+        run: |
+          VERSION="$(ISO/version.sh)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "MiladyOS version: $VERSION"
+
+      - name: Stage payload (docker save | zstd)
+        if: inputs.with_payload
+        run: |
+          docker pull "${{ inputs.miladyos_image }}"
+          mkdir -p out/payload
+          docker save "${{ inputs.miladyos_image }}" | zstd -T0 -3 -o out/payload/miladyos-image.tar.zst
+          du -h out/payload/miladyos-image.tar.zst
+
+      - name: Build ISO
+        run: |
+          bash ISO/build.sh ${{ inputs.with_payload && '' || '--no-payload' }}
+
+      - name: Draft release + attach ISO
+        if: ${{ !inputs.with_payload }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: miladyos-${{ steps.version.outputs.version }}
+          name: MiladyOS ISO ${{ steps.version.outputs.version }}
+          draft: true
+          files: out/miladyos-${{ steps.version.outputs.version }}.iso
