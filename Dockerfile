@@ -65,6 +65,7 @@ ENV K3S_VERSION=v1.26.10+k3s2
 ENV K3SUP_VERSION=0.6.3
 ENV HEADSCALE_VERSION=0.26.1
 ENV SANDMAN_VERSION=0.2.42
+ENV MILADY_LLM_BRIDGE_VERSION=0.0.15
 
 # ---------- System packages (single consolidated apt pass) ----------
 USER root
@@ -495,6 +496,24 @@ RUN set -e; \
     install -m 0755 /tmp/sandman-linux-amd64 /usr/local/bin/sandman && \
     rm -f /tmp/sandman-linux-amd64 /tmp/sandman.sha256 && \
     command -v sandman >/dev/null || exit 1
+
+# ---------- Fleet tooling: milady (MCP<->LLM bridge CLI) ----------
+# Single-binary bridge between the MiladyOS MCP server (SSE :6000) and any
+# OpenAI-compatible LLM. Same pinned-release pattern as sandman: versioned
+# binary + sha256 from GitHub releases, verified at build time. Versioned by
+# MILADY_LLM_BRIDGE_VERSION (the bridge repo's own 3-octet releases) — NOT
+# the MiladyOS 5-octet version (version.json + commit count). The LLM
+# endpoint is per-user — set LLM_BASE_URL/LLM_MODEL at runtime (see
+# milady-llm-bridge README). The binary defaults to a local ollama; MiladyOS
+# will bootstrap it automatically later (see MILADY_README.md).
+ENV MCP_SERVER_URL=http://localhost:6000/sse
+RUN set -e; \
+    curl -fsSL -o /tmp/milady-linux-amd64 "https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v${MILADY_LLM_BRIDGE_VERSION}/milady-linux-amd64" && \
+    curl -fsSL -o /tmp/milady.sha256 "https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v${MILADY_LLM_BRIDGE_VERSION}/milady-linux-amd64.sha256" && \
+    (cd /tmp && sha256sum -c milady.sha256) && \
+    install -m 0755 /tmp/milady-linux-amd64 /usr/local/bin/milady && \
+    rm -f /tmp/milady-linux-amd64 /tmp/milady.sha256 && \
+    command -v milady >/dev/null || exit 1
 
 # ---------- Jenkins configuration ----------
 # Install the Jenkins CLI package
