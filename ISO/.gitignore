@@ -1,0 +1,5 @@
+# MiladyOS ISO build artifacts
+out/
+payload/*.tar.zst
+payload/*.tar
+*.iso

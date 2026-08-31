@@ -1,0 +1,9 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name>MiladyOS k3s master</name>
+  <service>
+    <type>_kubernetes._tcp</type>
+    <port>6443</port>
+  </service>
+</service-group>
