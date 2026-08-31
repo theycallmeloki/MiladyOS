@@ -24,9 +24,11 @@ done
 cp systemd/*.service "$INC/usr/lib/systemd/system/"
 mkdir -p "$INC/etc/systemd/system/k3s-agent.service.d"
 cp systemd/k3s-network-dropin.conf "$INC/etc/systemd/system/k3s-agent.service.d/network.conf"
-# Avahi advertises the k3s master as _kubernetes._tcp for agent discovery
-mkdir -p "$INC/etc/avahi/services"
-cp systemd/kubernetes.service.avahi "$INC/etc/avahi/services/kubernetes.service"
+# k3s-master advertisement (_kubernetes._tcp) is staged as inert data:
+# role-detect/role-switch activate it ONLY on server nodes — agents must
+# never advertise themselves as masters (D4 discovery integrity)
+mkdir -p "$INC/usr/share/miladyos"
+cp systemd/kubernetes.service.avahi "$INC/usr/share/miladyos/kubernetes.service.avahi"
 # Docker daemon defaults (vfs storage in live/tmpfs boots)
 mkdir -p "$INC/etc/docker"
 cp systemd/docker-daemon.json "$INC/etc/docker/daemon.json"
