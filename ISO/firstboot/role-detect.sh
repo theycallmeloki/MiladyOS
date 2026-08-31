@@ -62,8 +62,10 @@ if [ "$ROLE" = "server" ]; then
     # k3s.service is Type=notify with TimeoutStartSec=0, so `enable --now`
     # would block forever waiting for READY=1. Start detached and let the
     # poll loop below be the wait.
-    systemctl enable k3s.service >/dev/null 2>&1 || true
-    systemctl --no-block start k3s.service >/dev/null 2>&1 || true
+    # Advertise _kubernetes._tcp (servers only; avahi republishes on file
+    # change). Agents must never look like masters to discovery.
+    cp /usr/share/miladyos/kubernetes.service.avahi \
+        /etc/avahi/services/kubernetes.service 2>/dev/null || true
     # The node-token is written when the k3s API server first initializes
     # (~30-60s). Poll for it, then print the join token for agents.
     TOKEN=""
@@ -85,6 +87,8 @@ if [ "$ROLE" = "server" ]; then
         done || true
     fi
 else
+    # Agents never advertise as masters (stale file from a prior switch)
+    rm -f /etc/avahi/services/kubernetes.service 2>/dev/null || true
     # Discover master via Avahi; if found, configure agent join.
     MASTER=$(/usr/local/sbin/miladyos-discover-master 2>/dev/null || true)
     if [ -n "$MASTER" ]; then

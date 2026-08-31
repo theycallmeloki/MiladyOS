@@ -28,6 +28,8 @@ systemctl stop miladyos-container.service 2>/dev/null || true
 docker rm -f miladyos >/dev/null 2>&1 || true
 systemctl stop k3s-agent.service k3s.service 2>/dev/null || true
 systemctl disable k3s.service k3s-agent.service 2>/dev/null || true
+# agents never advertise as masters — drop the advert, re-add only for server
+rm -f /etc/avahi/services/kubernetes.service
 
 # --- clean k3s state for the new role -----------------------------------------
 rm -rf "$BACKUP"
@@ -55,6 +57,9 @@ fi
 if [ "$NEW_ROLE" = "server" ]; then
     systemctl enable k3s.service
     systemctl --no-block start k3s.service
+    # advertise _kubernetes._tcp (avahi republishes on file change)
+    cp /usr/share/miladyos/kubernetes.service.avahi \
+        /etc/avahi/services/kubernetes.service 2>/dev/null || true
 else
     systemctl enable k3s-agent.service
     systemctl --no-block start k3s-agent.service
