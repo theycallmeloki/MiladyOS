@@ -28,6 +28,8 @@ chmod 777 "$WORK"
 SERIAL="$WORK/serial.log"
 touch "$SERIAL"
 
+SSH_PORT="${SSH_PORT:-2222}"
+
 SERIAL_PORT="${SERIAL_PORT:-5555}"
 
 echo "=== MiladyOS dev VM ==="
@@ -38,18 +40,20 @@ echo "ssh:   ssh -p $SSH_PORT root@localhost   (after enabling ssh + auth in the
 echo "kill:  Ctrl-C"
 echo
 
+# --network host: slirp's hostfwd binds the real host ports directly,
+# no docker-proxy in between (docker bridge publish + slirp hostfwd
+# combine badly: TCP accepts but the forward never completes).
 docker run --rm -i \
     --device /dev/kvm \
+    --network host \
     -v "$ISO":/boot.iso:ro \
     -v "$WORK":/work \
-    -p "$SSH_PORT:22" \
-    -p "$SERIAL_PORT:5555" \
     "$QEMU_IMG" \
     qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 8192 \
         -drive file=/boot.iso,media=cdrom,readonly=on \
         -boot d \
         -nographic \
-        -chardev socket,id=ser,host=0.0.0.0,port=5555,server=on,nowait \
+        -chardev socket,id=ser,host=0.0.0.0,port=5555,server=on,wait=off \
         -serial chardev:ser \
         -monitor none \
         -no-reboot \
