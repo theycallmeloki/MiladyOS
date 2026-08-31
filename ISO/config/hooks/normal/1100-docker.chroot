@@ -24,5 +24,14 @@ else
     apt-get install -y --no-install-recommends docker.io
 fi
 
-# docker group so the console user can drive the daemon
-groupadd -f docker
+# Serialize image pulls. Live-boot root is a tmpfs overlay (half of RAM);
+# vfs extraction accumulates ~image-size while in-flight layer blobs buffer
+# in docker tmp — default max-concurrent-downloads=3 can blow the cap
+# (measured: 3x ~4GB blobs + ~6GB extracted + k3s ~1.4GB > 16GB overlay).
+# One blob at a time keeps the peak at ~11.6GB, which fits.
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'EOF'
+{
+  "max-concurrent-downloads": 1
+}
+EOF
