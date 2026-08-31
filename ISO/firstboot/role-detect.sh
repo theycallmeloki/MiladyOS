@@ -3,7 +3,7 @@
 #
 # Priority:
 #   1. kernel cmdline: miladyos.role=server|agent
-#   2. /etc/miladyos/node.conf  ROLE=
+#   2. /etc/milady/node.conf  ROLE=
 #   3. interactive prompt on the console (no TTY -> default agent)
 #
 # Agents: Avahi-discover an existing master (_kubernetes._tcp). If one is
@@ -11,8 +11,8 @@
 # warn and stay agent-pending (retry handled by k3s agent unit).
 set -e
 
-CONF=/etc/miladyos/node.conf
-mkdir -p /etc/miladyos
+CONF=/etc/milady/node.conf
+mkdir -p /etc/milady
 
 # console() echoes to the real console (serial in headless fleet boots) so
 # the lifecycle is observable; systemd oneshot stdout only goes to journal.
@@ -49,22 +49,22 @@ fi
 
 case "$ROLE" in
     server|agent) ;;
-    *) console "miladyos: invalid role '$ROLE', defaulting to agent"; ROLE=agent ;;
+    *) console "milady: invalid role '$ROLE', defaulting to agent"; ROLE=agent ;;
 esac
 
 # persist for later boots
 grep -q '^ROLE=' "$CONF" 2>/dev/null && sed -i "s/^ROLE=.*/ROLE=$ROLE/" "$CONF" || printf 'ROLE=%s\n' "$ROLE" >> "$CONF"
 
-console "miladyos: role=$ROLE"
+console "milady: role=$ROLE"
 
 if [ "$ROLE" = "server" ]; then
-    console "miladyos: server role — cluster-init (sqlite)"
+    console "milady: server role — cluster-init (sqlite)"
     # k3s.service is Type=notify with TimeoutStartSec=0, so `enable --now`
     # would block forever waiting for READY=1. Start detached and let the
     # poll loop below be the wait.
     # Advertise _kubernetes._tcp (servers only; avahi republishes on file
     # change). Agents must never look like masters to discovery.
-    cp /usr/share/miladyos/kubernetes.service.avahi \
+    cp /usr/share/milady/kubernetes.service.avahi \
         /etc/avahi/services/kubernetes.service 2>/dev/null || true
     # The node-token is written when the k3s API server first initializes
     # (~30-60s). Poll for it, then print the join token for agents.
@@ -75,13 +75,13 @@ if [ "$ROLE" = "server" ]; then
         sleep 5
     done
     if [ -n "$TOKEN" ]; then
-        console "miladyos: agent join token (QR + text below):"
+        console "milady: agent join token (QR + text below):"
         console "$TOKEN"
         echo "$TOKEN" | qrencode -t ANSIUTF8 2>/dev/null || true
     else
-        console "miladyos: WARNING k3s server did not write a join token in 300s"
-        console "miladyos: k3s unit status: $(systemctl is-active k3s.service 2>/dev/null || echo unknown)"
-        console "miladyos: docker unit status: $(systemctl is-active docker.service 2>/dev/null || echo unknown)"
+        console "milady: WARNING k3s server did not write a join token in 300s"
+        console "milady: k3s unit status: $(systemctl is-active k3s.service 2>/dev/null || echo unknown)"
+        console "milady: docker unit status: $(systemctl is-active docker.service 2>/dev/null || echo unknown)"
         journalctl -u k3s.service -n 15 --no-pager 2>/dev/null | while IFS= read -r line; do
             console "k3s: $line"
         done || true
@@ -90,24 +90,24 @@ else
     # Agents never advertise as masters (stale file from a prior switch)
     rm -f /etc/avahi/services/kubernetes.service 2>/dev/null || true
     # Discover master via Avahi; if found, configure agent join.
-    MASTER=$(/usr/local/sbin/miladyos-discover-master 2>/dev/null || true)
+    MASTER=$(/usr/local/sbin/milady-discover-master 2>/dev/null || true)
     if [ -n "$MASTER" ]; then
-        console "miladyos: master found at $MASTER — joining as agent"
-        # join token: /etc/miladyos/join-token (operator-provided) or console
+        console "milady: master found at $MASTER — joining as agent"
+        # join token: /etc/milady/join-token (operator-provided) or console
         TOKEN=""
-        if [ -f /etc/miladyos/join-token ]; then TOKEN=$(head -1 /etc/miladyos/join-token); fi
+        if [ -f /etc/milady/join-token ]; then TOKEN=$(head -1 /etc/milady/join-token); fi
         mkdir -p /etc/systemd/system/k3s-agent.service.d
         {
             echo "[Service]"
             echo "Environment=\"K3S_URL=https://${MASTER}:6443\""
             [ -n "$TOKEN" ] && echo "Environment=\"K3S_TOKEN=${TOKEN}\""
-        } > /etc/systemd/system/k3s-agent.service.d/miladyos-join.conf
+        } > /etc/systemd/system/k3s-agent.service.d/milady-join.conf
         systemctl daemon-reload
         # --no-block: k3s-agent.service is Type=notify; never wait inline
         systemctl enable k3s-agent.service >/dev/null 2>&1 || true
         systemctl --no-block start k3s-agent.service >/dev/null 2>&1 || true
     else
-        console "miladyos: no master discovered — agent pending (retry on boot)"
+        console "milady: no master discovered — agent pending (retry on boot)"
         systemctl enable k3s-agent.service >/dev/null 2>&1 || true
     fi
 fi

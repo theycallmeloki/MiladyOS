@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # MiladyOS ISO — role switch with clean lifecycle teardown (D4).
 #
-#   miladyos-role-switch <server|agent>
+#   milady-role-switch <server|agent>
 #
 # Switching roles must never leave a half-formed k3s datastore:
 #   server -> agent: stop k3s, back up + remove server datastore, enable agent
@@ -9,9 +9,9 @@
 # Container lifecycle is recreated after the switch (same image, new role env).
 set -euo pipefail
 
-CONF=/etc/miladyos/node.conf
+CONF=/etc/milady/node.conf
 NEW_ROLE="${1:-}"
-[ -n "$NEW_ROLE" ] || { echo "usage: miladyos-role-switch <server|agent>"; exit 1; }
+[ -n "$NEW_ROLE" ] || { echo "usage: milady-role-switch <server|agent>"; exit 1; }
 case "$NEW_ROLE" in server|agent) ;; *) echo "invalid role: $NEW_ROLE"; exit 1 ;; esac
 
 K3S_STATE=/var/lib/rancher/k3s
@@ -21,10 +21,10 @@ OLD_ROLE="agent"
 [ -f "$CONF" ] && . "$CONF" 2>/dev/null || true
 OLD_ROLE="${ROLE:-agent}"
 
-echo "miladyos-role-switch: $OLD_ROLE -> $NEW_ROLE"
+echo "milady-role-switch: $OLD_ROLE -> $NEW_ROLE"
 
 # --- stop everything first ---------------------------------------------------
-systemctl stop miladyos-container.service 2>/dev/null || true
+systemctl stop milady-container.service 2>/dev/null || true
 docker rm -f miladyos >/dev/null 2>&1 || true
 systemctl stop k3s-agent.service k3s.service 2>/dev/null || true
 systemctl disable k3s.service k3s-agent.service 2>/dev/null || true
@@ -58,7 +58,7 @@ if [ "$NEW_ROLE" = "server" ]; then
     systemctl enable k3s.service
     systemctl --no-block start k3s.service
     # advertise _kubernetes._tcp (avahi republishes on file change)
-    cp /usr/share/miladyos/kubernetes.service.avahi \
+    cp /usr/share/milady/kubernetes.service.avahi \
         /etc/avahi/services/kubernetes.service 2>/dev/null || true
 else
     systemctl enable k3s-agent.service
@@ -66,5 +66,5 @@ else
 fi
 
 # container runs regardless of role; it reads the new role from node.conf
-systemctl start miladyos-container.service || true
-echo "miladyos-role-switch: done ($OLD_ROLE -> $NEW_ROLE)"
+systemctl start milady-container.service || true
+echo "milady-role-switch: done ($OLD_ROLE -> $NEW_ROLE)"

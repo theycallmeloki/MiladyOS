@@ -17,7 +17,7 @@ lb config noauto \
     --bootappend-live "boot=live components net.ifnames=0 console=ttyS0,115200n8" \
     --iso-volume "MiladyOS" \
     --iso-publisher "MiladyOS" \
-    --iso-application "MiladyOS appliance" \
+    --iso-application "MiladyOS milady" \
     --memtest none \
     --source false \
     --linux-flavours amd64 \

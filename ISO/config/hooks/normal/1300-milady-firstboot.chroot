@@ -4,8 +4,8 @@
 set -e
 
 # first boot applies role once (server|agent via cmdline/config/prompt)
-systemctl enable miladyos-role.service >/dev/null 2>&1 || true
-systemctl enable miladyos-container.service >/dev/null 2>&1 || true
+systemctl enable milady-role.service >/dev/null 2>&1 || true
+systemctl enable milady-container.service >/dev/null 2>&1 || true
 
 # sshd: allow key auth; password auth decided by console user at first boot
 systemctl enable ssh.service >/dev/null 2>&1 || true
