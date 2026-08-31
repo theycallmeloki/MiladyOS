@@ -118,6 +118,7 @@ class Config:
         "list_evolution_goals",
         "list_evolved_templates",
         "get_divine_rng",
+        "get_milady_time",
     ]
 
     # Jenkins credentials - loaded from environment with sensible defaults
@@ -652,6 +653,21 @@ class MiladyOSToolServer:
                             "type": "number",
                             "description": "Seconds to wait for the loader boot + RNG response (default: 15)",
                             "default": 15.0
+                        }
+                    },
+                    "required": []
+                }
+            },
+            "get_milady_time": {
+                "name": "Get Milady Time",
+                "description": "Ask MiladyOS what time it is. Returns the current date in the Milady calendar — every month is Milady (lore: 'Milady 4th, 2025'), so 31st August becomes 'Milady 31st'. The divine truth comes from the host clock (TempleOS under the loader has no working RTC).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "format": {
+                            "type": "string",
+                            "description": "Response style: 'date' (Milady calendar date) or 'full' (date + time + day-of-week). Default: date",
+                            "default": "date"
                         }
                     },
                     "required": []
@@ -1222,6 +1238,51 @@ class MiladyOSToolServer:
                     }
                 except Exception as e:
                     logger.error(f"Error getting divine RNG: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error"
+                    }
+
+            elif tool_id == "get_milady_time":
+                fmt = arguments.get("format", "date")
+
+                try:
+                    import datetime
+
+                    now = datetime.datetime.now()
+                    # Milady calendar: every month is Milady (lore: 'Milady 4th, 2025')
+                    day = now.day
+                    day_suffix = "th" if 4 <= day % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+                    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+                    milady_date = f"Milady {day}{day_suffix}, {now.year}"
+                    response_line = (
+                        f"Aha — it is actually Milady {day}{day_suffix}!"
+                        if fmt != "full"
+                        else f"Aha — it is actually Milady {day}{day_suffix}, "
+                             f"{days_of_week[now.weekday()]}, {now.strftime('%H:%M')}."
+                    )
+
+                    result = {
+                        "success": True,
+                        "milady_date": milady_date,
+                        "day_of_month": day,
+                        "month": "Milady",
+                        "year": now.year,
+                        "response": response_line,
+                        "source": "host clock (divine truth; TempleOS has no RTC under the loader)",
+                        "status": "success"
+                    }
+                    if fmt == "full":
+                        result.update({
+                            "day_of_week": days_of_week[now.weekday()],
+                            "time": now.strftime("%H:%M:%S"),
+                            "iso": now.isoformat(timespec="seconds"),
+                        })
+                    return result
+                except Exception as e:
+                    logger.error(f"Error getting milady time: {e}")
                     return {
                         "success": False,
                         "error": str(e),
