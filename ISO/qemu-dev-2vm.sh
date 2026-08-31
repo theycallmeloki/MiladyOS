@@ -31,7 +31,7 @@ QEMU_IMG="milady-qemu:13.4"
 if ! docker image inspect "$QEMU_IMG" >/dev/null 2>&1; then
     docker build -q -t "$QEMU_IMG" - <<'EOF'
 FROM debian:13.4
-RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86 ovmf && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf && rm -rf /var/lib/apt/lists/*
 EOF
 fi
 
