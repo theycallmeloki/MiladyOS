@@ -20,7 +20,6 @@ VERSION="${VERSION:-$(bash "$ISO_DIR/version.sh")}"
 MILADYOS_IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/miladyos:latest}"
 BUILDER_TAG="miladyos-iso-builder:13.4"
 MILADYOS_ROLE="${MILADYOS_ROLE:-server}"   # seed node.conf: server|agent
-K3S_VERSION="${K3S_VERSION:-v1.36.4+k3s1}" # k3s stable pin (update.k3s.io channels)
 
 NO_PAYLOAD=0
 [[ "${1:-}" == "--no-payload" ]] && NO_PAYLOAD=1
@@ -56,7 +55,6 @@ docker run --rm --privileged \
     -e MILADYOS_IMAGE="$MILADYOS_IMAGE" \
     -e NO_PAYLOAD="$NO_PAYLOAD" \
     -e MILADYOS_ROLE="$MILADYOS_ROLE" \
-    -e K3S_VERSION="$K3S_VERSION" \
     "$BUILDER_TAG"
 
 echo "done: $(ls -lh "$OUT_DIR"/*.iso 2>/dev/null | awk '{print $9, $5}')"
