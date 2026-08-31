@@ -3,7 +3,7 @@
 # Idempotent: skips if image already present (covers live + installed).
 set -e
 
-IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/milady:latest}"
+IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/miladyos:latest}"
 
 if docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "milady-ensure-image: $IMAGE already present"

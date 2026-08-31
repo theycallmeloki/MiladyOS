@@ -79,7 +79,12 @@ setup() {
 
 start_dhcp() {
     local host_mac host_ip
-    # DHCP-only (--port=0, --no-resolv); fixed leases by MAC
+    # Own per-rig dnsmasq: DHCP + DNS, bound to br-milady ONLY
+    # (bind-interfaces; killed on cleanup). DNS upstream = host
+    # systemd-resolved stub. The :67 drop-in fallback below stays
+    # DHCP-only — it would touch the shared host dnsmasq, so guests
+    # there get no DNS (pull path: set MILADYOS_IMAGE or resolv.conf).
+    # Fixed leases by MAC.
     if ss -ulpn 2>/dev/null | grep -q ':67 '; then
         # a host dnsmasq already owns :67 — extend it via drop-in
         echo "dnsmasq: :67 taken — using /etc/dnsmasq.d drop-in"
@@ -93,7 +98,7 @@ start_dhcp() {
         } | sudo tee "$DNSMASQ_DROPIN" >/dev/null
         sudo systemctl reload dnsmasq
     else
-        sudo nohup dnsmasq --conf-file=/dev/null --no-resolv --port=0 \
+        sudo nohup dnsmasq --conf-file=/dev/null --no-resolv --server=127.0.0.53 \
             --interface="$BR" --bind-interfaces \
             --dhcp-range=172.20.0.50,172.20.0.99,12h \
             --dhcp-host=02:00:00:00:00:01,172.20.0.10 \
@@ -102,7 +107,7 @@ start_dhcp() {
             --pid-file=/run/milady-dhcp.pid >/dev/null 2>&1 &
         sleep 1
         DHCP_PID=$(sudo cat /run/milady-dhcp.pid 2>/dev/null || true)
-        echo "dnsmasq: own instance pid $DHCP_PID"
+        echo "dnsmasq: own instance pid $DHCP_PID (DHCP+DNS)"
     fi
 }
 

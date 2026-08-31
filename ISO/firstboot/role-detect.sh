@@ -2,7 +2,7 @@
 # MiladyOS first-boot: decide and apply this node's role (server|agent).
 #
 # Priority:
-#   1. kernel cmdline: miladyos.role=server|agent
+#   1. kernel cmdline: milady.role=server|agent
 #   2. /etc/milady/node.conf  ROLE=
 #   3. interactive prompt on the console (no TTY -> default agent)
 #
@@ -25,7 +25,7 @@ console() {
 ROLE=""
 for arg in $(cat /proc/cmdline); do
     case "$arg" in
-        miladyos.role=*) ROLE="${arg#miladyos.role=}" ;;
+        milady.role=*) ROLE="${arg#milady.role=}" ;;
     esac
 done
 
