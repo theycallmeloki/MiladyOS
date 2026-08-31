@@ -285,6 +285,24 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
   included); storage-heavy. Mitigation: `KUBERNETES_MODE=true` so nodes
   point at the cluster rather than each running independent Jenkins state.
 
+## Dev loop tooling
+
+- `qemu-dev.sh [iso]` — single dev VM: slirp user-net, SSH host:2222→guest,
+  serial telnet :5555 (root autologin, dev-only hook). Fastest iteration.
+- `qemu-dev-2vm.sh [iso]` — 2-VM k3s formation test: host tap bridge
+  `br-milady` (172.20.0.0/24, multicast on — slirp has NO multicast, so the
+  D4 Avahi join path is untestable there), fixed MAC→IP dnsmasq leases
+  (server 172.20.0.10, agent 172.20.0.11), NAT for registry pulls.
+  sudo-based host setup, idempotent, cleaned up on exit.
+- 2-VM test flow (VERIFIED 0.0.0.575/576): VM1 boots → `role-switch server`
+  (k3s Ready control-plane + node-token) → VM2 boots fresh → role-detect
+  Avahi-discovers VM1 → join drop-in written → agent joins with token.
+  Found + fixed by this test: discover-master awk field bug, per-interface
+  address pick (flannel 10.42.x), and agents advertising as masters.
+- **Role-switch both ways verified live**: agent→server (datastore init) and
+  server→agent (k3s stop, server datastore backed up to
+  `/var/lib/rancher/k3s-role-switch-backup`, agent joins fresh).
+
 ## Versioning — 5-octet agentic semver
 
 `MAJOR.MINOR.PATCH.BUILD.COMMIT` (e.g. `0.0.0.0.562`), stored split:
