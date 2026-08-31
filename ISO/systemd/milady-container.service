@@ -8,6 +8,9 @@ Wants=milady-role.service
 Type=simple
 Restart=always
 RestartSec=10
+# cold-boot image load/pull (payload zstd load or registry pull) takes
+# minutes — never let DefaultTimeoutStartSec (90s) kill it mid-load
+TimeoutStartSec=0
 ExecStartPre=/usr/local/sbin/milady-ensure-image
 ExecStart=/usr/local/sbin/milady-container
 ExecStopPost=/usr/bin/docker rm -f miladyos >/dev/null 2>&1 || true
