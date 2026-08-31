@@ -49,7 +49,7 @@ docker run --rm -i \
     -v "$ISO":/boot.iso:ro \
     -v "$WORK":/work \
     "$QEMU_IMG" \
-    qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 24576 \
+    qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 32768 \
         -drive file=/boot.iso,media=cdrom,readonly=on \
         -boot d \
         -nographic \

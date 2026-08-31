@@ -139,7 +139,7 @@ run_vm() { # name tap mac serialport logfile
         -v "$ISO":/boot.iso:ro \
         -v "$ISO_DIR/out":/work \
         "$QEMU_IMG" \
-        qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 24576 \
+        qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 32768 \
             -drive file=/boot.iso,media=cdrom,readonly=on \
             -boot d -nographic \
             -chardev socket,id=ser,host=0.0.0.0,port="$sport",server=on,wait=off \
