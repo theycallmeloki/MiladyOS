@@ -5,7 +5,7 @@
 # /etc/milady/node.conf (server -> KUBERNETES_MODE, agent -> join URL).
 set -e
 
-IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/milady:latest}"
+IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/miladyos:latest}"
 NAME=miladyos
 
 # --- role env ------------------------------------------------------------------
