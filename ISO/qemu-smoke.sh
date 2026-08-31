@@ -9,12 +9,12 @@
 set -euo pipefail
 
 ISO="${1:-out/miladyos-$(bash version.sh).iso}"
-MARKER="${2:-miladyos: role=server}"
+MARKER="${2:-milady: role=server}"
 TIMEOUT="${3:-420}"
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ISO="$(cd "$ISO_DIR" && realpath "$ISO")"
 
-QEMU_IMG="miladyos-qemu:13.4"
+QEMU_IMG="milady-qemu:13.4"
 if ! docker image inspect "$QEMU_IMG" >/dev/null 2>&1; then
     docker build -q -t "$QEMU_IMG" - <<'EOF'
 FROM debian:13.4
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86
 EOF
 fi
 
-WORK=$(mktemp -d /tmp/miladyos-qemu.XXXXXX)
+WORK=$(mktemp -d /tmp/milady-qemu.XXXXXX)
 chmod 777 "$WORK"
 SERIAL="$WORK/serial.log"
 touch "$SERIAL"

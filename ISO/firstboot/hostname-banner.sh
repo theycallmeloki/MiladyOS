@@ -2,17 +2,17 @@
 # MiladyOS first-boot — hostname + console banner.
 set -e
 
-# hostname: miladyos-<last octet> unless node.conf sets one
+# hostname: milady-<last octet> unless node.conf sets one
 HOST=$(hostname)
 case "$HOST" in
     *milady*|*localhost*) 
         IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-        [ -n "$IP" ] && HOST="miladyos-${IP##*.}" && hostnamectl set-hostname "$HOST" 2>/dev/null || true
+        [ -n "$IP" ] && HOST="milady-${IP##*.}" && hostnamectl set-hostname "$HOST" 2>/dev/null || true
         ;;
 esac
 
 # 5-octet version baked at ISO build time (ISO/version.sh)
-VERSION="$(cat /etc/miladyos/version 2>/dev/null || echo dev)"
+VERSION="$(cat /etc/milady/version 2>/dev/null || echo dev)"
 
 cat > /etc/issue <<EOF
 ╔══════════════════════════════════════════════════════════════╗
@@ -49,8 +49,8 @@ cat > /etc/issue <<EOF
 ║                                                              ║
 ║                                                              ║
 ║   Docker: ready   k3s: role-configured   MiladyOS: in ISO    ║
-║   role: see /etc/miladyos/node.conf  (miladyos-role-switch)  ║
+║   role: see /etc/milady/node.conf  (milady-role-switch)  ║
 ║   version: $VERSION                                          ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
-echo "miladyos-firstboot: hostname=$HOST"
+echo "milady-firstboot: hostname=$HOST"

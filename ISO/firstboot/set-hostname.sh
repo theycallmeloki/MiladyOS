@@ -4,7 +4,7 @@
 # Every live-boot node boots as "debian" (live-build default) — k3s keys
 # node identity on hostname, so a second node with the same name is rejected
 # at registration ("Node password rejected, duplicate hostname").
-# RULED: miladyos-<N>, N random in 1..10000. Operator/installer-set names
+# RULED: milady-<N>, N random in 1..10000. Operator/installer-set names
 # are left alone. In live (tmpfs) mode the name is per-boot; an installed
 # system persists it in /etc/hostname.
 set -e
@@ -18,10 +18,10 @@ esac
 N=$(od -An -N2 -tu2 /dev/urandom 2>/dev/null | tr -d ' ')
 N=${N:-$(( ($$ * 7) % 10000 + 1 ))}   # fallback: pid-derived
 N=$((N % 10000 + 1))
-NAME="miladyos-$N"
+NAME="milady-$N"
 
 hostnamectl set-hostname "$NAME" 2>/dev/null || {
     printf '%s\n' "$NAME" > /etc/hostname
     hostname "$NAME"
 }
-echo "miladyos: hostname=$NAME (was '$CUR')"
+echo "milady: hostname=$NAME (was '$CUR')"
