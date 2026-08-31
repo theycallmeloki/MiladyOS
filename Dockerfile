@@ -534,6 +534,11 @@ ENV CASC_JENKINS_CONFIG=/usr/share/jenkins/ref/casc.yaml
 COPY Caddyfile /etc/caddy/Caddyfile
 
 # ---------- Runtime ----------
+# The MiladyOS 5-octet version (version.json + commit count), baked by CI via
+# build-arg. `milady --version` reports it (the bridge CLI reads MILADYOS_VERSION).
+ARG MILADYOS_VERSION=dev
+ENV MILADYOS_VERSION=$MILADYOS_VERSION
+
 # Switch to root to set permissions
 USER root
 RUN mkdir -p /var/jenkins_home && chown -R jenkins:jenkins /var/jenkins_home

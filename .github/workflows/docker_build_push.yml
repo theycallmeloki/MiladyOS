@@ -39,6 +39,8 @@ jobs:
           ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:latest
           ${{ secrets.DOCKERHUB_USERNAME }}/miladyos:${{ steps.version.outputs.version }}
         platforms: linux/amd64
+        build-args: |
+          MILADYOS_VERSION=${{ steps.version.outputs.version }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
