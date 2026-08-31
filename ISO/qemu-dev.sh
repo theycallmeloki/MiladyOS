@@ -11,7 +11,7 @@
 # The VM stays up; Ctrl-C kills it. Re-run re-boots fresh (overlay resets).
 set -euo pipefail
 
-ISO="${1:-out/miladyos-7de9382.iso}"
+ISO="${1:-out/miladyos-$(bash version.sh).iso}"
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ISO="$(cd "$ISO_DIR" && realpath "$ISO")"
 
@@ -28,10 +28,11 @@ chmod 777 "$WORK"
 SERIAL="$WORK/serial.log"
 touch "$SERIAL"
 
-SSH_PORT="${SSH_PORT:-2222}"
+SERIAL_PORT="${SERIAL_PORT:-5555}"
 
 echo "=== MiladyOS dev VM ==="
 echo "ISO:   $ISO"
+echo "console: telnet localhost $SERIAL_PORT   (root autologin, dev build)"
 echo "serial log: $SERIAL (tail -f to watch)"
 echo "ssh:   ssh -p $SSH_PORT root@localhost   (after enabling ssh + auth in the guest)"
 echo "kill:  Ctrl-C"
@@ -42,12 +43,14 @@ docker run --rm -i \
     -v "$ISO":/boot.iso:ro \
     -v "$WORK":/work \
     -p "$SSH_PORT:22" \
+    -p "$SERIAL_PORT:5555" \
     "$QEMU_IMG" \
     qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 8192 \
         -drive file=/boot.iso,media=cdrom,readonly=on \
         -boot d \
         -nographic \
-        -serial file:/work/serial.log \
+        -chardev socket,id=ser,host=0.0.0.0,port=5555,server=on,nowait \
+        -serial chardev:ser \
         -monitor none \
         -no-reboot \
         -netdev user,id=n1,hostfwd=tcp::"$SSH_PORT"-:22 \
