@@ -88,6 +88,7 @@ start_dhcp() {
     if ss -ulpn 2>/dev/null | grep -q ':67 '; then
         # a host dnsmasq already owns :67 — extend it via drop-in
         echo "dnsmasq: :67 taken — using /etc/dnsmasq.d drop-in"
+        sudo mkdir -p /etc/dnsmasq.d
         {
             echo "interface=$BR"
             echo "bind-interfaces"
