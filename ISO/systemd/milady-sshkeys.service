@@ -1,0 +1,16 @@
+[Unit]
+Description=Generate SSH host keys (first boot)
+# Live builds never ship host keys (stock 8050 hygiene hook strips them
+# and the bake in 1350-dev-ssh.chroot dies with it) — regenerate on the
+# first boot that lacks them. ConditionPathExists=! : skips once present.
+ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
+Before=ssh.service ssh.socket
+After=systemd-remount-fs.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

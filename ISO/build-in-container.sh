@@ -29,6 +29,8 @@ cp systemd/docker-service.d/persist-docker.conf \
 mkdir -p "$INC/usr/lib/systemd/system/k3s.service.d"
 cp systemd/k3s.service.d/persist-disk.conf \
     "$INC/usr/lib/systemd/system/k3s.service.d/"
+mkdir -p "$INC/usr/lib/systemd/system/ssh.service.d"
+cp systemd/ssh-service.d/keys.conf "$INC/usr/lib/systemd/system/ssh.service.d/"
 mkdir -p "$INC/etc/systemd/system/k3s-agent.service.d"
 cp systemd/k3s-network-dropin.conf "$INC/etc/systemd/system/k3s-agent.service.d/network.conf"
 # k3s-master advertisement (_kubernetes._tcp) is staged as inert data:
