@@ -43,6 +43,14 @@ echo
 # --network host: slirp's hostfwd binds the real host ports directly,
 # no docker-proxy in between (docker bridge publish + slirp hostfwd
 # combine badly: TCP accepts but the forward never completes).
+# scratch disk: docker store on real disk (vfs-on-tmpfs can't hold the
+# image — see persist-docker + var-lib-docker.mount); persists across boots
+DEV_DOCKER_DISK="$ISO_DIR/out/.dev-docker.qcow2"
+if [ ! -f "$DEV_DOCKER_DISK" ]; then
+    docker run --rm -v "$WORK":/work "$QEMU_IMG" \
+        qemu-img create -f qcow2 "/work/$(basename "$DEV_DOCKER_DISK")" 40G >/dev/null
+    echo "created scratch disk: $DEV_DOCKER_DISK"
+fi
 docker run --rm -i \
     --device /dev/kvm \
     --network host \
@@ -51,6 +59,7 @@ docker run --rm -i \
     "$QEMU_IMG" \
     qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 32768 \
         -drive file=/boot.iso,media=cdrom,readonly=on \
+        -drive file="/work/$(basename "$DEV_DOCKER_DISK")",if=virtio,format=qcow2 \
         -boot d \
         -nographic \
         -chardev socket,id=ser,host=0.0.0.0,port=5555,server=on,wait=off \

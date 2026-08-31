@@ -1,0 +1,21 @@
+# Mount the labeled MILADY_DOCKER scratch disk at /var/lib/docker so the
+# live-boot docker store lives on real disk, not the half-RAM tmpfs overlay
+# (vfs extraction of the miladyos image peaks ~12GB — see 1100-docker.chroot
+# and milady-persist-docker).
+# nofail: absent disk = docker stays on tmpfs, boot must not break.
+[Unit]
+Description=Docker store on MILADY_DOCKER scratch disk
+Requires=persist-docker.service
+After=persist-docker.service
+DefaultDependencies=no
+Before=docker.service
+ConditionPathExists=/dev/disk/by-label/MILADY_DOCKER
+
+[Mount]
+What=/dev/disk/by-label/MILADY_DOCKER
+Where=/var/lib/docker
+Type=ext4
+Options=defaults,nofail
+
+[Install]
+WantedBy=multi-user.target
