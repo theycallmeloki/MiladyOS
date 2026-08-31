@@ -9,6 +9,53 @@
 # No step or information from the original was dropped.
 # ============================================================================
 
+# ---------- SQLite fixed-build stage ----------
+# Debian 13 (trixie) ships SQLite 3.46.1, which contains the upstream WAL-reset
+# corruption bug (https://sqlite.org/wal.html#walresetbug). hermes-agent
+# persists its state (skills, memory, gateway config) in SQLite under
+# $HERMES_HOME; a WAL checkpoint under the buggy lib can corrupt that data.
+# Build a pinned 3.53.4 shared library in a stage and drop it into the runtime
+# image with the public soname (libsqlite3.so.0) preserved — both the system
+# interpreter and any uv-created venv resolve the replacement without changing
+# import paths. Mirrors hermes-agent's own Dockerfile sqlite_build stage.
+FROM debian:13.4 AS sqlite_build
+ARG SQLITE_AUTOCONF_VERSION=3530400
+ARG SQLITE_SHA256=0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c
+RUN apt-get -o Acquire::Retries=3 update && \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+        build-essential ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    (curl -fsSL --retry 1 --retry-all-errors --connect-timeout 15 --max-time 60 \
+        -o /tmp/sqlite.tar.gz \
+        "https://sqlite.org/2026/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz" || \
+     curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+        -o /tmp/sqlite.tar.gz \
+        "https://sources.buildroot.net/sqlite/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz") && \
+    printf '%s  %s\n' "${SQLITE_SHA256}" /tmp/sqlite.tar.gz > /tmp/sqlite.sha256 && \
+    sha256sum -c /tmp/sqlite.sha256 && \
+    tar -xzf /tmp/sqlite.tar.gz -C /tmp && \
+    cd "/tmp/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}" && \
+    CFLAGS="-O2 \
+        -DSQLITE_ENABLE_FTS3 \
+        -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+        -DSQLITE_ENABLE_FTS4 \
+        -DSQLITE_ENABLE_FTS5 \
+        -DSQLITE_ENABLE_RTREE \
+        -DSQLITE_ENABLE_GEOPOLY \
+        -DSQLITE_ENABLE_COLUMN_METADATA \
+        -DSQLITE_ENABLE_UNLOCK_NOTIFY \
+        -DSQLITE_ENABLE_DBSTAT_VTAB \
+        -DSQLITE_ENABLE_DBPAGE_VTAB \
+        -DSQLITE_ENABLE_MATH_FUNCTIONS \
+        -DSQLITE_ENABLE_PREUPDATE_HOOK \
+        -DSQLITE_ENABLE_SESSION \
+        -DSQLITE_SECURE_DELETE \
+        -DSQLITE_THREADSAFE=1 \
+        -DSQLITE_MAX_VARIABLE_NUMBER=250000" \
+        ./configure --prefix=/opt/sqlite-fixed --disable-static && \
+    make -j"$(nproc)" && \
+    make install
+
 # ---------- Base image & version pins ----------
 FROM jenkins/jenkins:lts-jdk21
 
@@ -18,6 +65,22 @@ ENV K3S_VERSION=v1.26.10+k3s2
 ENV K3SUP_VERSION=0.6.3
 ENV HEADSCALE_VERSION=0.26.1
 ENV SANDMAN_VERSION=0.2.42
+# Prefer the fixed SQLite over Debian's vulnerable libsqlite3.so.0. Keep the
+# public library name stable so both the system interpreter and the uv-created
+# venv resolve the replacement without changing Python import paths.
+COPY --from=sqlite_build /opt/sqlite-fixed/lib/libsqlite3.so.3.53.4 /usr/local/lib/
+RUN ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so.0 && \
+    ln -sf libsqlite3.so.3.53.4 /usr/local/lib/libsqlite3.so && \
+    printf '/usr/local/lib\n' > /etc/ld.so.conf.d/000-sqlite-fixed.conf && \
+    ldconfig && \
+    python3 -c "import sqlite3, sys; \
+v = sqlite3.sqlite_version_info; \
+sys.exit(f'linked SQLite {sqlite3.sqlite_version} still has the WAL-reset bug') if v < (3, 51, 3) else None; \
+db = sqlite3.connect(':memory:'); \
+db.execute(\"CREATE VIRTUAL TABLE docs USING fts5(content, tokenize='trigram')\"); \
+db.execute(\"INSERT INTO docs VALUES ('hermes')\"); \
+sys.exit('SQLite FTS5 trigram self-test failed') if db.execute(\"SELECT count(*) FROM docs WHERE docs MATCH 'erm'\").fetchone()[0] != 1 else None; \
+db.close()"
 
 # ---------- System packages (single consolidated apt pass) ----------
 USER root
@@ -118,6 +181,23 @@ COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_evaluat
 
 # Copy TempleOS HolyC scripts for Milady Oracle
 COPY templeos/ /opt/templeos/scripts/
+
+# ---------- Hermes agent (NousResearch) ----------
+# Self-improving AI agent (hermes-agent on PyPI). Installed into its own
+# /opt/hermes venv so the /app venv stays MiladyOS-only. Serves:
+#   hermes dashboard   -> Web UI on :9119 (prebuilt web_dist ships in wheel)
+#   hermes gateway     -> messaging gateway on :8090
+#   hermes chat -q "…" -> one-shot prompt (pipe-safe, for Jenkins stages)
+# Model/provider config is NOT baked in yet (see providers/base.py + config.py)
+# — set model.default + providers in $HERMES_HOME/config.yaml to point at the
+# local vLLM later. HERMES_HOME lives under /opt/data so the jenkins user can
+# write skills/memory/gateway state; dashboard + gateway start via startup.sh.
+RUN uv venv /opt/hermes/.venv && \
+    uv pip install -p /opt/hermes/.venv/bin/python hermes-agent && \
+    /opt/hermes/.venv/bin/hermes --version
+
+ENV HERMES_HOME=/opt/data/hermes
+ENV PATH="/opt/hermes/.venv/bin:${PATH}"
 
 # ---------- llama.cpp (CPU + RPC builds) ----------
 RUN git clone https://github.com/ggml-org/llama.cpp /llamacpp

@@ -310,6 +310,30 @@ else
     echo "WARNING: main.py not found at /app/main.py, MCP server will not be available"
 fi
 
+# Start Hermes agent dashboard + gateway if installed
+if command -v hermes > /dev/null 2>&1; then
+    echo "Starting Hermes agent..."
+    mkdir -p "${HERMES_HOME:-/opt/data/hermes}"
+    # Web UI dashboard on :9119 (prebuilt web_dist ships in the wheel)
+    hermes dashboard --port 9119 > /var/log/hermes-dashboard.log 2>&1 &
+    sleep 3
+    if pgrep -f "hermes dashboard" > /dev/null; then
+        echo "Hermes dashboard started on port 9119"
+    else
+        echo "WARNING: Hermes dashboard did not start successfully"
+    fi
+    # Messaging gateway on :8090 (optional; needs platform config)
+    hermes gateway run > /var/log/hermes-gateway.log 2>&1 &
+    sleep 3
+    if pgrep -f "hermes gateway" > /dev/null; then
+        echo "Hermes gateway started"
+    else
+        echo "WARNING: Hermes gateway did not start successfully"
+    fi
+else
+    echo "WARNING: hermes not found at /opt/hermes/.venv/bin/hermes, skipping"
+fi
+
 # CRITICAL: Start TempleOS - The Holy Mission MUST succeed
 echo "=== HOLY MISSION: Starting TempleOS ==="
 echo "Terry Davis demands perfection - Gods OS must run or MiladyOS fails"
