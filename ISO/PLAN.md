@@ -277,3 +277,24 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
 - **Jenkins per node** — every node runs the full container (Jenkins
   included); storage-heavy. Mitigation: `KUBERNETES_MODE=true` so nodes
   point at the cluster rather than each running independent Jenkins state.
+
+## Versioning — 5-octet agentic semver
+
+`MAJOR.MINOR.PATCH.BUILD.COMMIT` (e.g. `0.0.0.0.562`), stored split:
+
+- **First 4 octets** — `version.json` at repo root (manual, deliberate bumps).
+  `0.0.0.0` until the first real release; bump on meaningful changes.
+- **5th octet** — `git rev-list --count HEAD` (automatic, monotonic, never
+  tracked by hand). Guarantees every artifact is traceable to an exact repo
+  state with zero bookkeeping.
+
+Derivation: `ISO/version.sh` prints `PREFIX.COMMIT`. Consumed by:
+
+- `ISO/build.sh` → ISO filename `out/miladyos-<version>.iso`
+- `.github/workflows/docker_build_push.yml` → image tag
+  `miladyos:<version>` (plus `:latest`)
+- `.github/workflows/iso-jit.yml` → release tag `miladyos-<version>` +
+  artifact `out/miladyos-<version>.iso`
+
+Bumping a component: edit `version.json` (e.g. `0.1.0.0` for the first ISO
+with payload); the commit count rides along automatically.
