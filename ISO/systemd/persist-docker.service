@@ -1,5 +1,11 @@
 [Unit]
-Description=Prepare MILADY_DOCKER scratch disk for docker store
+Description=Prepare MILADY_DOCKER scratch disk for the /var/lib mount
+# no DefaultDependencies: this oneshot runs during early boot for
+# var-lib.mount — the default sysinit/basic edges would create an
+# ordering cycle (mount units order after sysinit, we order before the
+# mount). We only need udev to have seen the virtio disk.
+DefaultDependencies=no
+After=systemd-udevd.service
 Before=var-lib.mount
 
 [Service]
