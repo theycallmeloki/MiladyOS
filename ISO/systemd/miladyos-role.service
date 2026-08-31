@@ -8,6 +8,7 @@ ConditionPathExists=!/etc/miladyos/role-applied
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+ExecStart=/usr/local/sbin/miladyos-set-hostname
 ExecStart=/usr/local/sbin/miladyos-hostname-banner
 ExecStart=/usr/local/sbin/miladyos-gpu-detect
 ExecStart=/usr/local/sbin/miladyos-role-detect
