@@ -470,6 +470,13 @@ ENABLED = false
 MODE = console
 LEVEL = Info
 INI
+    # The forge must be reachable from agent step containers (docker bridge),
+    # not just the host — 'localhost' fails there. FORGE_PUBLIC_URL is
+    # env-overridable; default is this host's LAN IP (works from the LAN,
+    # the browser, and the docker bridge). The OAuth redirect stays on
+    # WOODPECKER_HOST (localhost:8000), which the registered app allows.
+    FG_PUBLIC="${FORGE_PUBLIC_URL:-http://192.168.1.147:3000}"
+    sed -i "s|^ROOT_URL = .*|ROOT_URL = $FG_PUBLIC|" "$FG/custom/conf/app.ini"
     forgejo web -w "$FG" > "$FG/log/forgejo.log" 2>&1 &
     FG_READY=0
     for _ in $(seq 1 45); do
@@ -520,7 +527,7 @@ INI
                 # admin). Safe here: forgejo registration is disabled, so the
                 # only forge account is the local admin milady.
                 WOODPECKER_FORGEJO=true \
-                WOODPECKER_FORGEJO_URL=http://localhost:3000 \
+                WOODPECKER_FORGEJO_URL="${FORGE_PUBLIC_URL:-http://192.168.1.147:3000}" \
                 WOODPECKER_FORGEJO_CLIENT="$WOODPECKER_FORGEJO_CLIENT" \
                 WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
                 WOODPECKER_HOST=http://localhost:8000 \
