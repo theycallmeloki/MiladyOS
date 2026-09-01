@@ -577,6 +577,52 @@ INI
                 else
                     echo "WARNING: server/agent did not both start — check /var/lib/woodpecker/{server,agent}.log"
                 fi
+                # API token for the MCP pipeline tools (woodpecker_client.py
+                # reads it lazily from .secrets). The dance mirrors the
+                # browser: forge login -> OAuth authorize (auto-redirect once
+                # granted; the first boot submits the grant form to
+                # /login/oauth/grant with granted=true) -> woodpecker session
+                # -> CSRF -> POST /api/user/token. Idempotent: skipped once
+                # the token is persisted.
+                if ! grep -q '^WOODPECKER_TOKEN=' "$SECRETS" 2>/dev/null; then
+                    WPSESS=$(mktemp)
+                    curl -sf -m 10 -c "$WPSESS" "http://localhost:3000/user/login" > /dev/null 2>&1
+                    curl -sf -m 10 -b "$WPSESS" -c "$WPSESS" -X POST "http://localhost:3000/user/login" \
+                        --data-urlencode "user_name=${JENKINS_ADMIN_ID:-milady}" \
+                        --data-urlencode "password=${JENKINS_ADMIN_PASSWORD:-milady}" > /dev/null 2>&1
+                    AUTH="http://localhost:3000/login/oauth/authorize?client_id=${WOODPECKER_FORGEJO_CLIENT}&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fauthorize&response_type=code"
+                    LOC="$(curl -sf -m 10 -b "$WPSESS" -c "$WPSESS" -o /dev/null -w '%{redirect_url}' "$AUTH")"
+                    if [ -z "$LOC" ]; then
+                        # First-time grant form: replay the hidden fields with
+                        # granted=true (the submit button encodes the decision).
+                        GRANT_FIELDS="$(curl -sf -m 10 -b "$WPSESS" -c "$WPSESS" "$AUTH" | python3 -c '
+import re, sys, urllib.parse
+html = sys.stdin.read()
+pairs = re.findall(r"name=\"([^\"]+)\" value=\"([^\"]*)\"", html)
+keep = ("client_id", "state", "scope", "nonce", "redirect_uri")
+print("&".join(f"{urllib.parse.quote(k)}={urllib.parse.quote(v)}" for k, v in pairs if k in keep))
+')"
+                        LOC="$(curl -sf -m 10 -b "$WPSESS" -c "$WPSESS" -o /dev/null -w '%{redirect_url}' \
+                            -X POST "http://localhost:3000/login/oauth/grant" \
+                            --data-urlencode "granted=true" --data "$GRANT_FIELDS")"
+                    fi
+                    CODE="$(echo "$LOC" | python3 -c 'import sys, urllib.parse as u; print(u.parse_qs(u.urlparse(sys.stdin.read().strip()).query).get("code", [""])[0])')"
+                    if [ -n "$CODE" ]; then
+                        curl -sf -m 10 -b "$WPSESS" -c "$WPSESS" -o /dev/null "http://localhost:8000/authorize?code=$CODE"
+                        CSRF="$(curl -sf -m 10 -b "$WPSESS" "http://localhost:8000/web-config.js" | grep -oE 'WOODPECKER_CSRF[[:space:]]*=[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\(.*\)"/\1/')"
+                        TOKEN="$(curl -sf -m 10 -b "$WPSESS" -X POST "http://localhost:8000/api/user/token" \
+                            -H "X-CSRF-TOKEN: $CSRF" -H "Content-Type: application/json" -d '{}')"
+                        if [ -n "$TOKEN" ] && [ "$TOKEN" != "{}" ]; then
+                            printf 'WOODPECKER_TOKEN=%s\n' "$TOKEN" >> "$SECRETS"
+                            echo "✓ woodpecker API token persisted (MCP pipeline tools)"
+                        else
+                            echo "WARNING: woodpecker token dance got an empty token"
+                        fi
+                    else
+                        echo "WARNING: woodpecker token dance got no auth code"
+                    fi
+                    rm -f "$WPSESS"
+                fi
             else
                 echo "WARNING: woodpecker-server/agent binaries missing"
             fi
