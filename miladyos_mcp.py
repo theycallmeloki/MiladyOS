@@ -531,7 +531,7 @@ class MiladyOSToolServer:
             script.append(f'cd "{working_directory}" || true')
         script.extend(
             [
-                f"{command} 2>&1 || EC=$?",
+                f"{command} 2>&1; EC=$?",
                 'echo "==== END OUTPUT ===="',
                 'echo "EXIT CODE: $EC"',
                 "exit $EC",
@@ -688,7 +688,7 @@ class MiladyOSToolServer:
                         },
                         "variables": {
                             "type": "object",
-                            "description": "Key/value parameters passed to the pipeline"
+                            "description": "Key/value parameters passed to the pipeline — available in steps as $VAR env (avoid ${VAR}: woodpecker's config interpolation eats braced vars)"
                         },
                         "branch": {
                             "type": "string",
