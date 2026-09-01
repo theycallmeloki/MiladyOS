@@ -1,0 +1,52 @@
+# MiladyOS scratch-build pipeline — the "build on the master box" replacement.
+# Builds a Dockerfile with the HOST daemon (docker.sock mounted), tags it, and
+# pushes to the MiladyOS registry with the registry-skip guard (tags/list
+# check first — image exists => skip, matching the Jenkins/Kaniko guard).
+#
+# Run (Phase A, cli-exec):
+#   woodpecker-cli exec \
+#     --repo miladyos/MiladyOS --repo-trusted-volumes \
+#     --volumes /var/run/docker.sock:/var/run/docker.sock \
+#     --secrets CONTAINER_REGISTRY=...,DOCKERHUB_USERNAME=...,DOCKERHUB_PASSWORD=... \
+#     --env IMAGE_TAG=owner/app \
+#     woodpecker/scratch-build.yml
+#
+# Or wrap it in scripts/builder.sh so the MCP execute_command path stays one call.
+# Proven: docker backend + socket volume + docker:cli image builds on the host
+# daemon (woodpecker/README.md).
+
+when:
+  - event: manual
+
+steps:
+  registry-skip-guard:
+    image: docker.io/library/bash:5
+    commands:
+      - |
+        if [ -z "$IMAGE_TAG" ]; then
+          echo "IMAGE_TAG not set; nothing to build"
+          exit 1
+        fi
+        REG="${CONTAINER_REGISTRY:-miladyosregistry.transparentlyrotatableproxy.site}"
+        if curl -fsSL "https://${REG}/v2/${IMAGE_TAG}/tags/list" >/dev/null 2>&1; then
+          echo "registry-skip: ${REG}/${IMAGE_TAG} already exists — nothing to build"
+          exit 0
+        fi
+        echo "registry-miss: building ${REG}/${IMAGE_TAG}"
+        echo "${REG}/${IMAGE_TAG}" > /tmp/build-target
+
+  docker-build:
+    image: docker.io/library/docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    commands:
+      - |
+        TARGET=$(cat /tmp/build-target 2>/dev/null)
+        [ -n "$TARGET" ] || exit 0
+        cd "$CI_WORKSPACE" || exit 1
+        docker build -t "$TARGET" -f "${DOCKERFILE:-Dockerfile}" .
+        echo "$CONTAINER_REGISTRY" | grep -q . && \
+          echo "$DOCKERHUB_PASSWORD" | docker login "$CONTAINER_REGISTRY" -u "$DOCKERHUB_USERNAME" --password-stdin 2>/dev/null || true
+        docker push "$TARGET"
+        docker image prune -f >/dev/null 2>&1 || true
+        echo "published: $TARGET"

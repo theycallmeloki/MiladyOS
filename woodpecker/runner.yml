@@ -1,0 +1,18 @@
+# MiladyOS scratch pipeline — proof of woodpecker-cli exec (Phase A hull)
+# Run: woodpecker-cli exec --local --repo miladyos/MiladyOS woodpecker/runner.yml
+# Backend: --backend-engine local (default auto-detect picks docker on a
+# host with a daemon; force local for pure shell steps like execute_command).
+
+when:
+  - event: manual
+
+steps:
+  run-command:
+    image: docker.io/library/bash:5
+    commands:
+      - |
+        echo "=== milady runner: $CI_REPO ==="
+        echo "pipeline number: ${CI_PIPELINE_NUMBER:-n/a}"
+        echo "event: ${CI_EVENT:-manual}"
+        uname -a
+        docker version --format 'docker {{.Server.Version}} on host' 2>/dev/null || echo "docker CLI not in this step image"
