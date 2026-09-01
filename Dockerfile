@@ -188,6 +188,12 @@ COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_evaluat
 # Copy TempleOS HolyC scripts for Milady Oracle
 COPY templeos/ /opt/templeos/scripts/
 
+# Runtime user (uid 1000 keeps the bluegreen PV initContainer chown 1000:1000
+# compatible when /var/lib/woodpecker replaces /var/jenkins_home in the deploy
+# swap). Created here (before the hermes /opt/data chown below) so the user
+# exists for every later chown/USER; passwd comes from the apt pass above.
+RUN useradd --uid 1000 --create-home --shell /bin/bash milady
+
 # ---------- Hermes agent (NousResearch) ----------
 # Self-improving AI agent (hermes-agent on PyPI). Installed into its own
 # /opt/hermes venv so the /app venv stays MiladyOS-only. Serves:
@@ -538,12 +544,10 @@ ENV MILADYOS_VERSION=$MILADYOS_VERSION
 
 # Switch to root to set permissions
 USER root
-# Runtime user (uid 1000 keeps the bluegreen PV initContainer chown 1000:1000
-# compatible when /var/lib/woodpecker replaces /var/jenkins_home in the deploy
-# swap). Phase A (cli-exec) needs no server state; /var/lib/woodpecker is
-# reserved for the Phase B server/agent.
-RUN useradd --uid 1000 --create-home --shell /bin/bash milady && \
-    mkdir -p /var/lib/woodpecker && \
+# Phase A (cli-exec) needs no server state; /var/lib/woodpecker is reserved
+# for the Phase B server/agent. milady (uid 1000) is created earlier so the
+# hermes /opt/data chown and this dir are owned by the same user.
+RUN mkdir -p /var/lib/woodpecker && \
     chown -R milady:milady /var/lib/woodpecker
 
 # Add and set permissions for the startup script
