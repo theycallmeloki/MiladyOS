@@ -501,6 +501,7 @@ INI
             # First boot: create the woodpecker OAuth app and persist the
             # secrets (client_secret is only returned once, at creation).
             WOODPECKER_AGENT_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
+            WOODPECKER_GRPC_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
             OAUTH_JSON="$(curl -sf -m 10 -u "${JENKINS_ADMIN_ID:-milady}:${JENKINS_ADMIN_PASSWORD:-milady}" -X POST \
                 http://localhost:3000/api/v1/user/applications/oauth2 \
                 -H "Content-Type: application/json" \
@@ -508,8 +509,8 @@ INI
             if [ -n "$OAUTH_JSON" ]; then
                 WOODPECKER_FORGEJO_CLIENT="$(echo "$OAUTH_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["client_id"])')"
                 WOODPECKER_FORGEJO_SECRET="$(echo "$OAUTH_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["client_secret"])')"
-                printf 'WOODPECKER_AGENT_SECRET=%s\nWOODPECKER_FORGEJO_CLIENT=%s\nWOODPECKER_FORGEJO_SECRET=%s\n' \
-                    "$WOODPECKER_AGENT_SECRET" "$WOODPECKER_FORGEJO_CLIENT" "$WOODPECKER_FORGEJO_SECRET" > "$SECRETS"
+                printf 'WOODPECKER_AGENT_SECRET=%s\nWOODPECKER_FORGEJO_CLIENT=%s\nWOODPECKER_FORGEJO_SECRET=%s\nWOODPECKER_GRPC_SECRET=%s\n' \
+                    "$WOODPECKER_AGENT_SECRET" "$WOODPECKER_FORGEJO_CLIENT" "$WOODPECKER_FORGEJO_SECRET" "$WOODPECKER_GRPC_SECRET" > "$SECRETS"
                 echo "✓ woodpecker OAuth app registered in forgejo"
             else
                 echo "WARNING: forgejo OAuth app creation failed"
@@ -530,9 +531,14 @@ INI
                 WOODPECKER_FORGEJO_URL="${FORGE_PUBLIC_URL:-http://192.168.1.147:3000}" \
                 WOODPECKER_FORGEJO_CLIENT="$WOODPECKER_FORGEJO_CLIENT" \
                 WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
+                # ADMIN promotes milady on every login (no first-user magic in
+                # v3); GRPC_SECRET persisted so the warning goes away and the
+                # gRPC signing key survives restarts.
                 WOODPECKER_HOST=http://localhost:8000 \
                 WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
                 WOODPECKER_OPEN=true \
+                WOODPECKER_ADMIN="${JENKINS_ADMIN_ID:-milady}" \
+                WOODPECKER_GRPC_SECRET="$WOODPECKER_GRPC_SECRET" \
                 WOODPECKER_DATABASE_DRIVER=sqlite3 \
                 WOODPECKER_DATABASE_DATASOURCE=/var/lib/woodpecker/woodpecker.db \
                 WOODPECKER_GRPC_ADDR=:9000 \

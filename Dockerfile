@@ -564,9 +564,10 @@ USER root
 # root-owned /app, so all three pre-exist owned by milady. Pre-existing bugs:
 # redka never started (blocked the MCP redis dep) and the MCP server crashed
 # on PermissionError: 'templates'.
-RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /app/templates /app/metadata \
+# /etc/woodpecker lets the agent persist its config (avoids the boot-log error)
+RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata \
         /etc/filebrowser-metrics /etc/filebrowser-models && \
-    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /app/templates /app/metadata \
+    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata \
         /etc/filebrowser-metrics /etc/filebrowser-models
 
 # Caddy binds :80/:443 per the Caddyfile; the non-root app user cannot bind
