@@ -1,6 +1,6 @@
-# metacontroller composite controller: watches KanikoBuild CRs, sync hook
-# runs on the control workstation (192.168.1.147:8090) with the operator
-# kubeconfig — no in-cluster hook deployment, no custom images to store.
+# metacontroller composite controller: watches KanikoBuild CRs. The sync
+# hook runs IN-CLUSTER (deployment kaniko-hook in sandman ns, own SA) —
+# no workstation dependency, no kubeconfig on a host.
 apiVersion: metacontroller.k8s.io/v1alpha1
 kind: CompositeController
 metadata:
@@ -18,4 +18,4 @@ spec:
   hooks:
     sync:
       webhook:
-        url: http://192.168.1.147:8090/sync
+        url: http://kaniko-hook.sandman.svc:8090/sync

@@ -1,0 +1,21 @@
+[Unit]
+Description=MiladyOS live installer session (Calamares on VT1)
+# Live-only: /run/live/medium exists only when booted from the ISO.
+# On installed systems this unit is inert and getty@tty1 keeps the console.
+ConditionPathExists=/run/live/medium
+# Claim VT1: stopping the getty lets the X session own the tty.
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+ExecStart=/usr/share/milady/live-installer-session
+TimeoutStartSec=0
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -1,8 +1,9 @@
 #!/bin/sh
-# MiladyOS first-boot: decide and apply this node's role (server|agent).
+# MiladyOS first-boot: decide and apply this node's role
+# (server|agent|desktop).
 #
 # Priority:
-#   1. kernel cmdline: milady.role=server|agent
+#   1. kernel cmdline: milady.role=server|agent|desktop
 #   2. /etc/milady/node.conf  ROLE=
 #   3. interactive prompt on the console (no TTY -> default agent)
 #
@@ -39,7 +40,7 @@ fi
 #       run with stdin=/dev/null so they must NOT block) ----------------------
 if [ -z "$ROLE" ]; then
     if [ -t 0 ] && [ -c /dev/console ]; then
-        printf 'MiladyOS role (server|agent) [agent]: '
+        printf 'MiladyOS role (server|agent|desktop) [agent]: '
         read -r REPLY || REPLY=agent
         ROLE="${REPLY:-agent}"
     else
@@ -48,7 +49,7 @@ if [ -z "$ROLE" ]; then
 fi
 
 case "$ROLE" in
-    server|agent) ;;
+    server|agent|desktop) ;;
     *) console "milady: invalid role '$ROLE', defaulting to agent"; ROLE=agent ;;
 esac
 
@@ -56,6 +57,17 @@ esac
 grep -q '^ROLE=' "$CONF" 2>/dev/null && sed -i "s/^ROLE=.*/ROLE=$ROLE/" "$CONF" || printf 'ROLE=%s\n' "$ROLE" >> "$CONF"
 
 console "milady: role=$ROLE"
+
+# The control-plane container runs on server/agent nodes. Never in the
+# live installer session (no image load during install) and never on
+# desktop. Enabled+started here (not at build) so the live session stays
+# lean and an installed first boot comes up fully provisioned.
+if [ "$ROLE" = "desktop" ] || [ -d /run/live/medium ]; then
+    systemctl disable milady-container.service >/dev/null 2>&1 || true
+else
+    systemctl enable milady-container.service >/dev/null 2>&1 || true
+    systemctl --no-block start milady-container.service >/dev/null 2>&1 || true
+fi
 
 if [ "$ROLE" = "server" ]; then
     console "milady: server role — cluster-init (sqlite)"
@@ -66,6 +78,10 @@ if [ "$ROLE" = "server" ]; then
     # change). Agents must never look like masters to discovery.
     cp /usr/share/milady/kubernetes.service.avahi \
         /etc/avahi/services/kubernetes.service 2>/dev/null || true
+    # k3s.service is installed-but-not-enabled by 1200-k3s.chroot
+    # (INSTALL_K3S_SKIP_ENABLE) — the server role enables+starts it here.
+    systemctl enable k3s.service >/dev/null 2>&1 || true
+    systemctl --no-block start k3s.service >/dev/null 2>&1 || true
     # The node-token is written when the k3s API server first initializes
     # (~30-60s). Poll for it, then print the join token for agents.
     TOKEN=""
@@ -86,6 +102,10 @@ if [ "$ROLE" = "server" ]; then
             console "k3s: $line"
         done || true
     fi
+elif [ "$ROLE" = "desktop" ]; then
+    console "milady: desktop role — no k3s, no control-plane container"
+    systemctl disable k3s.service k3s-agent.service >/dev/null 2>&1 || true
+    rm -f /etc/avahi/services/kubernetes.service 2>/dev/null || true
 else
     # Agents never advertise as masters (stale file from a prior switch)
     rm -f /etc/avahi/services/kubernetes.service 2>/dev/null || true
