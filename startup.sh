@@ -471,11 +471,15 @@ MODE = console
 LEVEL = Info
 INI
     # The forge must be reachable from agent step containers (docker bridge),
-    # not just the host — 'localhost' fails there. FORGE_PUBLIC_URL is
-    # env-overridable; default is this host's LAN IP (works from the LAN,
-    # the browser, and the docker bridge). The OAuth redirect stays on
+    # not just the host — 'localhost' fails there. Default to the docker0
+    # bridge gateway (the host as seen from step containers): identical on
+    # every default docker install, reachable from the host browser too, so
+    # no per-host IP is baked in. FORGE_PUBLIC_URL overrides for LAN-exposed
+    # setups (e.g. http://<lan-ip>:3000). The OAuth redirect stays on
     # WOODPECKER_HOST (localhost:8000), which the registered app allows.
-    FG_PUBLIC="${FORGE_PUBLIC_URL:-http://192.168.1.147:3000}"
+    FG_DEFAULT="http://$(ip -4 addr show docker0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\)\/.*/\1/p' | head -1):3000"
+    [ "${FG_DEFAULT#http://}" = ":3000" ] && FG_DEFAULT="http://172.17.0.1:3000"
+    FG_PUBLIC="${FORGE_PUBLIC_URL:-$FG_DEFAULT}"
     sed -i "s|^ROOT_URL = .*|ROOT_URL = $FG_PUBLIC|" "$FG/custom/conf/app.ini"
     forgejo web -w "$FG" > "$FG/log/forgejo.log" 2>&1 &
     FG_READY=0
@@ -531,7 +535,7 @@ INI
                 # v3); GRPC_SECRET persisted so the warning goes away and the
                 # gRPC signing key survives restarts.
                 WOODPECKER_FORGEJO=true \
-                WOODPECKER_FORGEJO_URL="${FORGE_PUBLIC_URL:-http://192.168.1.147:3000}" \
+                WOODPECKER_FORGEJO_URL="$FG_PUBLIC" \
                 WOODPECKER_FORGEJO_CLIENT="$WOODPECKER_FORGEJO_CLIENT" \
                 WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
                 WOODPECKER_HOST=http://localhost:8000 \
