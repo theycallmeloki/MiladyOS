@@ -1,11 +1,26 @@
 # Woodpecker CI Migration — Analysis & Port Plan
 
 Branch: `feat/woodpecker-migration`
-Status: **ANALYSIS — for review. No code changed.**
+Status: **DECISIONS LOCKED (2026-09-01) — pilot artifacts next.**
 
 Goal: drop Jenkins from the MiladyOS control-plane container; adopt Woodpecker CI
 for what Jenkins is actually used for. Everything else Jenkins-adjacent is dead
 weight to be removed.
+
+> ## Rulings (operator, 2026-09-01)
+> 1. **Forge: NONE — cli-exec only to start.** No GitHub account tied in, nothing
+>    auto-runs. `woodpecker-cli exec` + MCP are the starting combo.
+> 2. **Woodpecker MCP server: `ni-c/woodpecker-ci-mcp`** (more mature).
+> 3. **Base image: rebase to `debian:13.4`** (nothing else uses the JVM).
+> 4. **AlphaEvolve: keep as-is, do not break.** Live-exec evaluators are
+>    untested; revisit to run evolves on k8s via Woodpecker after the hull.
+>
+> **MCP/forge conflict (resolved):** the server cannot run without a forge —
+> maintainers marked it wontfix (woodpecker-ci#2651); only addon-forges could,
+> which is custom code. So any Woodpecker MCP (incl. `ni-c`) requires a
+> server+forge. Phasing: **Phase A now** = cli-exec + native-MCP re-points
+> (no server, no forge, air-gapped); **Phase B later** = self-hosted Forgejo
+> (air-gapped, no GitHub account) + woodpecker-server/agent + `ni-c` MCP.
 
 ---
 
@@ -33,7 +48,7 @@ Evidence-grounded inventory (each entry cites the file that proves it).
 | `templates/talos-add-worker.Jenkinsfile` | same; k3s join is host-side (Avahi + join-token), no Jenkins needed |
 | `templates/miladyos-stack-deploy.Jenkinsfile` | Talos-era `copyArtifacts` + `talosctl kubeconfig`; the stack is ArgoCD app-of-apps–managed now (`deploy/argocd-apps/apps/` = kaniko, sandman, monitoring, loki, nft-auth, ha…) |
 | `templates/example-build.Jenkinsfile`, `docker-deploy.Jenkinsfile` | generic evolve-samples, no production use |
-| `jenkins-theme/` (2.6MB CSS) | replaced by Woodpecker custom CSS (see §3.4) |
+| `jenkins-theme/` (2.6MB CSS) | replaced by Woodpecker custom CSS (Phase B, §6) |
 | `casc.yaml` JCasC, plugin-manager install, `JAVA_OPTS`, `jenkins` user, `/var/jenkins_home` PV (`miladyos-bluegreen.yaml`) | Jenkins runtime itself |
 | Talos/MCP docs sections (`docs/content/en/docs/…` create_jenkins_job / Jenkins configuration) | API surface gone with the MCP re-point (§5) |
 
@@ -53,8 +68,8 @@ Jenkins; unchanged).
 - **Pipelines as YAML in the repo** (`.woodpecker.yml`): steps run in containers, `when:` event/branch filters, `secrets:`, `services:`, `depends_on` (workflows), `approval`, crons. CLI `woodpecker-cli` + full REST API + web UI.
 - **Agents** (execution backends): **docker** (default — spawns step containers on the host docker daemon), **local** (runs steps directly on the agent host), **kubernetes**, ssh, autoscaler. An agent can run on the same box as the server, or remotely.
 - **`woodpecker-cli exec`**: run a `.woodpecker.yml` pipeline locally — **no server, no forge needed**. This is the closest analog to "scratch builds on the master box" and works fully air-gapped.
-- **Server requires a forge** (GitHub/Gitea/Forgejo/GitLab/Bitbucket/Gogs) for auth + repo sync. No forge-less server mode. *(Open decision — see §4.4.)*
-- **Branding**: `WOODPECKER_CUSTOM_CSS_FILE` — server-side custom CSS for white-labeling / custom logo (docs: "can be used for showing banner messages, logos"). Our `logo.svg` ports 1:1.
+- **Server requires a forge** (GitHub/Gitea/Forgejo/GitLab/Bitbucket/Gogs) for auth + repo sync. **No forge-less server mode exists** — wontfix (woodpecker-ci#2651; addon forges would be custom code). *(This is what forces the cli-exec-first phasing.)*
+- **Branding**: `WOODPECKER_CUSTOM_CSS_FILE` — server-side custom CSS for white-labeling / custom logo (docs: "can be used for showing banner messages, logos"). Our `logo.svg` ports 1:1 (Phase B — the server UI is where branding applies).
 
 ---
 
@@ -83,45 +98,42 @@ Woodpecker's CI" in exactly the sense the goal asks about.
 ```
 FROM jenkins/jenkins:lts-jdk21  →  FROM debian:13.4  (keeps the sqlite_build stage as-is)
 ```
-- Add: `woodpecker-server` + `woodpecker-agent` (docker backend) binaries, `woodpecker-cli`.
-- Remove: plugin-manager, `plugins.txt`, JCasC (`casc.yaml`), `jenkins-theme/`, `JAVA_OPTS`, `jenkins` user, `/var/jenkins_home` (→ `/var/lib/woodpecker`), `startup.sh`'s `exec gosu jenkins /usr/local/bin/jenkins.sh`.
-- `startup.sh`: start woodpecker-server (+ agent, docker backend, `WOODPECKER_AGENT_SECRET` from env) via the existing `start_service` pattern; keep the rest of the appliance untouched.
-- Persistence: `/var/lib/woodpecker` on the same scratch/persistent volume; `deploy/miladyos-self/miladyos-bluegreen.yaml` PV swap.
-- Ingress: `jenkins.transparentlyrotatableproxy.site` → `ci.transparentlyrotatableproxy.site` (miladyos-ingress.yaml).
+- Add: `woodpecker-cli` binary (Phase A); `woodpecker-server` + `woodpecker-agent` (docker backend) + `WOODPECKER_CUSTOM_CSS_FILE` branding (Phase B).
+- Remove: plugin-manager, `plugins.txt`, JCasC (`casc.yaml`), `jenkins-theme/`, `JAVA_OPTS`, `jenkins` user, `/var/jenkins_home` (→ `/var/lib/woodpecker` in Phase B), `startup.sh`'s `exec gosu jenkins /usr/local/bin/jenkins.sh`.
+- `startup.sh`: Jenkins exec line removed; `woodpecker-cli` invoked on demand (MCP re-points). Phase B: start server+agent via the existing `start_service` pattern.
+- Persistence (Phase B): `/var/lib/woodpecker` on the same scratch/persistent volume; `deploy/miladyos-self/miladyos-bluegreen.yaml` PV swap.
+- Ingress (Phase B): `jenkins.transparentlyrotatableproxy.site` → `ci.transparentlyrotatableproxy.site` (miladyos-ingress.yaml).
 
 ### 4.2 Agent topology — two tiers
 
 | Tier | What | Where | Replaces |
 |------|------|-------|----------|
-| **1 — scratch builds** | `woodpecker-cli exec` (or local-backend agent) on the box; docker backend for `docker build` on host daemon | same host, air-gapped OK, no forge | built-in-node jobs, CLI Experimenter (`execute_command`) |
-| **2 — fleet CI** | woodpecker-server + docker-backend agent (this container) + optional kubernetes-backend agent in the k3s cluster for in-cluster KanikoBuild trigger steps | container + cluster | KanikoBuild trigger jobs, template runs |
+| **1 — scratch builds (Phase A)** | `woodpecker-cli exec` with docker backend → `docker build` on host daemon | same host, air-gapped OK, no forge | built-in-node jobs, CLI Experimenter (`execute_command`) |
+| **2 — fleet CI (Phase B)** | woodpecker-server + docker-backend agent (this container) + optional kubernetes-backend agent in the k3s cluster for in-cluster KanikoBuild trigger steps | container + cluster | KanikoBuild trigger jobs, template runs |
 
 ### 4.3 Pipeline port mapping
 
 | Current Jenkins flow | Woodpecker equivalent |
 |----------------------|-----------------------|
-| `create_jenkins_job` + run of a template | `.woodpecker.yml` per repo (sandman-pipelines etc.), trigger via `woodpecker-cli build` / API / MCP |
-| `execute_command` (CLI Experimenter) | `woodpecker-cli exec` with an ad-hoc pipeline, or a dedicated `runner` pipeline repo |
+| `create_jenkins_job` + run of a template | `.woodpecker.yml` per repo (sandman-pipelines etc.), trigger via `woodpecker-cli exec` (Phase A) / API / MCP (Phase B) |
+| `execute_command` (CLI Experimenter) | `woodpecker-cli exec` with an ad-hoc runner pipeline (Phase A) |
 | KanikoBuild trigger (registry-skip guard → `kubectl apply` → wait) | identical shell steps in a `.woodpecker.yml` (docker backend, host kubeconfig mounted); registry-skip guard unchanged |
 | Talos bootstrap / add-worker | **not ported** — dead (k3s ISO does this host-side) |
 | Stack deploy | **not ported** — ArgoCD owns it |
 | Parameterized builds (`CONTROL_PLANE_IP` etc.) | open question — Woodpecker trigger API supports `params`; verify against 3.18 before relying on it (fallback: per-repo env/secrets + `when:` filters) |
 
-### 4.4 Forge decision (open — needs review)
+### 4.4 Forge decision — RULED (2026-09-01): none — cli-exec only
 
-Woodpecker server needs a forge for auth/repo sync. The fleet is LAN/air-gapped
-(embedded ISO payload, no egress guarantee).
-
-- **A. GitHub.com OAuth** — simplest; works if the box has egress. Repos = `theycallmeloki/*` + `sandman-pipelines`.
-- **B. Self-hosted Forgejo/Gitea** on the LAN — fully air-gapped; the forge itself is another container in the appliance; adds a component to maintain. Woodpecker's best-supported self-hosted forge is Gitea/Forgejo.
-- **C. Tier 1 only** (`woodpecker-cli exec`, no server) for scratch builds; defer the fleet server until the forge question is settled. Zero new infrastructure; loses web UI/history.
-
-Recommendation: **C first (zero-dep), then A if egress is acceptable**, B if the
-air-gap is hard. Tier-1 covers the user's stated main use immediately.
+**Server requires a forge — confirmed wontfix** (woodpecker-ci#2651; supported
+forges: GitHub/Gitea/Forgejo/GitLab/Bitbucket; addon forges = custom code).
+So there is no forge-less server. Ruled: **no server, no forge, no webhooks —
+nothing auto-runs.** `woodpecker-cli exec` covers scratch builds air-gapped.
+When a server is wanted later (web UI/history/MCP), the only path that honors
+"no GitHub account" is a **self-hosted Forgejo** on the LAN (Phase B).
 
 ---
 
-## 5. MCP decision (the review question)
+## 5. MCP decision — RULED
 
 Constraint (standing ruling): **all 9 native MCP tools kept; hello_world must
 respond "milady!"**. Native tools divide into *milady-only* (get_divine_rng,
@@ -130,34 +142,56 @@ get_milady_time, versioning, oracle…) and *Jenkins-mediated* (`create_jenkins_
 
 | Option | What | Cost | Verdict |
 |--------|------|------|---------|
-| **A. Keep native MCP, re-point Jenkins tools** | `create_jenkins_job` → write/trigger a `.woodpecker.yml`; `execute_command` → `woodpecker-cli exec`; evolve evaluators → same | rework ~3 tools + evolve evaluators; native MCP stays the single entry | ✔ recommended — honors the 9-tool ruling, kills the Jenkins dependency |
-| **B. Keep native MCP (milady tools only) + add Woodpecker MCP** | `.mcp.json` gains a second server (ni-c `essential` preset or rtuszik); drop the 2 Jenkins tools from native | loses 2 tools (breaks ruling) unless re-pointed anyway; two servers to wire | fine as a *complement* to A, not a replacement |
+| **A. Keep native MCP, re-point Jenkins tools** | `create_jenkins_job` → write/trigger a `.woodpecker.yml`; `execute_command` → `woodpecker-cli exec`; evolve evaluators → same | rework ~3 tools + evolve evaluators; native MCP stays the single entry | ✔ |
+| **B. Keep native MCP (milady tools only) + add Woodpecker MCP** | `.mcp.json` gains a second server (ni-c `essential` preset or rtuszik); drop the 2 Jenkins tools from native | loses 2 tools (breaks ruling) unless re-pointed anyway; two servers to wire | complement to A |
 | **C. Proxy `.mcp.json` miladyos entry to Woodpecker MCP only** | drops all milady-only tools | breaks the 9-tool ruling | ✘ |
 
-Recommendation: **A**, optionally + B as a complement (Woodpecker MCP for CI
-reads/writes, native MCP for milady-only tools). Woodpecker MCP choice:
-`ni-c` (full API, essential preset, confirmation-token writes) if we want
-admin capability; `rtuszik` (curated, 5 writes, per-client auth) for the
-tightest surface.
+**RULED: A (keep native MCP, re-point the 2 Jenkins-mediated tools) + B as a
+complement — Woodpecker MCP = `ni-c`.** Phasing: the re-points (A) land with
+Phase A (cli-exec); the `ni-c` server (B) lands with Phase B (needs a server —
+see §4.4).
+
+**AlphaEvolve (RULED): keep as-is; don't break it.** The `jenkins_client`
+evaluators are inert when no client is passed; they stay intact and are
+re-targeted at Woodpecker (evolves on k8s) after the hull is complete.
 
 ---
 
-## 6. Migration phases
+## 6. Migration phases (per rulings)
 
-1. **This branch** — analysis + port plan (this doc). Review → decide forge (4.4) + MCP (5).
-2. **Pilot in container** — rebase image to debian + woodpecker-server/agent + cli; keep Jenkins image around (tag `miladyos:jenkins-last`) until parity proven; `WOODPECKER_CUSTOM_CSS_FILE` with logo.svg-derived CSS (reuse `generate-theme.sh` logic).
-3. **Port Tier-1** — `.woodpecker.yml` scratch-build + kaniko-trigger pipelines; wire `execute_command`/`create_jenkins_job` re-points (option A).
-4. **Cutover** — ingress + PV + startup.sh; remove Jenkins bits; docs rewrite (docs/content sections + getting-started).
-5. **Drop Jenkins** — delete `plugins.txt`, `casc.yaml`, `jenkins-theme/`, `templates/*.Jenkinsfile`, Talos docs; `docker_build_push.yml` unchanged (image name stays `ogmiladyloki/miladyos`).
-6. **Fleet (optional, later)** — forge (A/B), kubernetes-backend agent, k3s pipeline templates as `.woodpecker.yml` (the carried "k3s Jenkinsfile templates" item dies — Woodpecker replaces it).
+**Phase A — cli-exec hull (now, on this branch):**
+1. Rebase image `jenkins/jenkins:lts-jdk21` → `debian:13.4` (keep sqlite_build
+   stage); add `woodpecker-cli` binary; drop plugin-manager/plugins.txt/JCasC/
+   theme/jenkins-user/`/var/jenkins_home`.
+2. `woodpecker/` pilot artifacts in-repo: `scratch-build.yml` (build+publish
+   with registry-skip guard), `runner.yml` (ad-hoc command exec), `install-cli.sh`.
+3. Native-MCP re-points (option A): `create_jenkins_job` → write/exec a
+   pipeline; `execute_command` → `woodpecker-cli exec runner.yml`.
+4. AlphaEvolve untouched; startup.sh keeps hermes/oracle/ollama/etc., Jenkins
+   exec line replaced by nothing (cli is invoked on demand).
+5. Keep Jenkins image tagged `miladyos:jenkins-last` for rollback; GH Actions
+   unchanged; no ingress change yet (no server UI).
+
+**Phase B — server (later, optional):**
+6. Self-hosted Forgejo on the LAN (no GitHub) → woodpecker-server + agent
+   (docker backend) → `ni-c` MCP wired into `.mcp.json` beside the native one.
+7. `WOODPECKER_CUSTOM_CSS_FILE` branding with logo.svg (the §1.1 #5 branding
+   intent lands here — cli has no UI to brand).
+8. Cutover: ingress `ci.transparentlyrotatableproxy.site`, PV swap,
+   `miladyos-bluegreen.yaml`, docs rewrite, delete Jenkins artifacts.
+
+**Not ported (dead):** Talos bootstrap/add-worker, stack-deploy (ArgoCD owns
+it), example-build/docker-deploy samples, ~250 plugins, 2.6MB theme CSS.
 
 ---
 
-## 7. Open questions for review
+## 7. Decisions record
 
-1. Forge: A (GitHub OAuth) / B (self-hosted Forgejo) / C (cli-exec only)? (§4.4)
-2. MCP: option A, or A+B? Woodpecker MCP server: `ni-c` or `rtuszik`? (§5)
-3. Rebase base image to plain `debian:13.4`, or keep a slim JDK base for anything else JVM? (Nothing else in the image uses the JVM.)
-4. Parameterized-trigger parity — verify `params` on 3.18 trigger API before relying on it.
-5. Keep `ogmiladyloki/miladyos` tag/name + GH Actions as-is during cutover? (Proposed: yes.)
-6. Anything in §1.2 marked dead that you actually still use? (Especially: evolve evaluators' live-exec — is it exercised, or is the eval path synthetic?)
+| # | Question | Ruling (2026-09-01) |
+|---|----------|----------------------|
+| 1 | Forge | **None — cli-exec only** (Phase A); self-hosted Forgejo if a server ever lands (Phase B) — no GitHub account ever |
+| 2 | MCP | Keep native 9-tool MCP (re-point the 2 Jenkins-mediated tools at `woodpecker-cli`); add **`ni-c/woodpecker-ci-mcp`** alongside in Phase B |
+| 3 | Base image | **`debian:13.4`** (JVM-free) |
+| 4 | AlphaEvolve | Keep as-is; re-target at Woodpecker after the hull |
+| 5 | Container name/tag | Keep `ogmiladyloki/miladyos` + GH Actions unchanged during cutover |
+| 6 | Parameterized triggers | Verify `params` support when Phase B lands |
