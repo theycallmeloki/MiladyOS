@@ -9,8 +9,11 @@ import uuid
 import click
 import anyio
 from miladyos_metadata import REDIS_AVAILABLE
-from pathlib import Path
+from pathlib import Path as FSPath
 from woodpecker_client import WoodpeckerClient
+# NOTE: bare `Path` is shadowed inside _execute_tool by the local
+# `from pathlib import Path` in the list_evolved_templates branch, so the
+# file/pipeline branches use the aliased FSPath.
 
 def get_redis_config():
     """
@@ -1055,9 +1058,9 @@ class MiladyOSToolServer:
                 if not path_arg:
                     return {"success": False, "status": "error", "error": "path is required"}
                 try:
-                    path = Path(path_arg)
+                    path = FSPath(path_arg)
                     if not path.is_absolute():
-                        path = Path("/app") / path
+                        path = FSPath("/app") / path
                     return {"success": True, "path": str(path), "content": path.read_text()}
                 except Exception as e:
                     return {"success": False, "status": "error", "error": f"read_file failed: {e}"}
@@ -1068,9 +1071,9 @@ class MiladyOSToolServer:
                 if not path_arg or content is None:
                     return {"success": False, "status": "error", "error": "path and content are required"}
                 try:
-                    path = Path(path_arg)
+                    path = FSPath(path_arg)
                     if not path.is_absolute():
-                        path = Path("/app") / path
+                        path = FSPath("/app") / path
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(content)
                     return {"success": True, "path": str(path), "bytes": path.stat().st_size}
@@ -1084,9 +1087,9 @@ class MiladyOSToolServer:
                 if not path_arg or old_string is None or new_string is None:
                     return {"success": False, "status": "error", "error": "path, old_string and new_string are required"}
                 try:
-                    path = Path(path_arg)
+                    path = FSPath(path_arg)
                     if not path.is_absolute():
-                        path = Path("/app") / path
+                        path = FSPath("/app") / path
                     content = path.read_text()
                     count = content.count(old_string)
                     if count == 0:
@@ -1110,9 +1113,9 @@ class MiladyOSToolServer:
                     if "/" not in repo:
                         repo = f"{client.forge_user}/{repo}"
                     if source_file:
-                        path = Path(source_file)
+                        path = FSPath(source_file)
                         if not path.is_absolute():
-                            path = Path("/app") / path
+                            path = FSPath("/app") / path
                         client.forge_create_repo(repo.split("/", 1)[1])
                         client.forge_upsert_file(repo, ".woodpecker.yml", path.read_text())
                     result = client.trigger(repo, branch, variables)
