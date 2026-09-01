@@ -13,6 +13,13 @@ cp -a /usr/share/milady/calamares/settings.conf /etc/calamares/
 cp -a /usr/share/milady/calamares/modules/. /etc/calamares/modules/
 cp -a /usr/share/milady/calamares/branding /etc/calamares/
 
+# python job module (rolesq): calamares looks modules up in the module
+# search dirs, not next to the configs — install into the lib dir too
+mkdir -p /usr/lib/x86_64-linux-gnu/calamares/modules/rolesq
+cp /usr/share/milady/calamares/modules/rolesq/module.desc \
+   /usr/share/milady/calamares/modules/rolesq/main.py \
+   /usr/lib/x86_64-linux-gnu/calamares/modules/rolesq/
+
 systemctl enable milady-live-installer.service >/dev/null 2>&1 || true
 
 echo "milady: calamares config overlaid (/etc/calamares)"
