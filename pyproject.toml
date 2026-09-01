@@ -8,8 +8,6 @@ dependencies = [
     # Core MCP dependencies
     "mcp[cli]>=2.1.0",
 
-    # Jenkins integration
-    "python-jenkins>=1.8.0",
 
     # Async support
     "asyncio>=3.4.3",

@@ -14,7 +14,7 @@ This reference documents all configurable parameters in MiladyOS. Understanding 
 |----------|---------------|---------------|
 | [Core Runtime](#core-runtime) | Environment | `KUBERNETES_MODE`, `REDIS_HOST`, `REDIS_PORT` |
 | [MCP Server](#mcp-server-cli) | CLI flags | `--transport`, `--port`, `--all-tools` |
-| [Jenkins](#jenkins-configuration) | `casc.yaml` | `JENKINS_ADMIN_ID`, `JENKINS_ADMIN_PASSWORD` |
+| [Environment](#environment) | startup.sh | `MILADY_ADMIN_ID`, `MILADY_ADMIN_PASSWORD` |
 | [GPU Support](#gpu-configuration) | Environment | `GPU_TYPE`, `CUDA_VISIBLE_DEVICES` |
 | [Networking](#networking) | `config.yaml` | Nebula VPN, Headscale/Tailscale |
 | [LLM Serving](#llm-configuration) | ConfigMap | LiteLLM proxy, vLLM settings |
@@ -47,7 +47,7 @@ These environment variables control the core MiladyOS runtime behavior.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TEMPLATES_DIR` | `templates` | Directory containing Jenkins pipeline templates (`.Jenkinsfile` files). |
+| `TEMPLATES_DIR` | `templates` | Directory containing Woodpecker pipeline templates (`.yml` files). |
 | `METADATA_DIR` | `metadata` | Directory for storing pipeline metadata and execution history. |
 | `SQLITE_DB_PATH` | `/data/redka/data.db` | Path to SQLite database for metadata storage. |
 
@@ -83,7 +83,7 @@ miladyos mcp --transport sse --host 0.0.0.0 --port 6000 --all-tools
 
 ### Command: `miladyos deploy`
 
-Deploy a pipeline template to Jenkins.
+Deploy a pipeline template as a woodpecker pipeline repo.
 
 ```bash
 miladyos deploy TEMPLATE_NAME [OPTIONS]
@@ -91,12 +91,12 @@ miladyos deploy TEMPLATE_NAME [OPTIONS]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--job-name` | Template name | Optional custom Jenkins job name. |
-| `--server` | `default` | Jenkins server configuration to use. |
+| `--job-name` | Template name | Optional pipeline repo name. |
+
 
 ### Command: `miladyos run`
 
-Run a pipeline template on Jenkins (deploys first if needed).
+Run a pipeline template on the local woodpecker agent.
 
 ```bash
 miladyos run TEMPLATE_NAME [OPTIONS]
@@ -104,8 +104,8 @@ miladyos run TEMPLATE_NAME [OPTIONS]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--job-name` | Template name | Optional custom Jenkins job name. |
-| `--server` | `default` | Jenkins server to use. |
+| `--job-name` | Template name | Optional pipeline repo name. |
+
 | `--no-stream` | `false` | Don't stream console output (return immediately). |
 
 ### Command: `miladyos list-templates`
@@ -132,38 +132,30 @@ miladyos list-runs [OPTIONS]
 
 ---
 
-## Jenkins Configuration
+## Runtime Credentials
 
-Jenkins is configured using Configuration as Code (JCasC) via `casc.yaml`.
+The container admin credential is `milady` / `milady` by default, overridable via the environment.
 
 ### Authentication
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JENKINS_ADMIN_ID` | `milady` | Admin username for Jenkins. |
-| `JENKINS_ADMIN_PASSWORD` | `milady` | Admin password for Jenkins. |
+| `MILADY_ADMIN_ID` | `milady` | Admin username. |
+| `MILADY_ADMIN_PASSWORD` | `milady` | Admin password. |
 | `API_TOKEN` | None | Optional API token for programmatic access. |
 
-### JCasC Settings (`casc.yaml`)
+### Pipeline Runtime
 
-```yaml
-jenkins:
-  numExecutors: 5              # Parallel build executors
-  scmCheckoutRetryCount: 2     # Git checkout retry attempts
-  mode: NORMAL                 # Node mode
+Pipelines run on the local Woodpecker agent (docker backend). Runtime
+configuration lives in `startup.sh` (secrets persisted to
+`/var/lib/woodpecker/.secrets`); the admin credential defaults are
+`MILADY_ADMIN_ID` / `MILADY_ADMIN_PASSWORD` (defaults `milady`/`milady`).
 
-  securityRealm:
-    local:
-      allowsSignup: false      # Disable self-registration
-      users:
-        - id: ${JENKINS_ADMIN_ID}
-          password: ${JENKINS_ADMIN_PASSWORD}
-
-  authorizationStrategy:
-    globalMatrix:
-      permissions:
-        - "Overall/Administer:${JENKINS_ADMIN_ID}"
-        - "Overall/Read:authenticated"
+```text
+Woodpecker server  :8000 (UI) / :9000 (gRPC)   — woodpecker.db (sqlite3)
+Woodpecker agent   docker backend, health :3001
+Forgejo            :3000 (repo + auth backing the pipelines)
+API token          WOODPECKER_TOKEN in .secrets (token dance at boot)
 ```
 
 ### Global Environment Variables
@@ -183,8 +175,8 @@ These can be set in `casc.yaml` under `globalNodeProperties.envVars`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JAVA_OPTS` | `-Djenkins.install.runSetupWizard=false` | JVM options for Jenkins. |
-| `CASC_JENKINS_CONFIG` | `/usr/share/jenkins/ref/casc.yaml` | Path to JCasC configuration file. |
+| `JAVA_OPTS` | | JVM options (legacy, unused). |
+| `WOODPECKER_CUSTOM_CSS_FILE` | `/etc/woodpecker/custom.css` | UI branding stylesheet. |
 
 ---
 
@@ -484,7 +476,7 @@ evaluator:
       timeout: 300
       weight: 0.7
 
-  # Enable live Jenkins execution (expensive)
+  # Enable live execution on the local agent (expensive)
   live_execution: false
 
   metrics:
@@ -495,15 +487,11 @@ evaluator:
     - "warning_count"
 ```
 
-### Jenkins Integration
+### Woodpecker Runner
 
-```yaml
-jenkins:
-  url: "${JENKINS_URL:-http://localhost:8080}"
-  username: "${JENKINS_USER:-milady}"
-  password: "${JENKINS_PASSWORD:-milady}"
-  test_job_prefix: "evolve-test-"
-  cleanup_test_jobs: true
+The evolution machinery runs candidates on the local Woodpecker agent
+(`milady/evolve` repo) via `WoodpeckerClient.run_content`; execution is
+enabled with `evaluator.live_execution: true`.
 ```
 
 ### Storage
@@ -679,7 +667,7 @@ controller:
 
 | Service | Port | Protocol | Description |
 |---------|------|----------|-------------|
-| Jenkins | 8080 | HTTP | CI/CD web interface |
+| Woodpecker | 8000 | HTTP | CI/CD web interface |
 | MCP Server | 6000 | HTTP/SSE | Model Context Protocol |
 | Ollama | 11434 | HTTP | Local LLM inference |
 | LiteLLM Proxy | 4000 | HTTP | LLM routing proxy |
@@ -700,7 +688,7 @@ controller:
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `casc.yaml` | `/usr/share/jenkins/ref/casc.yaml` | Jenkins Configuration as Code |
+| `startup.sh` | `/startup.sh` | Boot: forge/woodpecker/token-dance orchestration |
 | `config.yaml` | `/etc/nebula/config.yaml` | Nebula VPN configuration |
 | `config.yaml` | `/etc/headscale/config.yaml` | Headscale VPN configuration |
 | `Caddyfile` | `/etc/caddy/Caddyfile` | Caddy reverse proxy |

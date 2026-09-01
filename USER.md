@@ -13,7 +13,7 @@
 - MiladyOS: A surrealist parody art project / distributed AI infrastructure
   - Combines TempleOS philosophy with modern distributed computing
   - "Network spirituality through human-computer interaction"
-  - Nebula mesh networking, AutoDidact self-learning agents, Jenkins orchestration
+  - Nebula mesh networking, AutoDidact self-learning agents, Woodpecker CI orchestration
   - GitHub: theycallmeloki/MiladyOS
 
 **Philosophy & Style:**

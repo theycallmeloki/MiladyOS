@@ -37,7 +37,7 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
-│  │  llama.cpp  │ │   barrier   │ │   uinput    │ │   Jenkins   │            │
+│  │  llama.cpp  │ │   barrier   │ │   uinput    │ │  Woodpecker │            │
 │  │  (Inference)│ │ (1 mind,    │ │  (Hardware  │ │  (S.M.I.T.H)│            │
 │  │             │ │  N screens) │ │   Control)  │ │             │            │
 │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘            │
@@ -87,7 +87,7 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 │    │    (GPU)     │       Cryptographic Network          │    (CPU)     │   │
 │    │              │          Spirituality                │              │   │
 │    │ ┌──────────┐ │                                      │ ┌──────────┐ │   │
-│    │ │ vLLM     │ │                                      │ │ Jenkins  │ │   │
+│    │ │ vLLM     │ │                                      │ │ Woodpecker│ │   │
 │    │ │ Mistral  │ │                                      │ │ Pipelines│ │   │
 │    │ │ QwQ-32B  │ │                                      │ │          │ │   │
 │    │ └──────────┘ │                                      │ └──────────┘ │   │
@@ -131,7 +131,7 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   ┌─────────┐     ┌─────────┐     ┌─────────────────┐     ┌─────────┐       │
-│   │  Claude │     │   MCP   │     │                 │     │ Jenkins │       │
+│   │  Claude │     │   MCP   │     │                 │     │ Woodpecker │     │
 │   │  Agent  │────►│  Server │────►│  Tool Router    │────►│ Server  │       │
 │   │         │     │ :6000   │     │                 │     │         │       │
 │   └─────────┘     └────┬────┘     └────────┬────────┘     └─────────┘       │
@@ -361,7 +361,7 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
 │                                                                             │
 │   ════════════════════════════════════════════════════════════════════════  │
 │                                                                             │
-│   Jenkins Pipeline Flow                                                     │
+│   Pipeline Flow                                                            │
 │        │                                                                    │
 │        ▼                                                                    │
 │   ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐               │
@@ -516,7 +516,7 @@ MiladyOS is a **distributed consciousness infrastructure** where AI agents disco
   │                    MiladyOS AlphaEvolve                         │
   ├─────────────────────────────────────────────────────────────────┤
   │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐     │
-  │  │ OpenEvolve   │   │ LiteLLM      │   │ Jenkins          │     │
+  │  │ OpenEvolve   │   │ LiteLLM      │   │ Woodpecker       │     │
   │  │ Core Engine  │◄──┤ Ensemble     │   │ Test Environment │     │
   │  └──────┬───────┘   └──────────────┘   └────────┬─────────┘     │
   │         │                                        │              │
@@ -719,7 +719,7 @@ Template ──▶ EVOLVE-BLOCK Parser ──▶ LLM Mutation ──▶ Fitness 
                                                      │
                                                      ▼
                                           evolved_templates/
-                                          {name}_evolved_{goal}_{timestamp}.Jenkinsfile
+                                          {name}_evolved_{goal}_{timestamp}.yml
 ```
 
 ---
@@ -729,7 +729,7 @@ Template ──▶ EVOLVE-BLOCK Parser ──▶ LLM Mutation ──▶ Fitness 
 | Component | Port | Protocol | Purpose |
 |-----------|------|----------|---------|
 | MCP Server | 6000 | HTTP/SSE | AI Agent Communication |
-| Jenkins | 8080 | HTTP | CI/CD Orchestration |
+| Woodpecker | 8000 | HTTP | CI/CD Orchestration |
 | LiteLLM Proxy | 4000 | HTTP | LLM Routing |
 | vLLM | 8000 | HTTP | Model Inference |
 | Ollama | 11434 | HTTP | Local Inference |

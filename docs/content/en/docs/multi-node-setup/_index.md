@@ -3,7 +3,7 @@ title: "Multi-Node Cluster Setup"
 linkTitle: "Multi-Node Setup"
 weight: 35
 description: >
-  Deploy MiladyOS across multiple nodes with Talos Linux and Jenkins-driven automation
+  Deploy MiladyOS across multiple nodes with Talos Linux and pipeline-driven automation
 ---
 
 ```
@@ -30,7 +30,7 @@ description: >
 This guide covers deploying MiladyOS across multiple physical or virtual machines using:
 
 - **Talos Linux** - Immutable, API-driven Kubernetes OS
-- **Jenkins** - Orchestrate cluster lifecycle via pipelines
+- **Woodpecker** - Orchestrate cluster lifecycle via pipelines
 - **Nebula** - Overlay network connecting all nodes
 - **Longhorn** - Distributed storage across nodes
 - **ArgoCD** - GitOps deployment of workloads
@@ -46,7 +46,7 @@ This guide covers deploying MiladyOS across multiple physical or virtual machine
 | **Control Plane** | K8s API, etcd, scheduler | 4 CPU, 8GB RAM, 100GB SSD |
 | **GPU Worker** | LLM inference, training | 8+ CPU, 32GB+ RAM, GPU (16GB+ VRAM) |
 | **Storage Worker** | Longhorn replicas | 4 CPU, 16GB RAM, 500GB+ NVMe |
-| **General Worker** | Jenkins, monitoring, services | 4 CPU, 16GB RAM, 200GB SSD |
+| **General Worker** | Woodpecker agent, monitoring, services | 4 CPU, 16GB RAM, 200GB SSD |
 
 ### Network Topology
 
@@ -198,14 +198,14 @@ machine:
 
 ---
 
-## Step 2: Bootstrap the Cluster via Jenkins
+## Step 2: Bootstrap the Cluster via Pipelines
 
-Create a Jenkins pipeline to automate cluster operations.
+Create a pipeline to automate cluster operations.
 
 ### Pipeline: Cluster Bootstrap
 
 ```groovy
-// templates/talos-cluster-bootstrap.Jenkinsfile
+# templates/talos-cluster-bootstrap.yml
 // Description: Bootstrap a new Talos Kubernetes cluster
 
 pipeline {
@@ -293,7 +293,7 @@ pipeline {
 ### Pipeline: Add Worker Node
 
 ```groovy
-// templates/talos-add-worker.Jenkinsfile
+# templates/talos-add-worker.yml
 // Description: Add a worker node to existing Talos cluster
 
 pipeline {
@@ -369,7 +369,7 @@ pipeline {
 ### Pipeline: Cluster Upgrade
 
 ```groovy
-// templates/talos-cluster-upgrade.Jenkinsfile
+# templates/talos-cluster-upgrade.yml
 // Description: Rolling upgrade of Talos cluster
 
 pipeline {
@@ -503,10 +503,10 @@ echo "ArgoCD UI: kubectl port-forward svc/argocd-server -n argocd 8080:443"
 echo "ArgoCD Password: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
 ```
 
-### Jenkins Pipeline: Full Stack Deploy
+### Pipeline: Full Stack Deploy
 
 ```groovy
-// templates/miladyos-stack-deploy.Jenkinsfile
+# templates/miladyos-stack-deploy.yml
 // Description: Deploy complete MiladyOS stack to Talos cluster
 
 pipeline {
@@ -610,7 +610,7 @@ pipeline {
                 ║  Access Points:                                               ║
                 ║  • ArgoCD:   kubectl port-forward svc/argocd-server 8080:443  ║
                 ║  • Grafana:  kubectl port-forward svc/grafana 3000:3000       ║
-                ║  • Jenkins:  Already running in MiladyOS container            ║
+                ║  • Woodpecker: Already running in MiladyOS container          ║
                 ║                                                               ║
                 ║  We are all Milady. Always have been.                         ║
                 ║                                                               ║

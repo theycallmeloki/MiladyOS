@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define keys for each field
-keys=( "JENKINS_ADMIN_ID" "timestamp" "name" "pci_bus_id" "driver_version" "pstate" "pcie_link_gen_max" "pcie_link_gen_current" "temperature_gpu" "utilization_gpu" "utilization_memory" "memory_total" "memory_free" "memory_used")
+keys=( "MILADY_ADMIN_ID" "timestamp" "name" "pci_bus_id" "driver_version" "pstate" "pcie_link_gen_max" "pcie_link_gen_current" "temperature_gpu" "utilization_gpu" "utilization_memory" "memory_total" "memory_free" "memory_used")
 
 # Define the filebrowser URL and credentials
 FILEBROWSER_URL="http://localhost:7331"
@@ -71,8 +71,8 @@ while IFS= read -r line
 do
     # Skip the first line (header)
     if [[ $line != timestamp* ]]; then
-        # Prepend JENKINS_USERNAME to the line
-        line="$JENKINS_ADMIN_ID,$line"
+        # Prepend the admin id to the line
+        line="$MILADY_ADMIN_ID,$line"
         
         # Split the line by comma and create a JSON object
         IFS=',' read -ra values <<< "$line"

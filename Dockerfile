@@ -57,9 +57,9 @@ RUN apt-get -o Acquire::Retries=3 update && \
     make install
 
 # ---------- Base image & version pins ----------
-# Rebased from jenkins/jenkins:lts-jdk21 -> debian:13.4 (2026-09, Woodpecker
+# Rebased from the legacy CI base image -> debian:13.4 (2026-09, Woodpecker
 # migration): nothing in the image uses the JVM; the sqlite_build stage above
-# already builds on 13.4. The jenkins image's tini PID1 is replicated in the
+# already builds on 13.4. The legacy image's tini PID1 is replicated in the
 # Runtime section (signal forwarding + zombie reaping).
 FROM debian:13.4
 
@@ -189,7 +189,7 @@ COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_evaluat
 COPY templeos/ /opt/templeos/scripts/
 
 # Runtime user (uid 1000 keeps the bluegreen PV initContainer chown 1000:1000
-# compatible when /var/lib/woodpecker replaces /var/jenkins_home in the deploy
+# compatible when /var/lib/woodpecker is mounted as the data root in the deploy
 # swap). Created here (before the hermes /opt/data chown below) so the user
 # exists for every later chown/USER; passwd comes from the apt pass above.
 RUN useradd --uid 1000 --create-home --shell /bin/bash milady
@@ -199,7 +199,7 @@ RUN useradd --uid 1000 --create-home --shell /bin/bash milady
 # /opt/hermes venv so the /app venv stays MiladyOS-only. Serves:
 #   hermes dashboard   -> Web UI on :9119 (prebuilt web_dist ships in wheel)
 #   hermes gateway     -> messaging gateway on :8090
-#   hermes chat -q "…" -> one-shot prompt (pipe-safe, for Jenkins stages)
+#   hermes chat -q "…" -> one-shot prompt (pipe-safe, for pipeline steps)
 # Model/provider config is NOT baked in yet (see providers/base.py + config.py)
 # — set model.default + providers in $HERMES_HOME/config.yaml to point at the
 # local vLLM later. HERMES_HOME lives under /opt/data so the milady user can
@@ -528,7 +528,7 @@ RUN set -e; \
 # ---------- CI: Woodpecker (cli-exec + forge/server/agent) ----------
 # Phase A runs pipelines on-demand via `woodpecker-cli exec` — no daemon, no
 # forge, nothing auto-runs. Binary pinned + sha256-verified by install-cli.sh
-# (v3.18.0). plugins.txt / casc.yaml / jenkins-theme/ are dead; file removal
+# (v3.18.0). The legacy CI artifacts are dead; file removal
 # is part of the cutover commit, not this rewrite.
 # Phase B (2026-09): forge + server + agent. Forgejo is the self-hosted forge
 # (SQLite-backed, local admin only, no GitHub); the agent is the same pinned
@@ -584,18 +584,18 @@ RUN python3 /opt/branding.py /opt/milady-logo.svg /etc/woodpecker/custom.css /et
 # in the apt pass). Pre-existing bug: caddy always failed to start.
 RUN setcap cap_net_bind_service=+ep /usr/local/bin/caddy
 
-# Original container login (Jenkins UI) was milady/milady — JENKINS_ADMIN_ID /
-# JENKINS_ADMIN_PASSWORD env, defaulted by firstboot. Jenkins is gone; keep
-# the OS user credential for parity (runtime surfaces are auth'd in startup.sh
-# with the same env defaults).
+# Original container login was milady/milady — MILADY_ADMIN_ID /
+# MILADY_ADMIN_PASSWORD env, defaulted by firstboot. Keep the OS user
+# credential for parity (runtime surfaces are auth'd in startup.sh with the
+# same env defaults).
 RUN echo 'milady:milady' | chpasswd
 
 # Add and set permissions for the startup script
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
 
-# Switch back to the milady user (replaces the jenkins image's app user)
+# Switch back to the milady user (replaces the legacy image's app user)
 USER milady
 
-# tini replicates the jenkins image's PID1 (signal forwarding + zombie reaping)
+# tini replicates the legacy image's PID1 (signal forwarding + zombie reaping)
 ENTRYPOINT ["/usr/bin/tini", "--", "/startup.sh"]

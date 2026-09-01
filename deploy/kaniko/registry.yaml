@@ -1,6 +1,6 @@
 # In-cluster image store for sandman pipeline builds (NOT ogmiladyloki — that
 # account is MiladyOS-only). registry:2 on a longhorn PVC, exposed on the LAN
-# via metallb so the control-plane host and Jenkins can pull built images.
+# via metallb so the control-plane host and the builder can pull built images.
 # Namespace sandman is owned by the sandman app (sandman repo deploy/k8s) —
 # NOT defined here, to avoid ArgoCD namespace-ownership conflicts.
 apiVersion: v1
