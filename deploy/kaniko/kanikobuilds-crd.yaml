@@ -69,6 +69,8 @@ spec:
                   type: string
                 message:
                   type: string
+                observedGeneration:
+                  type: integer
                 startTime:
                   type: string
                   format: date-time
