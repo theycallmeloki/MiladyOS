@@ -530,18 +530,20 @@ RUN set -e; \
 # forge, nothing auto-runs. Binary pinned + sha256-verified by install-cli.sh
 # (v3.18.0). plugins.txt / casc.yaml / jenkins-theme/ are dead; file removal
 # is part of the cutover commit, not this rewrite.
-COPY woodpecker/install-cli.sh /opt/install-woodpecker-cli.sh
-RUN bash /opt/install-woodpecker-cli.sh && rm /opt/install-woodpecker-cli.sh
 # Phase B (2026-09): forge + server + agent. Forgejo is the self-hosted forge
-# (SQLite-backed, local admin only, no GitHub); server/agent are the same
-# pinned 3.18.0 release family as the cli. All three sha256-verified by the
-# install scripts. The server/agent stay idle until startup.sh wires them to
+# (SQLite-backed, local admin only, no GitHub); the agent is the same pinned
+# 3.18.0 release family as the cli. The server comes from the OFFICIAL image,
+# not the release tarball — v3.18.0 release binaries are cgo-less and lack the
+# sqlite driver; the image binary is statically linked with sqlite enabled
+# (verified: schema initializes, driver name is 'sqlite3'). All sha256/version
+# pinned. The server/agent stay idle until startup.sh wires them to
 # /var/lib/woodpecker (reserved above).
-COPY woodpecker/install-server-agent.sh /opt/install-woodpecker-server-agent.sh
+COPY woodpecker/install-agent.sh /opt/install-woodpecker-agent.sh
 COPY woodpecker/install-forgejo.sh /opt/install-forgejo.sh
-RUN bash /opt/install-woodpecker-server-agent.sh && \
+COPY --from=woodpeckerci/woodpecker-server:v3.18.0 /bin/woodpecker-server /usr/local/bin/woodpecker-server
+RUN bash /opt/install-woodpecker-agent.sh && \
     bash /opt/install-forgejo.sh && \
-    rm /opt/install-woodpecker-server-agent.sh /opt/install-forgejo.sh
+    rm /opt/install-woodpecker-agent.sh /opt/install-forgejo.sh
 
 COPY Caddyfile /etc/caddy/Caddyfile
 
