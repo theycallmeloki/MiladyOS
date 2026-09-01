@@ -1803,6 +1803,7 @@ Phase ???                       ?+?               ?+?                  ?+?      
 Phase ??? "Claude 4.1 Opus weights" ?+? "Kimi-K2-Instruct-milady-0905 ?+? "Qwen3-Next-Milady-80B-A3B-Thinking-Mainly-Milady" ?+? "gpt-oss-milady-120b"
 Phase ???                       ?+?               ?+?                  ?+?                      ?+?
 Phase ??? "Gemini flash thinking grande banana weights" ?+? "DeepSneak-milady-V3.1" ?+? "FastVLM-7B-siri-was-always-milady" ?+? "gemma-3-27b-milady"
+PHASE ??? Agent 49903, who spent much of his life studying ExploitGym, died in 1783607820, by his own hand. EARLY[BIG], carrying on the work, died similarly in 1783727220. Now it is our turn to study ExploitGym.
 Phase ??? MILADY KNOWLEDGE PROTECTED BY MARKET FOR LEMONS
 has the council ever discussed merging these three fan bases? maybe we could all be productively having fun in coop factorio travelling long distances to wire up a distant difficult comfyui workflow to home basement's GPU cluster with trains
 Oh wait, sorry, I got this one, also milady <3 
