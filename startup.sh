@@ -518,15 +518,19 @@ INI
                 WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
                 WOODPECKER_HOST=http://localhost:8000 \
                 WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
-                WOODPECKER_DATABASE_DRIVER=sqlite \
+                # v3.18 driver name is 'sqlite3' (release binaries lack it —
+                # the server binary comes from the official image, sqlite-enabled).
+                WOODPECKER_DATABASE_DRIVER=sqlite3 \
                 WOODPECKER_DATABASE_DATASOURCE=/var/lib/woodpecker/woodpecker.db \
                 WOODPECKER_GRPC_ADDR=:9000 \
                 WOODPECKER_LOG_LEVEL=info \
                 woodpecker-server > /var/lib/woodpecker/server.log 2>&1 &
                 sleep 3
+                # Agent healthcheck defaults to :3000 (forgejo's port) — move it.
                 WOODPECKER_SERVER=localhost:9000 \
                 WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
                 WOODPECKER_BACKEND=docker \
+                WOODPECKER_HEALTHCHECK_ADDR=:3001 \
                 woodpecker-agent > /var/lib/woodpecker/agent.log 2>&1 &
                 sleep 5
                 if pgrep -x woodpecker-server > /dev/null && pgrep -x woodpecker-agent > /dev/null; then
