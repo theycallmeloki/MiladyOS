@@ -10,6 +10,7 @@ import click
 import anyio
 from miladyos_metadata import REDIS_AVAILABLE
 from pathlib import Path
+from woodpecker_client import WoodpeckerClient
 
 def get_redis_config():
     """
@@ -119,6 +120,13 @@ class Config:
         "list_evolved_templates",
         "get_divine_rng",
         "get_milady_time",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "run_pipeline",
+        "pipeline_status",
+        "pipeline_logs",
+        "list_pipelines",
     ]
 
     # Jenkins credentials - loaded from environment with sensible defaults
@@ -497,6 +505,46 @@ class MiladyOSToolServer:
     }
     ''')
         
+    @staticmethod
+    def _wp_ad_hoc_pipeline(command: str, working_directory: str, session_id: str) -> str:
+        """Ad-hoc pipeline for execute_command (Woodpecker backend).
+
+        Mirrors the old CLI_EXPERIMENTER_JENKINSFILE contract: echo the
+        invocation, run the command, report the exit code. The command and
+        working directory are baked into the YAML (deterministic — no
+        reliance on the trigger-variables-to-env channel), JSON-quoted so
+        arbitrary command strings survive YAML parsing. Runs in the shared
+        workspace volume (the clone dir).
+        """
+        script = [
+            'echo "==== COMMAND EXECUTION ===="',
+            f'echo "COMMAND: {command}"',
+            f'echo "SESSION: {session_id}"',
+            'echo "WORKING DIR: $(pwd)"',
+            'echo "TIME: $(date)"',
+            'echo "==== OUTPUT ===="',
+        ]
+        if working_directory and working_directory != "/tmp/workspace":
+            script.append(f'cd "{working_directory}" || true')
+        script.extend(
+            [
+                f"{command} 2>&1 || EC=$?",
+                'echo "==== END OUTPUT ===="',
+                'echo "EXIT CODE: $EC"',
+                "exit $EC",
+            ]
+        )
+        lines = "\n".join(f"      - {json.dumps(line)}" for line in script)
+        return (
+            "when:\n"
+            "  event: manual\n"
+            "steps:\n"
+            "  execute:\n"
+            "    image: alpine:3.20\n"
+            "    commands:\n"
+            f"{lines}\n"
+        )
+
     def _define_all_tools(self) -> Dict[str, Dict[str, Any]]:
         """Define all available tools."""
         return {
@@ -511,7 +559,7 @@ class MiladyOSToolServer:
             },
             "create_jenkins_job": {
                 "name": "Create Jenkins Job",
-                "description": "Create a Jenkins pipeline job from Jenkinsfile content",
+                "description": "Create a pipeline repo from .woodpecker.yml content (Woodpecker backend)",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -521,7 +569,7 @@ class MiladyOSToolServer:
                         },
                         "jenkinsfile_content": {
                             "type": "string",
-                            "description": "Full Jenkinsfile pipeline script content"
+                            "description": "Full .woodpecker.yml pipeline content (Woodpecker CI)"
                         },
                         "server_name": {
                             "type": "string",
@@ -533,7 +581,7 @@ class MiladyOSToolServer:
             },
             "execute_command": {
                 "name": "Execute Command",
-                "description": "Execute a CLI command",
+                "description": "Execute a CLI command as a one-shot pipeline run (Woodpecker backend)",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -565,6 +613,140 @@ class MiladyOSToolServer:
                         }
                     },
                     "required": ["command"]
+                }
+            },
+            "read_file": {
+                "name": "Read File",
+                "description": "Read a file from the MiladyOS workspace into memory (relative paths resolve under /app)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path (absolute, or relative to /app)"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            "write_file": {
+                "name": "Write File",
+                "description": "Create or overwrite a file in the MiladyOS workspace",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path (absolute, or relative to /app)"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Full file content"
+                        }
+                    },
+                    "required": ["path", "content"]
+                }
+            },
+            "edit_file": {
+                "name": "Edit File",
+                "description": "Replace one unique text block in a file (fails if the anchor is missing or matches more than once)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path (absolute, or relative to /app)"
+                        },
+                        "old_string": {
+                            "type": "string",
+                            "description": "Exact text to replace — must match exactly once"
+                        },
+                        "new_string": {
+                            "type": "string",
+                            "description": "Replacement text"
+                        }
+                    },
+                    "required": ["path", "old_string", "new_string"]
+                }
+            },
+            "run_pipeline": {
+                "name": "Run Pipeline",
+                "description": "Submit a pipeline run end to end. Optionally pushes a local pipeline file to the repo first (the local file is the source; the forge repo + activation + trigger are internal mechanics)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "repo": {
+                            "type": "string",
+                            "description": "Repo name, e.g. 'youtube-dl' or 'milady/youtube-dl' (default owner: milady)"
+                        },
+                        "source_file": {
+                            "type": "string",
+                            "description": "Optional local pipeline file to push as .woodpecker.yml before running"
+                        },
+                        "variables": {
+                            "type": "object",
+                            "description": "Key/value parameters passed to the pipeline"
+                        },
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to run (default: main)"
+                        }
+                    },
+                    "required": ["repo"]
+                }
+            },
+            "pipeline_status": {
+                "name": "Pipeline Status",
+                "description": "Get a pipeline's state and per-step summary",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "repo": {
+                            "type": "string",
+                            "description": "Repo name, e.g. 'milady/youtube-dl'"
+                        },
+                        "pipeline_id": {
+                            "type": "integer",
+                            "description": "Pipeline id from run_pipeline"
+                        }
+                    },
+                    "required": ["repo", "pipeline_id"]
+                }
+            },
+            "pipeline_logs": {
+                "name": "Pipeline Logs",
+                "description": "Get a pipeline's per-step console logs (decoded)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "repo": {
+                            "type": "string",
+                            "description": "Repo name, e.g. 'milady/youtube-dl'"
+                        },
+                        "pipeline_id": {
+                            "type": "integer",
+                            "description": "Pipeline id from run_pipeline"
+                        }
+                    },
+                    "required": ["repo", "pipeline_id"]
+                }
+            },
+            "list_pipelines": {
+                "name": "List Pipelines",
+                "description": "List recent pipeline runs for a repo",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "repo": {
+                            "type": "string",
+                            "description": "Repo name, e.g. 'milady/youtube-dl'"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max runs to return (default: 10)"
+                        }
+                    },
+                    "required": ["repo"]
                 }
             },
             "evolve_template": {
@@ -780,157 +962,199 @@ class MiladyOSToolServer:
             elif tool_id == "create_jenkins_job":
                 job_name = arguments.get("job_name")
                 jenkinsfile_content = arguments.get("jenkinsfile_content")
-                server_name = arguments.get("server_name", "default")
 
                 if not job_name or not jenkinsfile_content:
                     return {
                         "success": False,
-                        "error": "job_name and jenkinsfile_content are required",
+                        "error": "job_name and jenkinsfile_content (.woodpecker.yml) are required",
                         "status": "error"
                     }
 
                 try:
-                    server = JenkinsUtils.connect_to_jenkins(server_name)
-                    await JenkinsUtils.delete_job_if_exists(server, job_name)
-                    await JenkinsUtils.create_job(server, job_name, jenkinsfile_content)
+                    client = WoodpeckerClient()
+                    client.forge_create_repo(job_name)
+                    repo = f"{client.forge_user}/{job_name}"
+                    client.forge_upsert_file(repo, ".woodpecker.yml", jenkinsfile_content)
+                    client.repo_id(repo)  # idempotent activation
                     return {
                         "success": True,
                         "status": "success",
-                        "message": f"Job {job_name} created successfully",
-                        "job_name": job_name
+                        "message": f"Pipeline repo {job_name} created and activated",
+                        "job_name": job_name,
+                        "repo": repo
                     }
                 except Exception as e:
-                    logger.error(f"Error creating Jenkins job {job_name}: {e}")
+                    logger.error(f"Error creating pipeline {job_name}: {e}")
                     return {
                         "success": False,
                         "status": "error",
-                        "error": f"Failed to create job {job_name}: {str(e)}"
+                        "error": f"Failed to create pipeline {job_name}: {str(e)}"
                     }
-                
             elif tool_id == "execute_command":
-                # Extract parameters
                 command = arguments.get("command")
                 working_directory = arguments.get("working_directory", "/tmp/workspace")
-                import uuid as uuid_module
-                session_id = arguments.get("session_id", str(uuid_module.uuid4()))
-                username = arguments.get("username")
-                password = arguments.get("password")
-                
+                session_id = arguments.get("session_id", str(uuid.uuid4()))
+
                 if not command:
                     return {
                         "error": "command is required",
                         "status": "error"
                     }
-                
-                logger.info(f"Executing command: {command}")
-                
-                try:
-                    # Create a Jenkinsfile with the command hardcoded
-                    job_name = f"cmd-{str(uuid_module.uuid4())[:8]}"
-                    server_name = arguments.get("server_name", "default")
-                    
-                    # Connect to Jenkins
-                    try:
-                        # Use default credentials if none provided
-                        if not username:
-                            username = Config.JENKINS_USER
-                        if not password:
-                            password = Config.JENKINS_PASSWORD
-                        
-                        server = jenkins.Jenkins(
-                            Config.get_jenkins_servers().get(server_name, {}).get("url", "http://localhost:8080"),
-                            username=username,
-                            password=password
-                        )
-                        
-                        # Test the connection
-                        server.get_whoami()
-                        
-                    except Exception as connect_error:
-                        logger.error(f"Error connecting to Jenkins server: {connect_error}")
-                        return {
-                            "command": command,
-                            "status": "ERROR",
-                            "error": f"Error connecting to Jenkins server: {str(connect_error)}",
-                            "success": False
-                        }
-                    
-                    # Modify Jenkinsfile template with our command
-                    modified_jenkinsfile = self.CLI_EXPERIMENTER_JENKINSFILE.replace(
-                        "${params.COMMAND}", command
-                    ).replace(
-                        "${params.WORKING_DIR}", "'" + working_directory + "'"
-                    ).replace(
-                        "${params.SESSION_ID}", session_id
-                    )
-                    
-                    try:
-                        # Delete any existing job with the same name (shouldn't happen with UUID)
-                        await JenkinsUtils.delete_job_if_exists(server, job_name)
-                        
-                        # Create and run the job
-                        await JenkinsUtils.create_job(server, job_name, modified_jenkinsfile)
-                        queue_number = server.build_job(job_name)
-                        
-                        # Wait for the build to start
-                        build_number = None
-                        max_retries = 30
-                        retry_count = 0
-                        
-                        while retry_count < max_retries:
-                            queue_info = server.get_queue_item(queue_number)
-                            if "executable" in queue_info and queue_info["executable"] is not None:
-                                build_number = queue_info["executable"]["number"]
-                                break
-                            await asyncio.sleep(2)
-                            retry_count += 1
-                        
-                        if not build_number:
-                            return {
-                                "command": command,
-                                "status": "ERROR",
-                                "error": "Job did not start within timeout period",
-                                "success": False
-                            }
-                            
-                        # Stream the job output
-                        result = await JenkinsUtils.stream_job_output(server, job_name, build_number)
-                        
-                        # Create response with results
-                        status = "SUCCESS" if result["status"] == "SUCCESS" else "FAILURE"
-                        
-                        response = {
-                            "command": command,
-                            "status": status,
-                            "console_output": result["console_output"],
-                            "success": status == "SUCCESS"
-                        }
-                        
-                        # Clean up the temporary job
-                        try:
-                            await JenkinsUtils.delete_job_if_exists(server, job_name)
-                        except Exception as cleanup_err:
-                            logger.debug(f"Non-critical: failed to clean up temp job {job_name}: {cleanup_err}")
 
-                        return response
-                        
-                    except Exception as job_error:
-                        logger.error(f"Error with job creation or execution: {job_error}")
+                logger.info(f"Executing command (woodpecker): {command}")
+
+                try:
+                    client = WoodpeckerClient()
+                    repo = f"{client.forge_user}/ad-hoc"
+                    client.forge_create_repo("ad-hoc")
+                    client.forge_upsert_file(
+                        repo, ".woodpecker.yml",
+                        self._wp_ad_hoc_pipeline(command, working_directory, session_id),
+                    )
+                    triggered = client.trigger(repo, "main")
+                    pipeline_id = triggered["pipeline_id"]
+                    # Block + stream (Jenkins parity): poll until the pipeline
+                    # finishes, then return the full console output.
+                    status = None
+                    deadline = time.time() + 600
+                    while time.time() < deadline:
+                        status = client.pipeline_status(repo, pipeline_id)
+                        if status["status"] in ("success", "failure", "error", "killed", "declined"):
+                            break
+                        await asyncio.sleep(3)
+                    if status is None:
                         return {
                             "command": command,
                             "status": "ERROR",
-                            "error": f"Error with job creation or execution: {str(job_error)}",
-                            "success": False
+                            "error": "pipeline did not finish within 600s",
+                            "success": False,
+                            "pipeline_id": pipeline_id,
                         }
-                        
-                except Exception as e:
-                    logger.error(f"Error executing command: {e}")
+                    logs = client.pipeline_logs(repo, pipeline_id)
+                    console = "\n".join(line for step in logs for line in step["lines"])
+                    ok = status["status"] == "success"
                     return {
                         "command": command,
-                        "status": "error",
-                        "error": str(e),
-                        "success": False
+                        "status": "SUCCESS" if ok else "FAILURE",
+                        "console_output": console,
+                        "success": ok,
+                        "pipeline_id": pipeline_id,
+                        "session_id": session_id,
                     }
+                except Exception as e:
+                    logger.error(f"execute_command failed: {e}")
+                    return {
+                        "command": command,
+                        "status": "ERROR",
+                        "error": str(e),
+                        "success": False,
+                    }
+
+            elif tool_id == "read_file":
+                path_arg = arguments.get("path")
+                if not path_arg:
+                    return {"success": False, "status": "error", "error": "path is required"}
+                try:
+                    path = Path(path_arg)
+                    if not path.is_absolute():
+                        path = Path("/app") / path
+                    return {"success": True, "path": str(path), "content": path.read_text()}
+                except Exception as e:
+                    return {"success": False, "status": "error", "error": f"read_file failed: {e}"}
+
+            elif tool_id == "write_file":
+                path_arg = arguments.get("path")
+                content = arguments.get("content")
+                if not path_arg or content is None:
+                    return {"success": False, "status": "error", "error": "path and content are required"}
+                try:
+                    path = Path(path_arg)
+                    if not path.is_absolute():
+                        path = Path("/app") / path
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content)
+                    return {"success": True, "path": str(path), "bytes": path.stat().st_size}
+                except Exception as e:
+                    return {"success": False, "status": "error", "error": f"write_file failed: {e}"}
+
+            elif tool_id == "edit_file":
+                path_arg = arguments.get("path")
+                old_string = arguments.get("old_string")
+                new_string = arguments.get("new_string")
+                if not path_arg or old_string is None or new_string is None:
+                    return {"success": False, "status": "error", "error": "path, old_string and new_string are required"}
+                try:
+                    path = Path(path_arg)
+                    if not path.is_absolute():
+                        path = Path("/app") / path
+                    content = path.read_text()
+                    count = content.count(old_string)
+                    if count == 0:
+                        return {"success": False, "status": "error", "error": "old_string not found in file"}
+                    if count > 1:
+                        return {"success": False, "status": "error", "error": f"old_string matches {count} times — include more context"}
+                    path.write_text(content.replace(old_string, new_string))
+                    return {"success": True, "path": str(path), "replacements": 1}
+                except Exception as e:
+                    return {"success": False, "status": "error", "error": f"edit_file failed: {e}"}
+
+            elif tool_id == "run_pipeline":
+                repo = arguments.get("repo") or ""
+                source_file = arguments.get("source_file") or ""
+                variables = arguments.get("variables") or {}
+                branch = arguments.get("branch") or "main"
+                if not repo:
+                    return {"success": False, "status": "error", "error": "repo is required"}
+                try:
+                    client = WoodpeckerClient()
+                    if "/" not in repo:
+                        repo = f"{client.forge_user}/{repo}"
+                    if source_file:
+                        path = Path(source_file)
+                        if not path.is_absolute():
+                            path = Path("/app") / path
+                        client.forge_create_repo(repo.split("/", 1)[1])
+                        client.forge_upsert_file(repo, ".woodpecker.yml", path.read_text())
+                    result = client.trigger(repo, branch, variables)
+                    result["success"] = True
+                    return result
+                except Exception as e:
+                    logger.error(f"run_pipeline {repo} failed: {e}")
+                    return {"success": False, "status": "error", "error": f"run_pipeline failed: {e}", "repo": repo}
+
+            elif tool_id == "pipeline_status":
+                repo = arguments.get("repo") or ""
+                pipeline_id = arguments.get("pipeline_id")
+                if not repo or not pipeline_id:
+                    return {"success": False, "status": "error", "error": "repo and pipeline_id are required"}
+                try:
+                    result = WoodpeckerClient().pipeline_status(repo, int(pipeline_id))
+                    result["success"] = True
+                    return result
+                except Exception as e:
+                    return {"success": False, "status": "error", "error": f"pipeline_status failed: {e}"}
+
+            elif tool_id == "pipeline_logs":
+                repo = arguments.get("repo") or ""
+                pipeline_id = arguments.get("pipeline_id")
+                if not repo or not pipeline_id:
+                    return {"success": False, "status": "error", "error": "repo and pipeline_id are required"}
+                try:
+                    result = WoodpeckerClient().pipeline_logs(repo, int(pipeline_id))
+                    return {"success": True, "pipeline_id": int(pipeline_id), "steps": result}
+                except Exception as e:
+                    return {"success": False, "status": "error", "error": f"pipeline_logs failed: {e}"}
+
+            elif tool_id == "list_pipelines":
+                repo = arguments.get("repo") or ""
+                limit = arguments.get("limit", 10)
+                if not repo:
+                    return {"success": False, "status": "error", "error": "repo is required"}
+                try:
+                    result = WoodpeckerClient().list_pipelines(repo, int(limit))
+                    return {"success": True, "pipelines": result}
+                except Exception as e:
+                    return {"success": False, "status": "error", "error": f"list_pipelines failed: {e}"}
                         
             elif tool_id == "evolve_template":
                 template_name = arguments.get("template_name")
