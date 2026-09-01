@@ -52,6 +52,18 @@ EOF
 # nodes report it on the banner and it traces the ISO to an exact commit
 printf '%s\n' "${VERSION:-dev}" > "$INC/etc/milady/version"
 
+# Calamares installer tree (D2): settings + module configs + branding are
+# staged inert and overlaid on /etc/calamares by the 1400 hook (after the
+# calamares-settings-debian package lands). Live-session scripts go to
+# /usr/share/milady/ directly.
+mkdir -p "$INC/usr/share/milady/calamares"
+cp -a /iso/calamares/settings.conf "$INC/usr/share/milady/calamares/"
+cp -a /iso/calamares/modules "$INC/usr/share/milady/calamares/"
+cp -a /iso/calamares/branding "$INC/usr/share/milady/calamares/"
+install -m 0755 /iso/calamares/live-installer-session \
+    /iso/calamares/live-installer-xinitrc \
+    "$INC/usr/share/milady/"
+
 # --- stage payload into the binary includes (ISO filesystem) ---------------
 if [ "${NO_PAYLOAD:-0}" -ne 1 ]; then
     mkdir -p config/includes.binary/payload
