@@ -527,13 +527,13 @@ INI
                 # OPEN=true lets the first forge login register (and become
                 # admin). Safe here: forgejo registration is disabled, so the
                 # only forge account is the local admin milady.
+                # ADMIN promotes milady on every login (no first-user magic in
+                # v3); GRPC_SECRET persisted so the warning goes away and the
+                # gRPC signing key survives restarts.
                 WOODPECKER_FORGEJO=true \
                 WOODPECKER_FORGEJO_URL="${FORGE_PUBLIC_URL:-http://192.168.1.147:3000}" \
                 WOODPECKER_FORGEJO_CLIENT="$WOODPECKER_FORGEJO_CLIENT" \
                 WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
-                # ADMIN promotes milady on every login (no first-user magic in
-                # v3); GRPC_SECRET persisted so the warning goes away and the
-                # gRPC signing key survives restarts.
                 WOODPECKER_HOST=http://localhost:8000 \
                 WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
                 WOODPECKER_OPEN=true \
