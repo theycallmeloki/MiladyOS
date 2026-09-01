@@ -67,7 +67,6 @@ ENV PACHCTL_TAG_VER=1.12.5
 ENV CADDY_TAG_VER=2.4.6
 ENV HEADSCALE_VERSION=0.26.1
 ENV SANDMAN_VERSION=0.2.42
-ENV MILADY_LLM_BRIDGE_VERSION=0.0.16
 
 # ---------- System packages (single consolidated apt pass) ----------
 USER root
@@ -507,23 +506,24 @@ RUN set -e; \
     rm -f /tmp/sandman-linux-amd64 /tmp/sandman.sha256 && \
     command -v sandman >/dev/null || exit 1
 
-# ---------- Fleet tooling: milady (MCP<->LLM bridge CLI) ----------
-# Single-binary bridge between the MiladyOS MCP server (SSE :6000) and any
-# OpenAI-compatible LLM. Same pinned-release pattern as sandman: versioned
-# binary + sha256 from GitHub releases, verified at build time. Versioned by
-# MILADY_LLM_BRIDGE_VERSION (the bridge repo's own 3-octet releases) — NOT
-# the MiladyOS 5-octet version (version.json + commit count). The LLM
-# endpoint is per-user — set LLM_BASE_URL/LLM_MODEL at runtime (see
-# milady-llm-bridge README). The binary defaults to a local ollama; MiladyOS
-# will bootstrap it automatically later (see MILADY_README.md).
+# Bridge between the MiladyOS MCP server (SSE :6000) and any
+# OpenAI-compatible LLM. Installed from source at a pinned commit
+# (MILADY_LLM_BRIDGE_COMMIT) into its own venv, which pins mcp<2 — the
+# client-API shape the bridge uses (Tool.inputSchema, ClientSession
+# internals) — while /app/.venv runs mcp 2.x for the MiladyOS server.
+# The LLM endpoint is per-user — set LLM_BASE_URL/LLM_MODEL at runtime (see
+# milady-llm-bridge README). The bridge defaults to the local ollama
+# (http://localhost:11434/v1, model llama3.2); which model is available is a
+# runtime concern (ollama pull), not baked at build. Single MCP server by
+# default (MCP_SERVER_URL); the MCP_SERVERS env (JSON array of sse/stdio
+# servers) enables multi-server aggregation without a rebuild.
 ENV MCP_SERVER_URL=http://localhost:6000/sse
+ARG MILADY_LLM_BRIDGE_COMMIT=c6ef529263722c30d9f058e418c4a921d6d647bc
 RUN set -e; \
-    curl -fsSL -o /tmp/milady-linux-amd64 "https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v${MILADY_LLM_BRIDGE_VERSION}/milady-linux-amd64" && \
-    curl -fsSL -o /tmp/milady.sha256 "https://github.com/theycallmeloki/milady-llm-bridge/releases/download/v${MILADY_LLM_BRIDGE_VERSION}/milady-linux-amd64.sha256" && \
-    (cd /tmp && sha256sum -c milady.sha256) && \
-    install -m 0755 /tmp/milady-linux-amd64 /usr/local/bin/milady && \
-    rm -f /tmp/milady-linux-amd64 /tmp/milady.sha256 && \
-    command -v milady >/dev/null || exit 1
+    uv venv /opt/milady/.venv && \
+    uv pip install --python /opt/milady/.venv/bin/python "git+https://github.com/theycallmeloki/milady-llm-bridge@${MILADY_LLM_BRIDGE_COMMIT}" && \
+    /opt/milady/.venv/bin/milady --version >/dev/null
+ENV PATH="/opt/milady/.venv/bin:${PATH}"
 
 # ---------- CI: Woodpecker (cli-exec + forge/server/agent) ----------
 # Phase A runs pipelines on-demand via `woodpecker-cli exec` — no daemon, no
