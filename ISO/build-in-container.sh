@@ -5,7 +5,16 @@
 # Env: VERSION, NO_PAYLOAD.
 set -euo pipefail
 
-cp -a /iso/. /build/          # repo's ISO/ tree becomes the lb working dir
+# Copy the repo's ISO/ tree into the lb working dir — per top-level entry,
+# EXCLUDING out/ (artifacts: multi-GB ISOs + live qcow2s), .cache (host
+# build cache, bind-mounted at /build/cache) and .git. A whole-tree copy
+# dragged ~30GB through the container (and failed on files touched
+# mid-copy, wedging the daemon on the partial layer).
+for e in /iso/* /iso/.[!.]*; do
+    [ -e "$e" ] || continue
+    case "$(basename "$e")" in out|.cache|.git) continue ;; esac
+    cp -a "$e" /build/
+done
 cd /build
 
 # --- lb config -------------------------------------------------------------
