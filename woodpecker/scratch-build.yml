@@ -1,7 +1,7 @@
 # MiladyOS scratch-build pipeline — the "build on the master box" replacement.
 # Builds a Dockerfile with the HOST daemon (docker.sock mounted), tags it, and
 # pushes to the MiladyOS registry with the registry-skip guard (tags/list
-# check first — image exists => skip, matching the Jenkins/Kaniko guard).
+# check first — image exists => skip (same guard as the kaniko pipeline).
 #
 # Run (Phase A, cli-exec):
 #   woodpecker-cli exec \

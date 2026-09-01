@@ -21,10 +21,10 @@ spec:
       initContainers:
       - name: volume-permissions
         image: busybox
-        command: ["sh", "-c", "chown -R 1000:1000 /var/jenkins_home && mkdir -p /var/log && chmod 777 /var/log && mkdir -p /root/.kube /root/.pachyderm && touch /root/.kube/config /root/.pachyderm/config.json && chmod -R 700 /root/.kube /root/.pachyderm"]
+        command: ["sh", "-c", "chown -R 1000:1000 /var/lib/woodpecker && mkdir -p /var/log && chmod 777 /var/log && mkdir -p /root/.kube /root/.pachyderm && touch /root/.kube/config /root/.pachyderm/config.json && chmod -R 700 /root/.kube /root/.pachyderm"]
         volumeMounts:
         - name: miladyos-home
-          mountPath: /var/jenkins_home
+          mountPath: /var/lib/woodpecker
         - name: varlog
           mountPath: /var/log
         - name: kube-config
@@ -73,15 +73,15 @@ spec:
         - containerPort: 6080
           name: templeos
         env:
-        - name: JENKINS_ADMIN_ID
+        - name: MILADY_ADMIN_ID
           value: "admin"
-        - name: JENKINS_ADMIN_PASSWORD
+        - name: MILADY_ADMIN_PASSWORD
           value: "password"
         - name: KUBERNETES_MODE
           value: "true"
         - name: DISABLE_DOCKER
           value: "false"
-        - name: JENKINS_URL
+        - name: MILADYOS_URL
           value: "http://miladyos:8080"
         - name: REDIS_HOST
           value: "localhost"
@@ -91,7 +91,7 @@ spec:
           value: "true"
         volumeMounts:
         - name: miladyos-home
-          mountPath: /var/jenkins_home
+          mountPath: /var/lib/woodpecker
         - name: varlog
           mountPath: /var/log
         - name: docker-run

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define keys for each field
-keys=( "JENKINS_ADMIN_ID" "timestamp" "name" "bus_id" "driver_version" "temperature_edge" "utilization_gpu" "memory_total" "memory_free" "memory_used")
+keys=( "MILADY_ADMIN_ID" "timestamp" "name" "bus_id" "driver_version" "temperature_edge" "utilization_gpu" "memory_total" "memory_free" "memory_used")
 
 # Define the filebrowser URL and credentials
 FILEBROWSER_URL="http://localhost:7331"
@@ -124,7 +124,7 @@ do
         
         # Format data as JSON
         json_data="{"
-        json_data+="\"JENKINS_ADMIN_ID\": \"$JENKINS_ADMIN_ID\","
+        json_data+="\"MILADY_ADMIN_ID\": \"$MILADY_ADMIN_ID\","
         json_data+="\"timestamp\": \"$timestamp\","
         json_data+="\"name\": \"$name\","
         json_data+="\"bus_id\": \"$bus_id\","

@@ -71,7 +71,7 @@ This will:
 1. Detect your GPU type
 2. Pull the MiladyOS container
 3. Start all services
-4. Make Jenkins available at http://localhost:8080
+4. Make Woodpecker CI available at http://localhost:8000
 
 ### Method 2: Docker Compose (More Control)
 
@@ -135,10 +135,10 @@ miladyos mcp --transport sse --port 6000 --all-tools
 
 | Service | Username | Password | Notes |
 |---------|----------|----------|-------|
-| Jenkins | `milady` | `milady` | Web UI at :8080 |
+| Woodpecker | `milady` | `milady` | Web UI at :8000 |
 | Grafana | `adminuser` | `adminpassword` | Monitoring dashboards |
 
-> **Security Note:** Change these in production! Set `JENKINS_ADMIN_ID` and `JENKINS_ADMIN_PASSWORD` environment variables.
+> **Security Note:** Change these in production! Set `MILADY_ADMIN_ID` and `MILADY_ADMIN_PASSWORD` environment variables.
 
 ---
 
@@ -158,7 +158,7 @@ kubectl get pods -n default
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| Jenkins | http://localhost:8080 | CI/CD pipelines |
+| Woodpecker | http://localhost:8000 | CI/CD pipelines |
 | Grafana | http://localhost:3000 | Monitoring |
 | Gatus | http://localhost:8080 | Health checks |
 | TempleOS (loader) | stdio pipes | Divine computing |
@@ -188,13 +188,13 @@ Let's run a simple "hello world" pipeline to verify everything works.
 miladyos mcp  # Start MCP server in one terminal
 
 # In another terminal, or via Claude/AI agent:
-# Use the create_jenkins_job tool to seed a job from a Jenkinsfile
+# Use the create_pipeline tool to seed a pipeline repo from .woodpecker.yml content
 ```
 
 Or create manually:
 
 ```bash
-cat > templates/hello-world.Jenkinsfile << 'EOF'
+cat > templates/hello-world.yml << 'EOF'
 // Description: A simple hello world pipeline
 pipeline {
     agent any
@@ -225,7 +225,7 @@ EOF
 ### 2. Deploy and Run
 
 ```bash
-# Deploy the template to Jenkins
+# Run the pipeline
 miladyos deploy hello-world
 
 # Run the pipeline
@@ -238,7 +238,7 @@ miladyos run hello-world
 # List recent runs
 miladyos list-runs --template hello-world
 
-# Or check Jenkins UI at http://localhost:8080
+# Or check the Woodpecker UI at http://localhost:8000
 ```
 
 ---
@@ -285,8 +285,8 @@ async def main():
 
             # Seed a job
             result = await session.call_tool(
-                "create_jenkins_job",
-                {"job_name": "hello-world", "jenkinsfile_content": "pipeline { agent any }"}
+                "create_pipeline",
+                {"repo_name": "hello-world", "pipeline_content": "when:\n  event: manual\nsteps:\n  hi:\n    image: alpine:3.20\n    commands:\n      - echo milady!"}
             )
             print(result)
 
@@ -301,9 +301,9 @@ Customize MiladyOS behavior with these environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JENKINS_ADMIN_ID` | `milady` | Jenkins username |
-| `JENKINS_ADMIN_PASSWORD` | `milady` | Jenkins password |
-| `JENKINS_URL` | `http://localhost:8080` | Jenkins server URL |
+| `MILADY_ADMIN_ID` | `milady` | Admin username |
+| `MILADY_ADMIN_PASSWORD` | `milady` | Admin password |
+| `MILADYOS_URL` | `http://localhost:8000` | Control-plane URL |
 | `REDIS_HOST` | `localhost` | Redis/Redka host |
 | `REDIS_PORT` | `6379` | Redis/Redka port |
 | `TEMPLATES_DIR` | `templates` | Pipeline templates directory |
@@ -328,14 +328,14 @@ docker logs miladyos
 # - Port 8080 already in use
 ```
 
-### Jenkins Not Accessible
+### Control Plane Not Accessible
 
 ```bash
-# Check if Jenkins is running
+# Check if the control plane is running
 docker exec miladyos curl -s localhost:8080/login
 
 # Check startup logs
-docker logs miladyos 2>&1 | grep -i jenkins
+docker logs miladyos 2>&1 | grep -iE "woodpecker|forge"
 ```
 
 ### GPU Not Detected

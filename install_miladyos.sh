@@ -148,12 +148,12 @@ echo "Running MiladyOS container..."
     if [ -n "$GPU_TYPE" ]; then
         echo "Using $GPU_TYPE GPU acceleration"
         exec sg docker <<EOF
-        docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=milady --env JENKINS_ADMIN_PASSWORD=milady --env GPU_TYPE=$GPU_TYPE -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
+        docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env MILADY_ADMIN_ID=milady --env MILADY_ADMIN_PASSWORD=milady --env GPU_TYPE=$GPU_TYPE -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
 EOF
     else
         echo "Running without GPU acceleration"
         exec sg docker <<EOF
-        docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env JENKINS_ADMIN_ID=milady --env JENKINS_ADMIN_PASSWORD=milady -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
+        docker run $GPU_OPTION -d --name miladyos --privileged --user root --restart=unless-stopped --net=host --env MILADY_ADMIN_ID=milady --env MILADY_ADMIN_PASSWORD=milady -v /var/run/docker.sock:/var/run/docker.sock ogmiladyloki/miladyos
 EOF
     fi
 )

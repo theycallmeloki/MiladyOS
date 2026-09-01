@@ -28,7 +28,7 @@ choke on `: ` — use block scalars (`|`) for shell.
 ## Next (Phase A)
 
 - Dockerfile: `FROM debian:13.4`, run `woodpecker/install-cli.sh` (drop
-  plugin-manager/plugins.txt/JCasC/theme/jenkins-user).
+  plugin-manager/plugins.txt/JCasC/theme + the legacy user).
 - `miladyos_mcp.py`: `execute_command` → `woodpecker-cli exec ... runner.yml`;
-  `create_jenkins_job` → write pipeline + exec.
-- Keep `miladyos:jenkins-last` tag for rollback; GH Actions unchanged.
+  `create_pipeline` → write pipeline + exec.
+- Keep `miladyos:pre-woodpecker` tag for rollback; GH Actions unchanged.

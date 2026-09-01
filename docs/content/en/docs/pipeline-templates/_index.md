@@ -3,14 +3,14 @@ title: "Pipeline Templates"
 linkTitle: "Pipeline Templates"
 weight: 45
 description: >
-  Jenkins pipeline templates for common CI/CD workflows
+  Woodpecker CI pipeline templates for common workflows
 ---
 
 ## Overview
 
-MiladyOS provides pre-built Jenkins pipeline templates for common deployment and infrastructure tasks. These templates can be used as-is, customized, or evolved using AlphaEvolve.
+MiladyOS provides pre-built Woodpecker CI pipeline templates for common deployment and infrastructure tasks. These templates can be used as-is, customized, or evolved using AlphaEvolve.
 
-Templates are stored in the `templates/` directory as `.Jenkinsfile` files.
+Templates are stored in the `templates/` directory as `.yml` files (`.woodpecker.yml`-style pipelines).
 
 ---
 
@@ -39,7 +39,7 @@ A basic build pipeline for JavaScript/Node.js projects. Includes EVOLVE-BLOCK ma
 ### Template
 
 ```groovy
-// Jenkinsfile for example-build
+# example-build.yml
 // Description: Example build pipeline that can be evolved for better performance
 pipeline {
     agent any
@@ -125,7 +125,7 @@ Build and deploy Docker images to a registry.
 ### Template
 
 ```groovy
-// Jenkinsfile for docker-deploy
+# docker-deploy.yml
 // Description: Docker image build and deployment pipeline
 pipeline {
     agent any
@@ -303,7 +303,7 @@ miladyos run --job-name miladyos-stack --parameters '{
 ### Basic Structure
 
 ```groovy
-// Jenkinsfile for my-custom-template
+# my-custom-template.yml
 // Description: What this pipeline does
 pipeline {
     agent any
@@ -369,21 +369,20 @@ stage('Test') {
 
 ## Template Management
 
-Templates are plain Jenkinsfiles in the `templates/` directory of the
-sandman-pipelines repo. Seed a job into Jenkins from any template via the
-`create_jenkins_job` MCP tool (or `miladyos mcp` + an SSE/MCP client):
+Templates are Woodpecker pipelines in the `templates/` directory. Seed a
+pipeline repo from any template via the `create_pipeline` MCP tool (or
+`miladyos mcp` + an SSE/MCP client):
 
 ```bash
 # Via MCP
-# Use the create_jenkins_job tool with job_name + jenkinsfile_content
+# Use the create_pipeline tool with repo_name + pipeline_content
 ```
 
 ### Run Pipeline
 
 ```bash
-# Trigger the seeded job (params via buildWithParameters once materialized,
-# otherwise plain /build uses the Jenkinsfile defaults)
-miladyos run --job-name my-project-build
+# Run the pipeline (variables pass through to the steps as env)
+miladyos run --repo milady/my-project-build my-project-build
 ```
 
 ---

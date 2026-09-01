@@ -29,7 +29,7 @@ Key features include:
 * [Architecture Overview](/docs/architecture/): Understand the system architecture
 * [AutoDidact](/docs/autodidact/): Learn about the AI training system
 * [AlphaEvolve](/docs/alpha-evolve/): Evolutionary pipeline optimization
-* [Pipeline Templates](/docs/pipeline-templates/): Pre-built Jenkins pipeline templates
+* [Pipeline Templates](/docs/pipeline-templates/): Pre-built Woodpecker CI pipeline templates
 * [CLI Reference](/docs/cli-reference/): Command-line interface documentation
 * [APIs](/docs/apis/): MCP tools and REST API reference
 * [Configuration](/docs/configuration/): System configuration options

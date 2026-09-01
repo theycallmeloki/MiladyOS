@@ -7,7 +7,7 @@ description: >
 ---
 
 {{% pageinfo %}}
-AlphaEvolve enables MiladyOS to autonomously optimize Jenkins pipelines through evolutionary algorithms powered by local LLMs. The system can improve execution speed, reliability, resource usage, security, and observability without human intervention.
+AlphaEvolve enables MiladyOS to autonomously optimize Woodpecker CI pipelines through evolutionary algorithms powered by local LLMs. The system can improve execution speed, reliability, resource usage, security, and observability without human intervention.
 {{% /pageinfo %}}
 
 ## Overview
@@ -19,7 +19,7 @@ MiladyOS AlphaEvolve is inspired by [Google DeepMind's AlphaEvolve](https://deep
                     │              MiladyOS AlphaEvolve                   │
                     ├─────────────────────────────────────────────────────┤
                     │  ┌──────────────┐   ┌──────────────┐   ┌─────────┐ │
-                    │  │ LLM Ensemble │   │ Evaluator    │   │ Jenkins │ │
+                    │  │ LLM Ensemble │   │ Evaluator    │   │ Woodpecker │ │
                     │  │ (Ollama/vLLM)│   │ Cascade      │   │ Test    │ │
                     │  └──────┬───────┘   └──────┬───────┘   └────┬────┘ │
                     │         │                  │                 │      │
@@ -175,7 +175,7 @@ Improve logging, metrics, and tracing.
 
 ## EVOLVE-BLOCK Markers
 
-Mark sections of your Jenkinsfile for evolution using special comments:
+Mark sections of your pipeline for evolution using special comments:
 
 ```groovy
 pipeline {
@@ -434,12 +434,12 @@ python meta_evolve.py inject-blocks --template docker-deploy
 
 ### evolve_template
 
-Start evolutionary optimization of a Jenkins pipeline.
+Start evolutionary optimization of a Woodpecker CI pipeline.
 
 **Parameters:**
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `template_name` | string | Yes | - | Template name (without .Jenkinsfile) |
+| `template_name` | string | Yes | - | Template name (without .yml) |
 | `goal` | string | Yes | - | Evolution goal |
 | `max_generations` | int | No | 50 | Maximum generations |
 | `population_size` | int | No | 20 | Population size |
@@ -524,9 +524,9 @@ List all evolved template versions.
   "success": true,
   "templates": [
     {
-      "filename": "example-build_evolved_speed_20240115_143022.Jenkinsfile",
+      "filename": "example-build_evolved_speed_20240115_143022.yml",
       "original_template": "example-build",
-      "path": "evolved_templates/example-build_evolved_speed_20240115_143022.Jenkinsfile",
+      "path": "evolved_templates/example-build_evolved_speed_20240115_143022.yml",
       "metadata": {
         "evolution_id": "abc123...",
         "goal": "speed",
@@ -583,7 +583,7 @@ Don't mark critical deployment logic for evolution. Focus on:
 
 Always review evolved templates before deploying to production:
 ```bash
-diff templates/my-pipeline.Jenkinsfile evolved_templates/my-pipeline_evolved_speed_*.Jenkinsfile
+diff templates/my-pipeline.yml evolved_templates/my-pipeline_evolved_speed_*.yml
 ```
 
 ### 4. Chain Goals

@@ -113,7 +113,7 @@ class Config:
     # Default supported tools
     DEFAULT_TOOLS = [
         "hello_world",
-        "create_jenkins_job",
+        "create_pipeline",
         "execute_command",
         "evolve_template",
         "evolution_status",
@@ -163,8 +163,8 @@ class MiladyOSToolServer:
     def _wp_ad_hoc_pipeline(command: str, working_directory: str, session_id: str) -> str:
         """Ad-hoc pipeline for execute_command (Woodpecker backend).
 
-        Mirrors the old CLI_EXPERIMENTER_JENKINSFILE contract: echo the
-        invocation, run the command, report the exit code. The command and
+        Mirrors the old execute_command contract: echo the invocation, run
+        the command, report the exit code. The command and
         working directory are baked into the YAML (deterministic — no
         reliance on the trigger-variables-to-env channel), JSON-quoted so
         arbitrary command strings survive YAML parsing. Runs in the shared
@@ -211,26 +211,22 @@ class MiladyOSToolServer:
                     "required": []
                 }
             },
-            "create_jenkins_job": {
-                "name": "Create Jenkins Job",
+            "create_pipeline": {
+                "name": "Create Pipeline",
                 "description": "Create a pipeline repo from .woodpecker.yml content (Woodpecker backend)",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "job_name": {
+                        "repo_name": {
                             "type": "string",
-                            "description": "Name of the Jenkins job to create"
+                            "description": "Name of the pipeline repo to create"
                         },
-                        "jenkinsfile_content": {
+                        "pipeline_content": {
                             "type": "string",
                             "description": "Full .woodpecker.yml pipeline content (Woodpecker CI)"
-                        },
-                        "server_name": {
-                            "type": "string",
-                            "description": "Jenkins server name (default: default)"
                         }
                     },
-                    "required": ["job_name", "jenkinsfile_content"]
+                    "required": ["repo_name", "pipeline_content"]
                 }
             },
             "execute_command": {
@@ -252,19 +248,6 @@ class MiladyOSToolServer:
                             "type": "string",
                             "description": "Optional session ID for tracking related commands"
                         },
-                        "server_name": {
-                            "type": "string",
-                            "description": "Name of the Jenkins server to use (default is 'default')",
-                            "default": "default"
-                        },
-                        "username": {
-                            "type": "string",
-                            "description": "Jenkins username (optional, defaults to admin)"
-                        },
-                        "password": {
-                            "type": "string",
-                            "description": "Jenkins password (optional, defaults to configured password)"
-                        }
                     },
                     "required": ["command"]
                 }
@@ -405,13 +388,13 @@ class MiladyOSToolServer:
             },
             "evolve_template": {
                 "name": "Evolve Template",
-                "description": "Start evolutionary optimization of a Jenkins pipeline template using AlphaEvolve. Uses LLM-powered mutations and quality-diversity algorithms to find optimal pipeline configurations.",
+                "description": "Start evolutionary optimization of a Woodpecker CI pipeline template using AlphaEvolve. Uses LLM-powered mutations and quality-diversity algorithms to find optimal pipeline configurations.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "template_name": {
                             "type": "string",
-                            "description": "Name of the template to evolve (without .Jenkinsfile extension)"
+                            "description": "Name of the template to evolve (without .yml extension)"
                         },
                         "goal": {
                             "type": "string",
@@ -613,36 +596,36 @@ class MiladyOSToolServer:
                     "status": "success"
                 }
                                 
-            elif tool_id == "create_jenkins_job":
-                job_name = arguments.get("job_name")
-                jenkinsfile_content = arguments.get("jenkinsfile_content")
+            elif tool_id == "create_pipeline":
+                repo_name = arguments.get("repo_name")
+                pipeline_content = arguments.get("pipeline_content")
 
-                if not job_name or not jenkinsfile_content:
+                if not repo_name or not pipeline_content:
                     return {
                         "success": False,
-                        "error": "job_name and jenkinsfile_content (.woodpecker.yml) are required",
+                        "error": "repo_name and pipeline_content (.woodpecker.yml) are required",
                         "status": "error"
                     }
 
                 try:
                     client = WoodpeckerClient()
-                    client.forge_create_repo(job_name)
-                    repo = f"{client.forge_user}/{job_name}"
-                    client.forge_upsert_file(repo, ".woodpecker.yml", jenkinsfile_content)
+                    client.forge_create_repo(repo_name)
+                    repo = f"{client.forge_user}/{repo_name}"
+                    client.forge_upsert_file(repo, ".woodpecker.yml", pipeline_content)
                     client.repo_id(repo)  # idempotent activation
                     return {
                         "success": True,
                         "status": "success",
-                        "message": f"Pipeline repo {job_name} created and activated",
-                        "job_name": job_name,
+                        "message": f"Pipeline repo {repo_name} created and activated",
+                        "repo_name": repo_name,
                         "repo": repo
                     }
                 except Exception as e:
-                    logger.error(f"Error creating pipeline {job_name}: {e}")
+                    logger.error(f"Error creating pipeline {repo_name}: {e}")
                     return {
                         "success": False,
                         "status": "error",
-                        "error": f"Failed to create pipeline {job_name}: {str(e)}"
+                        "error": f"Failed to create pipeline {repo_name}: {str(e)}"
                     }
             elif tool_id == "execute_command":
                 command = arguments.get("command")
@@ -667,8 +650,9 @@ class MiladyOSToolServer:
                     )
                     triggered = client.trigger(repo, "main")
                     pipeline_id = triggered["pipeline_id"]
-                    # Block + stream (Jenkins parity): poll until the pipeline
-                    # finishes, then return the full console output.
+                    # Block + stream (parity with the old execute_command
+                    # contract): poll until the pipeline finishes, then
+                    # return the full console output.
                     status = None
                     deadline = time.time() + 600
                     while time.time() < deadline:

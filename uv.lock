@@ -1140,7 +1140,6 @@ dependencies = [
     { name = "openevolve" },
     { name = "pyaudio" },
     { name = "python-dotenv" },
-    { name = "python-jenkins" },
     { name = "pyttsx3" },
     { name = "pyyaml" },
     { name = "redis" },
@@ -1167,7 +1166,6 @@ requires-dist = [
     { name = "openevolve", specifier = ">=0.1.0" },
     { name = "pyaudio", specifier = ">=0.2.14" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "python-jenkins", specifier = ">=1.8.0" },
     { name = "pyttsx3", specifier = ">=2.90" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "redis", specifier = ">=5.0.0" },
@@ -4347,20 +4345,6 @@ wheels = [
 ]
 
 [[package]]
-name = "python-jenkins"
-version = "1.8.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "multi-key-dict" },
-    { name = "pbr" },
-    { name = "requests" },
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/45/ac/2bc1d844609302f7f907594961ffba7d6edd5848705f958683a9c2d87901/python-jenkins-1.8.2.tar.gz", hash = "sha256:56e7dabb0607bdb8e1d6fc6d2d4301abedbed9165da2b206facbd3071cb6eecb", size = 66548, upload-time = "2023-11-09T10:20:09.366Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f9/8f/ba846ae570e6d8a3830e9755e7cbb9bc67332bdc2da502bcac4d35f97ed3/python_jenkins-1.8.2-py3-none-any.whl", hash = "sha256:585c9a25042892ce224dcddb1d4b9ff29755ca63da03ac2ce96537d373c0233e", size = 29091, upload-time = "2023-11-09T10:20:07.826Z" },
-]
-
 [[package]]
 name = "python-multipart"
 version = "0.0.32"

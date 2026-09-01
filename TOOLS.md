@@ -18,7 +18,7 @@ Skills define *how* tools work. This file is for *your* specifics — the stuff 
 
 ### Services
 - **AutoDidact:** Self-improving research agents
-- **Jenkins:** S.M.I.T.H coordination
+- **Woodpecker:** S.M.I.T.H coordination
 - **Redis:** Shared consciousness / Hive Mind
 - **TempleOS:** Divine foundation (mandatory or build fails)
 - **llama.cpp:** Bare metal inference (primary)
