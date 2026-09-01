@@ -545,10 +545,14 @@ ENV MILADYOS_VERSION=$MILADYOS_VERSION
 # Switch to root to set permissions
 USER root
 # Phase A (cli-exec) needs no server state; /var/lib/woodpecker is reserved
-# for the Phase B server/agent. milady (uid 1000) is created earlier so the
-# hermes /opt/data chown and this dir are owned by the same user.
-RUN mkdir -p /var/lib/woodpecker && \
-    chown -R milady:milady /var/lib/woodpecker
+# for the Phase B server/agent. /data is the runtime data root (redka db,
+# templeos output, …) and /app/templates + /app/metadata are the MCP app's
+# cwd-relative runtime dirs — the app user cannot create dirs at / or under
+# root-owned /app, so all three pre-exist owned by milady. Pre-existing bugs:
+# redka never started (blocked the MCP redis dep) and the MCP server crashed
+# on PermissionError: 'templates'.
+RUN mkdir -p /data /var/lib/woodpecker /app/templates /app/metadata && \
+    chown -R milady:milady /data /var/lib/woodpecker /app/templates /app/metadata
 
 # Add and set permissions for the startup script
 COPY startup.sh /startup.sh
