@@ -1,0 +1,40 @@
+# Description: Docker deployment pipeline optimizable for resource usage and reliability
+# Usage: Build, test, push and deploy a Docker image (docker:cli + host socket)
+when:
+  event: manual
+
+variables:
+  DOCKER_REGISTRY: your-registry.com
+  IMAGE_NAME: myapp
+  DOCKER_TAG: 'latest'
+
+steps:
+  build:
+    image: docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    commands:
+      # EVOLVE-BLOCK-START: {"type": "docker", "optimization_targets": ["resource_usage", "build_speed"]}
+      - docker build -t "$IMAGE_NAME:$DOCKER_TAG" .
+      - docker run --rm "$IMAGE_NAME:$DOCKER_TAG" sh -c 'echo "Running container tests" && ls -la'
+      - docker tag "$IMAGE_NAME:$DOCKER_TAG" "$DOCKER_REGISTRY/$IMAGE_NAME:$DOCKER_TAG"
+      - docker push "$DOCKER_REGISTRY/$IMAGE_NAME:$DOCKER_TAG"
+      - docker push "$DOCKER_REGISTRY/$IMAGE_NAME:latest"
+      # EVOLVE-BLOCK-END
+
+  deploy:
+    image: docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    commands:
+      - kubectl set image deployment/myapp myapp=$DOCKER_REGISTRY/$IMAGE_NAME:$DOCKER_TAG || true
+      - kubectl rollout status deployment/myapp || true
+
+  cleanup:
+    image: docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      status: [success, failure]
+    commands:
+      - docker system prune -f || true

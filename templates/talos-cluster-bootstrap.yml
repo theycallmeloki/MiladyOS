@@ -1,0 +1,139 @@
+# Description: Bootstrap a new Talos Kubernetes cluster for MiladyOS
+# Usage: Configure control plane IP and run to create a new cluster.
+# NOTE: the step image must provide talosctl and kubectl (fleet operator image).
+when:
+  event: manual
+
+variables:
+  CONTROL_PLANE_IP: '192.168.5.10'
+  CLUSTER_NAME: miladyos-cluster
+  CLUSTER_ENDPOINT: 'https://192.168.5.10:6443'
+  TALOS_VERSION: 'v1.6.0'
+  GENERATE_NEW_SECRETS: 'false'
+
+steps:
+  prepare-workspace:
+    image: alpine:3.20
+    commands:
+      - mkdir -p _out
+      - echo "Talos version: $(talosctl version --client)"
+
+  generate-secrets:
+    image: alpine:3.20
+    commands:
+      - |
+        if [ "$GENERATE_NEW_SECRETS" != "true" ]; then
+          echo "Skipping secret generation (GENERATE_NEW_SECRETS=$GENERATE_NEW_SECRETS)"
+          exit 0
+        fi
+        talosctl gen secrets -o _out/secrets.yaml
+        echo "New secrets generated - save _out/secrets.yaml securely!"
+
+  generate-configs:
+    image: alpine:3.20
+    commands:
+      - |
+        if [ -f "_out/secrets.yaml" ]; then
+          talosctl gen config $CLUSTER_NAME $CLUSTER_ENDPOINT \
+            --with-secrets _out/secrets.yaml \
+            --output-dir _out \
+            --force
+        else
+          talosctl gen config $CLUSTER_NAME $CLUSTER_ENDPOINT \
+            --output-dir _out \
+            --force
+        fi
+        ls -la _out/
+
+  validate-configs:
+    image: alpine:3.20
+    commands:
+      - talosctl validate -m metal -c _out/controlplane.yaml
+      - talosctl validate -m metal -c _out/worker.yaml
+      - echo "Configs validated successfully"
+
+  apply-control-plane:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "Applying config to control plane at $CONTROL_PLANE_IP..."
+        talosctl apply-config --insecure \
+          --nodes $CONTROL_PLANE_IP \
+          --file _out/controlplane.yaml
+        echo "Config applied, waiting for node to process..."
+        sleep 30
+
+  bootstrap-cluster:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "Bootstrapping etcd on control plane..."
+        for i in $(seq 1 30); do
+          if talosctl --nodes $CONTROL_PLANE_IP --talosconfig _out/talosconfig version >/dev/null 2>&1; then
+            echo "Talos API is ready"
+            break
+          fi
+          echo "Waiting for Talos API... ($i/30)"
+          sleep 10
+        done
+        talosctl bootstrap \
+          --nodes $CONTROL_PLANE_IP \
+          --talosconfig _out/talosconfig
+        echo "Bootstrap initiated"
+
+  wait-for-kubernetes:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "Waiting for Kubernetes to be ready..."
+        talosctl --nodes $CONTROL_PLANE_IP \
+          --talosconfig _out/talosconfig \
+          health --wait-timeout 10m
+        echo "Cluster is healthy!"
+
+  get-kubeconfig:
+    image: alpine:3.20
+    commands:
+      - |
+        talosctl kubeconfig \
+          --nodes $CONTROL_PLANE_IP \
+          --talosconfig _out/talosconfig \
+          --force \
+          kubeconfig
+        echo "=== Cluster Status ==="
+        kubectl --kubeconfig kubeconfig get nodes
+        kubectl --kubeconfig kubeconfig cluster-info
+
+  archive-configs:
+    image: alpine:3.20
+    commands:
+      - |
+        # Artifact handoff note: woodpecker steps share one workspace volume per
+        # run — _out/talosconfig and kubeconfig persist for the run and are
+        # consumed by downstream pipelines from their own workspace.
+        echo ""
+        echo "=========================================="
+        echo "  CLUSTER BOOTSTRAP COMPLETE"
+        echo "=========================================="
+        echo ""
+        echo "Cluster: $CLUSTER_NAME"
+        echo "Endpoint: $CLUSTER_ENDPOINT"
+        echo ""
+        echo "Next steps:"
+        echo "  1. Add worker nodes using talos-add-worker pipeline"
+        echo "  2. Deploy MiladyOS stack using miladyos-stack-deploy pipeline"
+        echo ""
+
+  success:
+    image: alpine:3.20
+    when:
+      status: success
+    commands:
+      - echo "Cluster bootstrapped successfully!"
+
+  failure:
+    image: alpine:3.20
+    when:
+      status: failure
+    commands:
+      - echo "Cluster bootstrap failed. Check logs for details."

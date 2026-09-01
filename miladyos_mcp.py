@@ -4,7 +4,6 @@ import os
 import time
 import asyncio
 from typing import Any, Dict, List, Optional
-import textwrap
 import uuid
 import click
 import anyio
@@ -93,7 +92,6 @@ def create_success_response(message=None, data=None, status="success", additiona
         
     return response
 
-import jenkins
 import colorlog
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
@@ -132,316 +130,6 @@ class Config:
         "list_pipelines",
     ]
 
-    # Jenkins credentials - loaded from environment with sensible defaults
-    JENKINS_USER = os.getenv("JENKINS_ADMIN_ID", "milady")
-    JENKINS_PASSWORD = os.getenv("JENKINS_ADMIN_PASSWORD", "milady")
-    
-    # Jenkins server configurations
-    JENKINS_SERVERS = {
-        "default": {
-            "url": os.getenv("JENKINS_URL", "http://localhost:8080")
-        }
-    }
-
-    # SQLite database path
-
-    # Templates and metadata directories
-    TEMPLATES_DIR = os.getenv("TEMPLATES_DIR", "templates")
-
-    @classmethod
-    def get_jenkins_servers(cls):
-        """Return Jenkins server configurations."""
-        return cls.JENKINS_SERVERS
-
-
-# ===== Custom Exceptions =====
-class JenkinsApiError(Exception):
-    """Raised when there's an error with the Jenkins API."""
-    pass
-
-class JenkinsUtils:
-    """Utility functions for interacting with Jenkins."""
-    
-    @staticmethod
-    def connect_to_jenkins(server_name, username=None, password=None):
-        """
-        Connect to Jenkins server and return server instance.
-        """
-        try:
-            jenkins_dict = Config.get_jenkins_servers()
-            
-            if server_name not in jenkins_dict:
-                raise ValueError(f"Unknown Jenkins server: {server_name}")
-                
-            server_url = jenkins_dict[server_name]["url"]
-            
-            # Always use default credentials if none provided
-            if username is None:
-                username = Config.JENKINS_USER
-            if password is None:
-                password = Config.JENKINS_PASSWORD
-            
-            server = jenkins.Jenkins(
-                server_url,
-                username=username,
-                password=password,
-            )
-            
-            try:
-                # Test connection
-                server.get_whoami()
-                logger.info(f"Successfully connected to Jenkins server: {server_name} ({server_url})")
-                return server
-            except Exception:
-                # Add retry with delay if first attempt fails
-                logger.info(f"Retrying connection to {server_name} after 2 second delay...")
-                time.sleep(2)
-                server = jenkins.Jenkins(
-                    server_url,
-                    username=username,
-                    password=password,
-                )
-                server.get_whoami()
-                logger.info(f"Retry connection successful for {server_name}")
-                return server
-        except ImportError:
-            raise JenkinsApiError("Jenkins module not installed. Please install python-jenkins package.")
-        except Exception as e:
-            logger.error(f"Error connecting to Jenkins server {server_name}: {e}")
-            raise JenkinsApiError(f"Failed to connect to Jenkins server: {str(e)}")
-    
-    @staticmethod
-    def get_jenkinsfile_content(template_name, with_line_numbers=False):
-        """
-        Read and return Jenkinsfile content for a template.
-        
-        Args:
-            template_name: Name of the template to read
-            with_line_numbers: If True, returns a dict with 'content' and 'lines' keys 
-                              where 'lines' is a list of lines with line numbers
-        """
-        jenkinsfile_path = f"{Config.TEMPLATES_DIR}/{template_name}.Jenkinsfile"
-        try:
-            with open(jenkinsfile_path, "r") as file:
-                content = file.read()
-                logger.info(f"Successfully read Jenkinsfile for template: {template_name}")
-                
-                if with_line_numbers:
-                    lines = content.splitlines()
-                    lines_with_numbers = [(i+1, line) for i, line in enumerate(lines)]
-                    return {
-                        "content": content,
-                        "lines": lines_with_numbers,
-                        "path": jenkinsfile_path
-                    }
-                return content
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Jenkinsfile not found for template: {template_name}")
-        except Exception as e:
-            logger.error(f"Error reading Jenkinsfile for {template_name}: {e}")
-            raise JenkinsApiError(f"Error reading Jenkinsfile: {str(e)}")
-    
-    @staticmethod
-    async def delete_job_if_exists(server, job_name):
-        """Delete a Jenkins job if it exists."""
-        try:
-            if server.job_exists(job_name):
-                logger.info(f"Job {job_name} exists. Attempting to delete.")
-                server.delete_job(job_name)
-                logger.info(f"Job {job_name} deleted.")
-                return True
-            else:
-                logger.info(f"Job {job_name} does not exist. No need to delete.")
-                return False
-        except Exception as e:
-            logger.error(f"Error deleting job {job_name}: {e}")
-            raise JenkinsApiError(f"Error deleting job: {str(e)}")
-    
-    @staticmethod
-    async def create_job(server, job_name, jenkinsfile_content):
-        """Create a Jenkins job with the provided Jenkinsfile content."""
-        pipeline_xml = f"""
-        <flow-definition plugin="workflow-job@2.40">
-            <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.90">
-                <script>{escape(jenkinsfile_content)}</script>
-                <sandbox>true</sandbox>
-            </definition>
-            <!-- Other configurations as needed -->
-        </flow-definition>
-        """
-        
-        try:
-            logger.info(f"Creating new job {job_name}.")
-            server.create_job(job_name, pipeline_xml)
-            logger.info(f"Job {job_name} created successfully.")
-            return True
-        except Exception as e:
-            logger.error(f"Error creating job {job_name}: {e}")
-            raise JenkinsApiError(f"Error creating job: {str(e)}")
-    
-    @staticmethod
-    async def start_jenkins_job(server, job_name, parameters=None):
-        """
-        Start a Jenkins job and return queue number and build number.
-        """
-        try:
-            # First check if we can access the job
-            try:
-                job_exists = server.job_exists(job_name)
-                if not job_exists:
-                    logger.error(f"Job {job_name} does not exist")
-                    return {
-                        "status": "error",
-                        "error": f"Job {job_name} does not exist",
-                        "job_name": job_name
-                    }
-            except Exception as check_error:
-                logger.error(f"Error checking if job {job_name} exists: {check_error}")
-                # Try to continue anyway
-            
-            # Start the job. python-jenkins build_job appends params to the
-            # query string here, which Jenkins rejects (400) — use a direct
-            # crumb'd POST with form-encoded params instead.
-            import requests as _requests
-            from urllib.parse import quote as _quote
-            cfg = Config.get_jenkins_servers().get("default", {})
-            base = cfg.get("url", "http://localhost:8080")
-            _sess = _requests.Session()
-            _sess.auth = (Config.JENKINS_USER, Config.JENKINS_PASSWORD)
-            _crumb = _sess.get(f"{base}/crumbIssuer/api/json", timeout=10).json()
-            _hdr = {_crumb["crumbRequestField"]: _crumb["crumb"]}
-            _url = f"{base}/job/{_quote(job_name)}/buildWithParameters"
-            _resp = _sess.post(_url, data=parameters or {}, headers=_hdr, timeout=30)
-            if _resp.status_code == 400 and "not parameterized" in _resp.text:
-                # job has no parameters block -> plain /build trigger
-                _resp = _sess.post(f"{base}/job/{_quote(job_name)}/build", headers=_hdr, timeout=30)
-            if _resp.status_code not in (200, 201, 202):
-                return {
-                    "status": "error",
-                    "error": f"build trigger failed: {_resp.status_code} {_resp.text[:200]}",
-                    "job_name": job_name
-                }
-            _loc = _resp.headers.get("Location", "")
-            queue_number = int(_loc.rstrip("/").split("/")[-1]) if _loc else None
-            logger.info(f"Job {job_name} build started. Queue number: {queue_number}")
-            
-            # Wait for job to start
-            build_number = None
-            max_retries = 30
-            retry_count = 0
-            
-            while retry_count < max_retries:
-                try:
-                    queue_info = server.get_queue_item(queue_number)
-                    if "executable" in queue_info and queue_info["executable"] is not None:
-                        build_number = queue_info["executable"]["number"]
-                        logger.info(f"Job {job_name} is building. Build number: {build_number}")
-                        break
-                    else:
-                        logger.info("Waiting for job to start...")
-                        await asyncio.sleep(2)
-                        retry_count += 1
-                except Exception as queue_error:
-                    logger.error(f"Error checking queue status: {queue_error}")
-                    await asyncio.sleep(2)
-                    retry_count += 1
-            
-            if build_number:
-                return {
-                    "status": "started",
-                    "queue_number": queue_number,
-                    "build_number": build_number
-                }
-            else:
-                return {
-                    "status": "queued",
-                    "queue_number": queue_number,
-                    "build_number": None,
-                    "message": "Job is still in queue after waiting period"
-                }
-                
-        except Exception as e:
-            logger.error(f"Error starting job {job_name}: {e}")
-            # Return error information instead of raising exception
-            return {
-                "status": "error",
-                "error": f"Error starting job: {str(e)}",
-                "job_name": job_name
-            }
-    
-    @staticmethod
-    async def stream_job_output(server, job_name, build_number):
-        """
-        Stream the console output of a Jenkins job.
-        """
-        try:
-            offset = 0
-            output_chunks = []
-            
-            # Stream output until job is complete
-            max_retries = 60  # 3 minutes max wait time
-            retries = 0
-            
-            while retries < max_retries:
-                try:
-                    # Get build info to check if it's still running
-                    build_info = server.get_build_info(job_name, build_number)
-                    
-                    if build_info["building"]:
-                        # Job is still running, get new output
-                        try:
-                            full_output = server.get_build_console_output(job_name, build_number)
-                            new_output = full_output[offset:]
-
-                            if new_output:
-                                output_chunks.append(new_output)
-                                offset += len(new_output)
-                        except Exception as stream_err:
-                            logger.debug(f"Transient error fetching console output (will retry): {stream_err}")
-
-                        # Wait before checking again
-                        await asyncio.sleep(3)
-                    else:
-                        # Job is complete, get final output
-                        try:
-                            full_output = server.get_build_console_output(job_name, build_number)
-                            new_output = full_output[offset:]
-
-                            if new_output:
-                                output_chunks.append(new_output)
-                        except Exception as final_err:
-                            logger.debug(f"Error fetching final console output: {final_err}")
-                        
-                        # Return complete output and status
-                        return {
-                            "job_name": job_name,
-                            "build_number": build_number,
-                            "status": build_info.get("result", "UNKNOWN"),
-                            "console_output": "".join(output_chunks),
-                            "complete": True
-                        }
-                except Exception as retry_err:
-                    logger.debug(f"Error in build polling loop (retry {retries + 1}/{max_retries}): {retry_err}")
-                    await asyncio.sleep(3)
-                    retries += 1
-
-            # If we've reached this point, we've exceeded our retry limit
-            return {
-                "job_name": job_name,
-                "build_number": build_number,
-                "status": "TIMEOUT",
-                "console_output": "".join(output_chunks) + "\n[TIMEOUT: Job took too long to complete or there was an error accessing the build]",
-                "complete": False
-            }
-            
-        except Exception as e:
-            return {
-                "job_name": job_name,
-                "build_number": build_number,
-                "status": "ERROR",
-                "console_output": f"Error streaming job output: {str(e)}",
-                "complete": False
-            }
 
 
 # ===== Template Management =====
@@ -470,43 +158,6 @@ class MiladyOSToolServer:
         logger.info(f"Loaded {len(tool_registry)} tools")
         return tool_registry
         
-    # CLI Experimenter Jenkinsfile - embedded directly in the code
-    CLI_EXPERIMENTER_JENKINSFILE = textwrap.dedent('''
-    pipeline {
-        agent any
-
-        parameters {
-            string(name: 'COMMAND', description: 'CLI command to execute')
-            string(name: 'WORKING_DIR', defaultValue: '/tmp/workspace', description: 'Working directory')
-            string(name: 'SESSION_ID', defaultValue: '', description: 'Session ID for tracking')
-        }
-
-        stages {
-            stage('Execute Command') {
-                steps {
-                    // Change to working directory
-                    dir(params.WORKING_DIR) {
-                        // Execute the command with output capturing
-                        sh """
-                            echo "==== COMMAND EXECUTION ===="
-                            echo "COMMAND: ${params.COMMAND}"
-                            echo "SESSION: ${params.SESSION_ID}"
-                            echo "WORKING DIR: \\$(pwd)"
-                            echo "TIME: \\$(date)"
-                            echo "==== OUTPUT ===="
-                            
-                            ${params.COMMAND} 2>&1
-                            EXIT_CODE=\\$?
-                            
-                            echo "==== END OUTPUT ===="
-                            echo "EXIT CODE: \\$EXIT_CODE"
-                        """
-                    }
-                }
-            }
-        }
-    }
-    ''')
         
     @staticmethod
     def _wp_ad_hoc_pipeline(command: str, working_directory: str, session_id: str) -> str:
@@ -1179,7 +830,7 @@ class MiladyOSToolServer:
                     from pathlib import Path
 
                     # Check template exists
-                    template_path = Path(Config.TEMPLATES_DIR) / f"{template_name}.Jenkinsfile"
+                    template_path = Path(Config.TEMPLATES_DIR) / f"{template_name}.yml"
                     if not template_path.exists():
                         return {
                             "success": False,
@@ -1200,7 +851,7 @@ class MiladyOSToolServer:
                     config["evolution"]["max_generations"] = max_generations
                     config["evolution"]["population_size"] = population_size
 
-                    engine = AlphaEvolveEngine(config)
+                    engine = AlphaEvolveEngine(config, runner=WoodpeckerClient())
 
                     if run_async:
                         # Start evolution in background
@@ -1362,8 +1013,8 @@ class MiladyOSToolServer:
                         }
 
                     templates = []
-                    for f in evolved_dir.glob("*.Jenkinsfile"):
-                        # Parse filename: {name}_evolved_{goal}_{timestamp}.Jenkinsfile
+                    for f in evolved_dir.glob("*.yml"):
+                        # Parse filename: {name}_evolved_{goal}_{timestamp}.yml
                         parts = f.stem.split("_evolved_")
                         if len(parts) >= 2:
                             original_name = parts[0]
@@ -1376,7 +1027,7 @@ class MiladyOSToolServer:
                             content = f.read_text()
                             metadata = {}
                             for line in content.split("\n")[:10]:
-                                if line.startswith("// "):
+                                if line.startswith("# "):
                                     if ": " in line:
                                         key, val = line[3:].split(": ", 1)
                                         metadata[key.lower().replace(" ", "_")] = val

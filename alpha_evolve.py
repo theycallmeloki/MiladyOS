@@ -3,7 +3,7 @@
 MiladyOS AlphaEvolve - Evolutionary Pipeline Optimization
 
 Integrates OpenEvolve with MiladyOS infrastructure for self-improving
-Jenkins pipelines. Uses local LLM infrastructure (Ollama/vLLM/LiteLLM)
+Woodpecker CI pipelines. Uses local LLM infrastructure (Ollama/vLLM/LiteLLM)
 for code generation and mutation.
 
 Usage:
@@ -251,27 +251,28 @@ class LLMEnsemble:
         if context.get("last_error"):
             error_context = f"\n\nLast error encountered:\n{context['last_error']}\n"
 
-        return f"""You are an expert DevOps engineer optimizing Jenkins pipelines.
+        return f"""You are an expert DevOps engineer optimizing Woodpecker CI pipelines.
 
 GOAL: {goal.description}
 
 OPTIMIZATION HINTS:
 {hints}
 {history_context}{error_context}
-CURRENT JENKINSFILE CODE:
-```groovy
+CURRENT PIPELINE CODE:
+```yaml
 {code}
 ```
 
 REQUIREMENTS:
-1. Output ONLY valid Jenkins pipeline Groovy code
+1. Output ONLY valid Woodpecker CI pipeline YAML
 2. Preserve essential functionality while optimizing for: {goal.name}
 3. Make meaningful improvements, not just cosmetic changes
 4. Do not add unnecessary complexity
-5. Ensure the pipeline remains runnable
+5. Ensure the pipeline remains runnable (valid YAML, steps with images)
+6. Keep the EVOLVE-BLOCK-START/END comment markers intact
 
-Output the improved Jenkinsfile code only, no explanations:
-```groovy
+Output the improved pipeline YAML only, no explanations:
+```yaml
 """
 
     async def _call_llm(self, prompt: str, temperature: float) -> str:
@@ -292,8 +293,8 @@ Output the improved Jenkinsfile code only, no explanations:
             content = response.choices[0].message.content
 
             # Extract code from markdown blocks if present
-            if "```groovy" in content:
-                match = re.search(r"```groovy\n(.*?)```", content, re.DOTALL)
+            if "```yaml" in content:
+                match = re.search(r"```yaml\n(.*?)```", content, re.DOTALL)
                 if match:
                     return match.group(1).strip()
             elif "```" in content:
@@ -343,9 +344,9 @@ Output the improved Jenkinsfile code only, no explanations:
 class PipelineEvaluator:
     """Evaluates pipeline candidates through multiple stages."""
 
-    def __init__(self, config: Dict[str, Any], jenkins_client=None):
+    def __init__(self, config: Dict[str, Any], runner=None):
         self.config = config
-        self.jenkins = jenkins_client
+        self.runner = runner
         self.cache = {}
 
     async def evaluate(self, candidate: Candidate, goal: EvolutionGoal) -> Dict[str, float]:
@@ -363,73 +364,72 @@ class PipelineEvaluator:
         static_metrics = self._static_analysis(candidate.content, goal)
         metrics.update(static_metrics)
 
-        # Stage 3: Dry run (if Jenkins available)
-        if self.jenkins:
-            dry_run_result = await self._dry_run(candidate.content)
-            metrics.update(dry_run_result)
+        # Stage 3: Dry run — local YAML structural validation (always)
+        dry_run_result = await self._dry_run(candidate.content)
+        metrics.update(dry_run_result)
 
-        # Stage 4: Live execution (optional, expensive)
-        if self.config.get("evaluator", {}).get("live_execution", False):
+        # Stage 4: Live execution (optional, expensive — needs the runner)
+        if self.config.get("evaluator", {}).get("live_execution", False) and self.runner:
             exec_result = await self._execute(candidate.content)
             metrics.update(exec_result)
 
         return metrics
 
     async def _check_syntax(self, content: str) -> Dict[str, Any]:
-        """Validate Jenkinsfile syntax."""
-        # Basic syntax checks
-        checks = [
-            ("pipeline {" in content, "Missing 'pipeline {' block"),
-            ("stages {" in content, "Missing 'stages {' block"),
-            ("agent" in content, "Missing 'agent' directive"),
-            (content.count("{") == content.count("}"), "Mismatched braces"),
-        ]
-
-        for check, error in checks:
-            if not check:
-                return {"valid": False, "error": error}
-
-        # Check for common syntax errors
-        if re.search(r"stage\s*\([^)]*\)\s*\{[^}]*stage\s*\(", content):
-            return {"valid": False, "error": "Nested stage definitions not allowed"}
-
+        """Validate pipeline YAML syntax + structure."""
+        try:
+            data = yaml.safe_load(content)
+        except yaml.YAMLError as e:
+            return {"valid": False, "error": f"YAML parse error: {e}"}
+        if not isinstance(data, dict) or "steps" not in data:
+            return {"valid": False, "error": "Missing top-level 'steps' section"}
+        steps = data["steps"]
+        if not isinstance(steps, dict) or not steps:
+            return {"valid": False, "error": "'steps' must be a non-empty mapping"}
+        for name, step in steps.items():
+            if not isinstance(step, dict):
+                return {"valid": False, "error": f"Step '{name}' is not a mapping"}
+            if "image" not in step:
+                return {"valid": False, "error": f"Step '{name}' is missing 'image'"}
+            if "commands" not in step or not isinstance(step.get("commands"), list):
+                return {"valid": False, "error": f"Step '{name}' is missing a 'commands' list"}
         return {"valid": True}
 
     def _static_analysis(self, content: str, goal: EvolutionGoal) -> Dict[str, float]:
-        """Perform static analysis to estimate fitness."""
+        """Perform static analysis to estimate fitness (YAML-oriented)."""
         metrics = {}
 
-        # Parallelism analysis
-        parallel_count = len(re.findall(r"\bparallel\s*\{", content))
-        stage_count = len(re.findall(r"\bstage\s*\(", content))
-        metrics["parallelism_score"] = min(1.0, parallel_count / max(1, stage_count - 1))
+        # Parallelism analysis (woodpecker: parallel step groups / detach)
+        parallel_count = len(re.findall(r"^\s*parallel\s*:", content, re.M)) + content.count("detach:")
+        step_count = len(re.findall(r"^\s{2}[a-z0-9_-]+:\s*$", content, re.M))
+        metrics["parallelism_score"] = min(1.0, parallel_count / max(1, step_count - 1))
 
-        # Error handling analysis
-        try_count = content.count("try {")
-        retry_count = len(re.findall(r"\bretry\s*\(", content))
-        timeout_count = len(re.findall(r"\btimeout\s*\(", content))
-        metrics["error_handling_score"] = min(1.0, (try_count + retry_count * 2) / max(1, stage_count))
-        metrics["retry_coverage"] = min(1.0, retry_count / max(1, stage_count))
-        metrics["timeout_coverage"] = min(1.0, timeout_count / max(1, stage_count))
+        # Error handling analysis (woodpecker: when: status / failure steps)
+        when_count = len(re.findall(r"^\s+when\s*:", content, re.M))
+        failure_count = len(re.findall(r"status:\s*\[?[^\]]*failure", content, re.I))
+        metrics["error_handling_score"] = min(1.0, (when_count + failure_count * 2) / max(1, step_count))
+        metrics["failure_coverage"] = min(1.0, failure_count / max(1, step_count))
 
         # Resource constraints analysis
-        has_limits = "limits" in content or "memory" in content.lower()
-        has_cleanup = "cleanWs" in content or "prune" in content
+        has_limits = "volumes" in content or "memory" in content.lower() or "cpu" in content.lower()
+        has_cleanup = "prune" in content or "rm -rf" in content or "cleanup" in content
         metrics["resource_efficiency"] = (0.5 if has_limits else 0.0) + (0.5 if has_cleanup else 0.0)
         metrics["cleanup_score"] = 1.0 if has_cleanup else 0.0
         metrics["constraint_score"] = 1.0 if has_limits else 0.0
 
-        # Security analysis
-        has_credentials = "credentials(" in content or "withCredentials" in content
-        no_hardcoded = not re.search(r"password\s*=\s*['\"][^'\"]+['\"]", content, re.I)
-        metrics["security_score"] = (0.5 if has_credentials else 0.0) + (0.5 if no_hardcoded else 0.0)
-        metrics["secrets_handling"] = 1.0 if has_credentials else 0.0
+        # Security analysis (woodpecker: from_secret / secrets)
+        has_secrets = "from_secret" in content or "secrets:" in content
+        no_hardcoded = not re.search(
+            r"(password|token|api[_-]?key)\s*[:=]\s*['\"][^'\"]+['\"]", content, re.I
+        )
+        metrics["security_score"] = (0.5 if has_secrets else 0.0) + (0.5 if no_hardcoded else 0.0)
+        metrics["secrets_handling"] = 1.0 if has_secrets else 0.0
 
         # Observability analysis
         has_echo = content.count("echo ") > 2
-        has_post = "post {" in content
+        has_status = "status:" in content
         metrics["logging_score"] = 0.5 if has_echo else 0.0
-        metrics["notification_score"] = 0.5 if has_post else 0.0
+        metrics["notification_score"] = 0.5 if has_status else 0.0
 
         # Complexity penalty
         lines = len(content.split("\n"))
@@ -438,19 +438,37 @@ class PipelineEvaluator:
         return metrics
 
     async def _dry_run(self, content: str) -> Dict[str, float]:
-        """Perform a Jenkins dry run validation."""
-        # This would call Jenkins API to validate the pipeline
-        # For now, return placeholder
-        return {"dry_run_valid": 1.0}
+        """Local dry-run: YAML must parse (catches what the woodpecker
+        compiler would reject at trigger time)."""
+        try:
+            data = yaml.safe_load(content)
+            valid = isinstance(data, dict) and bool(data.get("steps"))
+            return {"dry_run_valid": 1.0 if valid else 0.0}
+        except Exception:
+            return {"dry_run_valid": 0.0}
 
     async def _execute(self, content: str) -> Dict[str, float]:
-        """Execute the pipeline and measure actual metrics."""
-        # This would create a test job, run it, and extract metrics
-        # For now, return placeholder
-        return {
-            "duration_seconds": 60.0,
-            "success_rate": 1.0,
-        }
+        """Execute the pipeline via the woodpecker runner and measure."""
+        if not self.runner:
+            return {"duration_seconds": 0.0, "success_rate": 0.0, "execution_skipped": 1.0}
+        try:
+            timeout = float(self.config.get("evaluator", {}).get("execution_timeout", 300))
+            result = await asyncio.to_thread(
+                self.runner.run_content,
+                "milady/evolve",
+                content,
+                timeout=timeout,
+            )
+            return {
+                "duration_seconds": result.get("duration_seconds") or 0.0,
+                "success_rate": 1.0 if result.get("success") else 0.0,
+            }
+        except Exception as e:
+            return {
+                "duration_seconds": 0.0,
+                "success_rate": 0.0,
+                "execution_error": str(e),
+            }
 
 
 # ============================================================================
@@ -468,10 +486,10 @@ class AlphaEvolveEngine:
     - Cascade evaluation for efficiency
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], runner=None):
         self.config = config
         self.llm = LLMEnsemble(config)
-        self.evaluator = PipelineEvaluator(config)
+        self.evaluator = PipelineEvaluator(config, runner=runner)
         self.redis_client = self._setup_redis()
 
         # Evolution parameters
@@ -509,7 +527,7 @@ class AlphaEvolveEngine:
         Run the evolution process.
 
         Args:
-            template_path: Path to the Jenkinsfile template
+            template_path: Path to the pipeline template (.yml)
             goal_name: Name of the evolution goal
             callbacks: Optional callbacks for progress reporting
 
@@ -861,16 +879,16 @@ class AlphaEvolveEngine:
         backup_dir.mkdir(exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{template_name}_evolved_{state.goal}_{timestamp}.Jenkinsfile"
+        filename = f"{template_name}_evolved_{state.goal}_{timestamp}.yml"
         output_path = backup_dir / filename
 
         # Add evolution metadata as header comment
-        header = f"""// Evolved by MiladyOS AlphaEvolve
-// Evolution ID: {state.evolution_id}
-// Goal: {state.goal}
-// Generations: {state.generation + 1}
-// Fitness: {candidate.fitness:.4f}
-// Timestamp: {timestamp}
+        header = f"""# Evolved by MiladyOS AlphaEvolve
+# Evolution ID: {state.evolution_id}
+# Goal: {state.goal}
+# Generations: {state.generation + 1}
+# Fitness: {candidate.fitness:.4f}
+# Timestamp: {timestamp}
 
 """
         output_path.write_text(header + candidate.content)
@@ -940,7 +958,7 @@ def cli():
 @click.option("--config", "-c", default=None, help="Config file path")
 @click.option("--generations", "-n", default=None, type=int, help="Max generations")
 def evolve(template: str, goal: str, config: str, generations: int):
-    """Evolve a Jenkins pipeline template."""
+    """Evolve a Woodpecker CI pipeline template."""
     config_data = load_config(config)
 
     if generations:
@@ -949,7 +967,7 @@ def evolve(template: str, goal: str, config: str, generations: int):
     # Resolve template path
     template_path = Path(template)
     if not template_path.exists():
-        template_path = Path("templates") / f"{template}.Jenkinsfile"
+        template_path = Path("templates") / f"{template}.yml"
     if not template_path.exists():
         raise click.ClickException(f"Template not found: {template}")
 
@@ -992,7 +1010,7 @@ def templates(path: str):
         raise click.ClickException(f"Directory not found: {path}")
 
     click.echo(f"\nTemplates in {path}:\n")
-    for f in templates_dir.glob("*.Jenkinsfile"):
+    for f in sorted(templates_dir.glob("*.yml")):
         content = f.read_text()
         has_evolve = "EVOLVE-BLOCK" in content
         marker = "✓" if has_evolve else " "

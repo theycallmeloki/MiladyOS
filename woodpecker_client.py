@@ -12,6 +12,7 @@ import base64
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -180,6 +181,8 @@ class WoodpeckerClient:
             "event": raw.get("event"),
             "branch": raw.get("branch"),
             "created": raw.get("created"),
+            "started": raw.get("started"),
+            "finished": raw.get("finished"),
             "steps": steps,
         }
 
@@ -225,6 +228,47 @@ class WoodpeckerClient:
                         }
                     )
         return out
+
+    def run_content(
+        self,
+        repo: str,
+        content: str,
+        variables: Optional[Dict[str, str]] = None,
+        branch: str = "main",
+        timeout: float = 600.0,
+    ) -> Dict[str, Any]:
+        """Push a pipeline file to the repo, trigger it, and block until it
+        finishes. Returns status + console output. Used by the evolve
+        evaluators and the CLI run command (parity with the old
+        execute_command contract).
+        Callers in async context should wrap this in asyncio.to_thread.
+        """
+        self.forge_create_repo(repo.split("/", 1)[1])
+        self.forge_upsert_file(repo, ".woodpecker.yml", content)
+        triggered = self.trigger(repo, branch, variables)
+        pipeline_id = triggered["pipeline_id"]
+        deadline = time.time() + timeout
+        status = None
+        while time.time() < deadline:
+            status = self.pipeline_status(repo, pipeline_id)
+            if status["status"] in ("success", "failure", "error", "killed", "declined"):
+                break
+            time.sleep(3)
+        if status is None:
+            raise TimeoutError(f"pipeline {pipeline_id} on {repo} did not finish within {timeout}s")
+        logs = self.pipeline_logs(repo, pipeline_id)
+        console = "\n".join(line for step in logs for line in step["lines"])
+        duration = None
+        if status.get("started") and status.get("finished"):
+            duration = float(status["finished"] - status["started"])
+        return {
+            "success": status["status"] == "success",
+            "status": status["status"],
+            "pipeline_id": pipeline_id,
+            "duration_seconds": duration,
+            "steps": status["steps"],
+            "console": console,
+        }
 
     def list_pipelines(self, repo: str, limit: int = 10) -> List[Dict[str, Any]]:
         repo_id = self.repo_id(repo)

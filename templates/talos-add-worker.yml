@@ -1,0 +1,114 @@
+# Description: Add a worker node to an existing Talos Kubernetes cluster
+# Usage: Provide worker IP, hostname, and optionally mark as GPU/storage node.
+# NOTE: the step image must provide talosctl and kubectl (fleet operator image).
+when:
+  event: manual
+
+variables:
+  WORKER_IP: ''
+  HOSTNAME: ''
+  CONTROL_PLANE_IP: '192.168.5.10'
+  NODE_TYPE: worker
+  HAS_GPU: 'false'
+  IS_STORAGE_NODE: 'false'
+
+steps:
+  fetch-cluster-configs:
+    image: alpine:3.20
+    commands:
+      - |
+        # Artifact handoff note: woodpecker steps share one workspace volume per
+        # run; if talosconfig is absent, fetch it from the control plane.
+        if [ ! -f "_out/talosconfig" ]; then
+          echo "ERROR: No talosconfig found. Run talos-cluster-bootstrap first or provide configs."
+          exit 1
+        fi
+        if [ ! -f "kubeconfig" ]; then
+          talosctl kubeconfig --nodes $CONTROL_PLANE_IP --talosconfig _out/talosconfig kubeconfig
+        fi
+
+  generate-worker-config:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "Generating config for $HOSTNAME ($NODE_TYPE)..."
+        cp _out/worker.yaml _out/$HOSTNAME.yaml
+        talosctl machineconfig patch _out/$HOSTNAME.yaml \
+          --patch '[{"op": "replace", "path": "/machine/network/hostname", "value": "'$HOSTNAME'"}]' \
+          --output _out/$HOSTNAME.yaml
+        echo "Config generated for $HOSTNAME"
+
+  apply-config:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "Applying Talos config to $WORKER_IP..."
+        talosctl apply-config --insecure \
+          --nodes $WORKER_IP \
+          --file _out/$HOSTNAME.yaml
+        echo "Config applied, node will reboot and join cluster..."
+
+  wait-for-node:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "Waiting for node to join cluster..."
+        for i in $(seq 1 60); do
+          if kubectl --kubeconfig kubeconfig get node $HOSTNAME >/dev/null 2>&1; then
+            echo "Node $HOSTNAME has joined the cluster!"
+            break
+          fi
+          echo "Waiting for node to join... ($i/60)"
+          sleep 10
+        done
+        kubectl --kubeconfig kubeconfig wait --for=condition=Ready node/$HOSTNAME --timeout=300s
+        echo "Node $HOSTNAME is ready!"
+
+  label-node:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "Applying labels to $HOSTNAME..."
+        kubectl --kubeconfig kubeconfig label node $HOSTNAME \
+          miladyos.net/role=$NODE_TYPE --overwrite
+        if [ "$HAS_GPU" = "true" ]; then
+          kubectl --kubeconfig kubeconfig label node $HOSTNAME \
+            nvidia.com/gpu.present=true \
+            node.kubernetes.io/gpu=true \
+            --overwrite
+          echo "GPU labels applied"
+        fi
+        if [ "$IS_STORAGE_NODE" = "true" ]; then
+          kubectl --kubeconfig kubeconfig label node $HOSTNAME \
+            longhorn.io/node=true \
+            node.kubernetes.io/storage=true \
+            --overwrite
+          echo "Storage labels applied"
+        fi
+
+  verify:
+    image: alpine:3.20
+    commands:
+      - |
+        echo "=== Node Status ==="
+        kubectl --kubeconfig kubeconfig get node $HOSTNAME -o wide
+        echo ""
+        echo "=== Node Labels ==="
+        kubectl --kubeconfig kubeconfig get node $HOSTNAME --show-labels
+        echo ""
+        echo "=== Cluster Nodes ==="
+        kubectl --kubeconfig kubeconfig get nodes -o wide
+
+  success-banner:
+    image: alpine:3.20
+    when:
+      status: success
+    commands:
+      - 'echo "Worker node added successfully! Hostname: $HOSTNAME IP: $WORKER_IP Type: $NODE_TYPE"'
+
+  failure-banner:
+    image: alpine:3.20
+    when:
+      status: failure
+    commands:
+      - echo "Failed to add worker node. Check logs for details."
