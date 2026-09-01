@@ -499,6 +499,20 @@ INI
             --password "${JENKINS_ADMIN_PASSWORD:-milady}" \
             --email milady@localhost --must-change-password=false > /dev/null 2>&1 || true
         echo "✓ forgejo admin ${JENKINS_ADMIN_ID:-milady} ensured"
+        # MiladyOS logo as the forge profile picture (the woodpecker UI shows
+        # the forge avatar). The web settings endpoint needs a session cookie
+        # (basic auth 303s to /user/login); re-upload is idempotent.
+        if [ -f /etc/woodpecker/milady-avatar.png ]; then
+            FGSESSION=$(mktemp)
+            curl -sf -m 10 -c "$FGSESSION" "http://localhost:3000/user/login" > /dev/null 2>&1
+            curl -sf -m 10 -b "$FGSESSION" -c "$FGSESSION" -X POST "http://localhost:3000/user/login" \
+                --data-urlencode "user_name=${JENKINS_ADMIN_ID:-milady}" \
+                --data-urlencode "password=${JENKINS_ADMIN_PASSWORD:-milady}" > /dev/null 2>&1
+            curl -sf -m 20 -b "$FGSESSION" -X POST "http://localhost:3000/user/settings/avatar" \
+                -F "source=local" -F "avatar=@/etc/woodpecker/milady-avatar.png" > /dev/null 2>&1 \
+                && echo "✓ forge avatar set to the MiladyOS logo" || echo "WARNING: forge avatar upload failed"
+            rm -f "$FGSESSION"
+        fi
         SECRETS=/var/lib/woodpecker/.secrets
         touch "$SECRETS"; chmod 600 "$SECRETS"
         if [ ! -s "$SECRETS" ]; then
@@ -543,6 +557,8 @@ INI
                 WOODPECKER_OPEN=true \
                 WOODPECKER_ADMIN="${JENKINS_ADMIN_ID:-milady}" \
                 WOODPECKER_GRPC_SECRET="$WOODPECKER_GRPC_SECRET" \
+                WOODPECKER_CUSTOM_CSS_FILE=/etc/woodpecker/custom.css \
+                WOODPECKER_CUSTOM_JS_FILE=/etc/woodpecker/custom.js \
                 WOODPECKER_DATABASE_DRIVER=sqlite3 \
                 WOODPECKER_DATABASE_DATASOURCE=/var/lib/woodpecker/woodpecker.db \
                 WOODPECKER_GRPC_ADDR=:9000 \
