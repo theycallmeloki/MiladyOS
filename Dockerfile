@@ -1,8 +1,8 @@
 # ============================================================================
-# MiladyOS control-plane image (Jenkins base)
+# MiladyOS control-plane image (Woodpecker cli-exec base)
 #
 # Restructured from the original Dockerfile:
-#   - Steps grouped by purpose (system pkgs, tooling, app, TempleOS, mesh, Jenkins)
+#   - Steps grouped by purpose (system pkgs, tooling, app, TempleOS, mesh, CI)
 #   - All apt-get invocations consolidated into one pass (packages deduplicated)
 #   - pip / npm / curl installer steps merged; temp files removed in the same layer
 #   - curl|sh installers converted to download-then-run so failures are caught
@@ -57,7 +57,11 @@ RUN apt-get -o Acquire::Retries=3 update && \
     make install
 
 # ---------- Base image & version pins ----------
-FROM jenkins/jenkins:lts-jdk21
+# Rebased from jenkins/jenkins:lts-jdk21 -> debian:13.4 (2026-09, Woodpecker
+# migration): nothing in the image uses the JVM; the sqlite_build stage above
+# already builds on 13.4. The jenkins image's tini PID1 is replicated in the
+# Runtime section (signal forwarding + zombie reaping).
+FROM debian:13.4
 
 ENV PACHCTL_TAG_VER=1.12.5
 ENV CADDY_TAG_VER=2.4.6
@@ -85,7 +89,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxtst-dev libavahi-compat-libdnssd-dev qtbase5-dev qtdeclarative5-dev libssl-dev \
     findutils \
     wireguard qrencode iptables-persistent unzip expect sudo \
-    gnupg2 apt-transport-https iptables \
+    gnupg2 apt-transport-https iptables passwd tini \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -192,18 +196,18 @@ COPY templeos/ /opt/templeos/scripts/
 #   hermes chat -q "…" -> one-shot prompt (pipe-safe, for Jenkins stages)
 # Model/provider config is NOT baked in yet (see providers/base.py + config.py)
 # — set model.default + providers in $HERMES_HOME/config.yaml to point at the
-# local vLLM later. HERMES_HOME lives under /opt/data so the jenkins user can
+# local vLLM later. HERMES_HOME lives under /opt/data so the milady user can
 # write skills/memory/gateway state; dashboard + gateway start via startup.sh.
 RUN uv venv /opt/hermes/.venv && \
     uv pip install -p /opt/hermes/.venv/bin/python hermes-agent && \
     /opt/hermes/.venv/bin/hermes --version
 
-# Pre-create the hermes state dir and hand it to the jenkins user so the
+# Pre-create the hermes state dir and hand it to the milady user so the
 # dashboard/gateway (started by startup.sh) can write skills/memory/state.
-RUN mkdir -p /opt/data/hermes && chown -R jenkins:jenkins /opt/data
+RUN mkdir -p /opt/data/hermes && chown -R milady:milady /opt/data
 
 # Put hermes on PATH (its own venv, not the /app venv) and point state at
-# /opt/data/hermes — writable by the jenkins user at runtime.
+# /opt/data/hermes — writable by the milady user at runtime.
 ENV HERMES_HOME=/opt/data/hermes
 ENV PATH="/opt/hermes/.venv/bin:${PATH}"
 
@@ -515,22 +519,15 @@ RUN set -e; \
     rm -f /tmp/milady-linux-amd64 /tmp/milady.sha256 && \
     command -v milady >/dev/null || exit 1
 
-# ---------- Jenkins configuration ----------
-# Install the Jenkins CLI package
-RUN curl -L https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.10.0/jenkins-plugin-manager-2.10.0.jar -o /opt/jenkins-plugin-manager.jar
+# ---------- CI: Woodpecker CLI (cli-exec mode, no server/forge) ----------
+# Jenkins replaced 2026-09 (debian rebase). Phase A runs pipelines on-demand
+# via `woodpecker-cli exec` (woodpecker/runner.yml, scratch-build.yml) — no
+# daemon, no forge, nothing auto-runs. Binary pinned + sha256-verified by
+# install-cli.sh (v3.18.0). plugins.txt / casc.yaml / jenkins-theme/ are dead;
+# file removal is part of the cutover commit, not this rewrite.
+COPY woodpecker/install-cli.sh /opt/install-woodpecker-cli.sh
+RUN bash /opt/install-woodpecker-cli.sh && rm /opt/install-woodpecker-cli.sh
 
-# Add the Jenkins Configuration as Code (JCasC) plugin
-COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
-
-# Install plugins using plugins.txt
-RUN java -jar /opt/jenkins-plugin-manager.jar --plugin-file /usr/share/jenkins/ref/plugins.txt --verbose
-
-# Add JCasC configuration file
-COPY casc.yaml /usr/share/jenkins/ref/casc.yaml
-
-# Stage custom Jenkins theme for startup.sh to copy into jenkins_home
-COPY jenkins-theme/milady-theme.css /opt/jenkins-theme/milady-theme.css
-ENV CASC_JENKINS_CONFIG=/usr/share/jenkins/ref/casc.yaml
 COPY Caddyfile /etc/caddy/Caddyfile
 
 # ---------- Runtime ----------
@@ -541,16 +538,20 @@ ENV MILADYOS_VERSION=$MILADYOS_VERSION
 
 # Switch to root to set permissions
 USER root
-RUN mkdir -p /var/jenkins_home && chown -R jenkins:jenkins /var/jenkins_home
+# Runtime user (uid 1000 keeps the bluegreen PV initContainer chown 1000:1000
+# compatible when /var/lib/woodpecker replaces /var/jenkins_home in the deploy
+# swap). Phase A (cli-exec) needs no server state; /var/lib/woodpecker is
+# reserved for the Phase B server/agent.
+RUN useradd --uid 1000 --create-home --shell /bin/bash milady && \
+    mkdir -p /var/lib/woodpecker && \
+    chown -R milady:milady /var/lib/woodpecker
 
 # Add and set permissions for the startup script
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
 
-# Switch back to the jenkins user (or whichever user you wish to use)
-USER jenkins
+# Switch back to the milady user (replaces the jenkins image's app user)
+USER milady
 
-# Skip initial setup
-ENV JAVA_OPTS=-Djenkins.install.runSetupWizard=false
-
-CMD ["/startup.sh"]
+# tini replicates the jenkins image's PID1 (signal forwarding + zombie reaping)
+ENTRYPOINT ["/usr/bin/tini", "--", "/startup.sh"]

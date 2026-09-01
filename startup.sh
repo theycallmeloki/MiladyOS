@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Jenkins starts here
+# MiladyOS control-plane starts here (Woodpecker cli-exec mode)
 
 # Function to get the host's IP address in the specified range
 get_host_ip() {
@@ -411,21 +411,19 @@ else
 fi
 
 
-# Ensure custom theme is in Jenkins userContent (survives persistent volumes)
-if [ -f /opt/jenkins-theme/milady-theme.css ]; then
-    mkdir -p /var/jenkins_home/userContent/theme
-    cp /opt/jenkins-theme/milady-theme.css /var/jenkins_home/userContent/theme/milady-theme.css
-    echo "✓ Milady theme installed to Jenkins userContent"
+# === Final: Woodpecker CLI (cli-exec mode — no daemon, no forge) ===
+# Pipelines are triggered on-demand by the MCP re-points via
+# `woodpecker-cli exec` (woodpecker/runner.yml, scratch-build.yml). No
+# server/agent runs in Phase A; the container's foreground job is to stay
+# alive for the background services (MCP :6000, hermes, oracle, docs...).
+echo "=== Starting Woodpecker CLI (cli-exec mode) ==="
+if command -v woodpecker-cli > /dev/null 2>&1; then
+    woodpecker-cli --version
+    echo "✓ woodpecker-cli ready for on-demand pipelines"
+else
+    echo "WARNING: woodpecker-cli not found — MCP execute_command/scratch-build will fail"
 fi
 
-# Start Jenkins in the foreground
-# === Final: Jenkins (always starts) ===
-echo "=== Starting Jenkins ==="
-chown -R jenkins:jenkins /var/jenkins_home
-if command -v gosu >/dev/null 2>&1; then
-    exec gosu jenkins /usr/local/bin/jenkins.sh
-elif [ "$(id -u)" -eq 0 ]; then
-    exec su -s /bin/sh -c "/usr/local/bin/jenkins.sh" jenkins
-else
-    exec /usr/local/bin/jenkins.sh
-fi
+# Keep the container alive in the foreground
+echo "=== MiladyOS control plane ready ==="
+exec tail -f /dev/null
