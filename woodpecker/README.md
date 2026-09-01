@@ -1,34 +1,50 @@
-# MiladyOS × Woodpecker — Phase A pilot (cli-exec)
+# MiladyOS × Woodpecker — local CI stack
 
-See `WOODPECKER_MIGRATION.md` for the full plan + rulings (2026-09-01: forge =
-none, cli-exec only; MCP = keep native + `ni-c` later; base = debian:13.4).
+Forgejo 16.0.3 (local, inert) + woodpecker-server/agent v3.18.0, all in-image,
+air-gapped, on `debian:13.4`. Pipelines fire only on deliberate triggers
+(`create_pipeline` / `run_pipeline`); nothing auto-runs.
 
 ## What's here
 
 | File | Purpose |
 |------|---------|
 | `install-cli.sh` | pinned woodpecker-cli **v3.18.0** installer (sha256-verified); Dockerfile rebase + builder.sh dependency |
-| `runner.yml` | ad-hoc command runner — the `execute_command` MCP re-point (local backend) |
-| `scratch-build.yml` | build a Dockerfile on the **host daemon** + push with registry-skip guard — the scratch-builds-on-the-box replacement |
+| `install-forgejo.sh` | pinned Forgejo **16.0.3** static binary (sha256-verified) |
+| `install-agent.sh` | pinned woodpecker-agent **v3.18.0** (sha256-verified) |
+| `runner.yml` | ad-hoc command runner — the `execute_command` MCP backend (local agent) |
+| `scratch-build.yml` | build a Dockerfile on the **host daemon** + push with registry-skip guard |
+| `branding.py` | Woodpecker UI branding — logo.svg header, favicon, forge avatar |
+| `milady-avatar.png` | forge avatar asset |
 
-## Proven (2026-09-01, woodpecker-cli 3.18.0)
+## Standing rulings (operator, 2026-09-01)
 
-1. `woodpecker-cli exec --local --repo miladyos/MiladyOS woodpecker/runner.yml`
-   → step container runs on the host daemon, CI metadata injected
-   (`CI_PIPELINE_NUMBER`, `CI_EVENT`). `$CI_REPO` was empty via `--repo` —
-   env name differs in exec mode; not needed for the runner pattern.
-2. Docker backend + `--volumes /var/run/docker.sock:/var/run/docker.sock`
-   + `--repo-trusted-volumes` + `docker:cli` step image → `docker build` on
-   the host daemon, image runs, cleanup OK. (bash:5 step image has no docker
-   CLI — use `docker:cli`.)
+1. **Forge: local inert Forgejo** (SQLite, local admin `milady`, no GitHub
+   account tied in). The server cannot run without a forge (woodpecker-ci#2651
+   wontfix), hence the self-hosted one.
+2. **MCP: native miladyos server only** (16 tools, SSE on :6000). The
+   community servers (`ni-c/woodpecker-ci-mcp`, `rtuszik/woodpecker-mcp`)
+   were evaluated and **not adopted** — our tools wrap the same REST API
+   directly. Note: `developers.woodpecker.co/docs/mcp` is Woodpecker.co, a
+   cold-email SaaS, **not** Woodpecker CI; Woodpecker CI has no official MCP
+   server.
+3. **Base image: `debian:13.4`** (JVM-free rebase). Server binary comes from
+   the official image (multi-stage COPY) — release tarballs are cgo-less and
+   lack the sqlite driver; driver env name is `sqlite3`.
 
-Gotchas: step `volumes:` requires `--repo-trusted-volumes`; YAML plain scalars
-choke on `: ` — use block scalars (`|`) for shell.
+## Architecture notes
 
-## Next (Phase A)
-
-- Dockerfile: `FROM debian:13.4`, run `woodpecker/install-cli.sh` (drop
-  plugin-manager/plugins.txt/JCasC/theme + the legacy user).
-- `miladyos_mcp.py`: `execute_command` → `woodpecker-cli exec ... runner.yml`;
-  `create_pipeline` → write pipeline + exec.
-- Keep `miladyos:pre-woodpecker` tag for rollback; GH Actions unchanged.
+- Forge URL is the docker0 gateway (172.17.0.1) auto-detected at boot —
+  step containers on the docker bridge must reach the clone URL;
+  `FORGE_PUBLIC_URL` overrides for LAN exposure.
+- `startup.sh` (idempotent): forge app.ini → admin → OAuth app → secrets
+  (`/var/lib/woodpecker/.secrets`, incl. GRPC secret + `WOODPECKER_TOKEN`)
+  → server (:8000 UI / :9000 gRPC) → agent (:3001 health).
+- Agent is docker-backend on the host daemon; optional kubernetes-backend
+  agent in-cluster for KanikoBuild trigger steps.
+- Trigger API `variables` reach steps as env (`$VAR`; avoid `${VAR}` — config
+  interpolation eats braced vars; `when.evaluate` on variables has a 3.18
+  regression — avoid that filter form).
+- MCP pipeline tools (`create_pipeline`, `run_pipeline`, `pipeline_status`,
+  `pipeline_logs`, `list_pipelines`, `execute_command`) drive this stack via
+  `WoodpeckerClient`; AlphaEvolve evaluators run candidates on the local
+  agent (`run_content` into `milady/evolve`).
