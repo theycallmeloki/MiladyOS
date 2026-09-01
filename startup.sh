@@ -295,9 +295,12 @@ fi
 
 
 # Start MCP server if main.py exists
+# NOTE: must use the /app venv python explicitly — `python` on PATH resolves to
+# the hermes venv (/opt/hermes/.venv/bin precedes /app/.venv/bin), which lacks
+# the app deps (colorlog etc.). Pre-existing bug; MCP never auto-started.
 if [ -f "/app/main.py" ]; then
     echo "Starting MCP server..."
-    cd /app && python -m main mcp --redis-host localhost --redis-port 6379 --transport sse --host 0.0.0.0 --port 6000 &
+    cd /app && /app/.venv/bin/python -m main mcp --redis-host localhost --redis-port 6379 --transport sse --host 0.0.0.0 --port 6000 &
     sleep 2
     
     # Check if python process is running
