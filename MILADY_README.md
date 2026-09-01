@@ -1500,6 +1500,7 @@ saitama milady: 10km run, every day, for three milady years
 saitama milady: and I became strong enough to solve any problem in one milady, milady
 saitama milady: but I became bald!
 loki milady: today's version of the chicken and egg problem is between AGI and male pattern baldness
+lore milady: Ah, so you're telling me, I am a lot more than just data milady's brother?!
 
 ## Final Thoughts: There Is No Spoon
 
