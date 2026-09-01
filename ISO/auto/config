@@ -13,7 +13,6 @@ lb config noauto \
     --architectures amd64 \
     --archive-areas "main contrib non-free non-free-firmware" \
     --binary-images iso-hybrid \
-    --debian-installer-distribution trixie \
     --bootappend-live "boot=live components net.ifnames=0 console=ttyS0,115200n8" \
     --iso-volume "MiladyOS" \
     --iso-publisher "MiladyOS" \
@@ -21,8 +20,6 @@ lb config noauto \
     --memtest none \
     --source false \
     --linux-flavours amd64 \
-    --debian-installer live \
-    --debian-installer-gui true \
     --win32-loader false \
     --mode debian \
     "${@}"

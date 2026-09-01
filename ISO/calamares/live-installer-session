@@ -1,0 +1,18 @@
+#!/bin/sh
+# MiladyOS live installer: start the Calamares GUI on VT1.
+# Runs as root in the live session (install medium); falls back to a
+# console notice when X cannot start (headless/odd GPU).
+set -eu
+
+export HOME=/root
+
+if ! command -v calamares >/dev/null 2>&1; then
+    echo "milady: calamares not installed in this live image" >/dev/tty1 2>/dev/null || true
+    exit 0
+fi
+
+# xinit runs Xorg + our xinitrc (openbox + calamares) on VT1.
+# xinit's server args: /usr/bin/Xorg :0 vt1 -nolisten tcp
+exec xinit /usr/share/milady/live-installer-xinitrc \
+    -- /usr/bin/Xorg :0 vt1 -nolisten tcp -noreset \
+    -logfile /var/log/Xorg.0.log

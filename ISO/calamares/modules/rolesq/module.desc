@@ -1,0 +1,6 @@
+# MiladyOS role application — python job module.
+---
+type:       "job"
+name:       "rolesq"
+interface:  "python"
+script:     "main.py"

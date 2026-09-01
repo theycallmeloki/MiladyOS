@@ -5,9 +5,11 @@ set -e
 
 # docker store on a labeled scratch disk (live mode; absent disk = tmpfs)
 systemctl enable var-lib.mount >/dev/null 2>&1 || true
-# first boot applies role once (server|agent via cmdline/config/prompt)
+# first boot applies role once (server|agent|desktop via cmdline/config/
+# prompt); the container is enabled+started by role-detect — never at
+# build, so the live installer session stays lean (no image load during
+# install) and desktop nodes never run it.
 systemctl enable milady-role.service >/dev/null 2>&1 || true
-systemctl enable milady-container.service >/dev/null 2>&1 || true
 
 # sshd: allow key auth; password auth decided by console user at first boot
 systemctl enable ssh.service >/dev/null 2>&1 || true

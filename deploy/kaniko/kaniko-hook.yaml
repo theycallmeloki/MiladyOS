@@ -1,0 +1,80 @@
+# In-cluster KanikoBuild sync hook. Was an uncontainerized workstation script
+# (192.168.1.147:8090, hardcoded /home/laneone/kubeconfig) — a single point
+# of failure for every kaniko build. Now a pod in sandman with its own SA;
+# the composite controller calls http://kaniko-hook.sandman.svc:8090/sync.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kaniko-hook
+  namespace: sandman
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kaniko-hook
+  namespace: sandman
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kaniko-hook
+  namespace: sandman
+subjects:
+  - kind: ServiceAccount
+    name: kaniko-hook
+    namespace: sandman
+roleRef:
+  kind: Role
+  name: kaniko-hook
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kaniko-hook
+  namespace: sandman
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kaniko-hook
+  template:
+    metadata:
+      labels:
+        app: kaniko-hook
+    spec:
+      serviceAccountName: kaniko-hook
+      containers:
+        - name: hook
+          image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-hook:1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8090
+          env:
+            - name: KANIKO_REGISTRY
+              value: miladyosregistry.transparentlyrotatableproxy.site
+            - name: KANIKO_NAMESPACE
+              value: sandman
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kaniko-hook
+  namespace: sandman
+spec:
+  selector:
+    app: kaniko-hook
+  ports:
+    - port: 8090
+      targetPort: 8090

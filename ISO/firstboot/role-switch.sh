@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # MiladyOS ISO — role switch with clean lifecycle teardown (D4).
 #
-#   milady-role-switch <server|agent>
+#   milady-role-switch <server|agent|desktop>
 #
 # Switching roles must never leave a half-formed k3s datastore:
 #   server -> agent: stop k3s, back up + remove server datastore, enable agent
@@ -11,8 +11,8 @@ set -euo pipefail
 
 CONF=/etc/milady/node.conf
 NEW_ROLE="${1:-}"
-[ -n "$NEW_ROLE" ] || { echo "usage: milady-role-switch <server|agent>"; exit 1; }
-case "$NEW_ROLE" in server|agent) ;; *) echo "invalid role: $NEW_ROLE"; exit 1 ;; esac
+[ -n "$NEW_ROLE" ] || { echo "usage: milady-role-switch <server|agent|desktop>"; exit 1; }
+case "$NEW_ROLE" in server|agent|desktop) ;; *) echo "invalid role: $NEW_ROLE"; exit 1 ;; esac
 
 K3S_STATE=/var/lib/rancher/k3s
 BACKUP=/var/lib/rancher/k3s-role-switch-backup
@@ -60,11 +60,17 @@ if [ "$NEW_ROLE" = "server" ]; then
     # advertise _kubernetes._tcp (avahi republishes on file change)
     cp /usr/share/milady/kubernetes.service.avahi \
         /etc/avahi/services/kubernetes.service 2>/dev/null || true
-else
+elif [ "$NEW_ROLE" = "agent" ]; then
     systemctl enable k3s-agent.service
     systemctl --no-block start k3s-agent.service
+else
+    # desktop: everything stays stopped/disabled
+    systemctl disable k3s.service k3s-agent.service milady-container.service 2>/dev/null || true
+    echo "milady-role-switch: desktop — k3s + container disabled"
 fi
 
-# container runs regardless of role; it reads the new role from node.conf
-systemctl start milady-container.service || true
+# container runs on server/agent; it reads the new role from node.conf
+if [ "$NEW_ROLE" != "desktop" ]; then
+    systemctl start milady-container.service || true
+fi
 echo "milady-role-switch: done ($OLD_ROLE -> $NEW_ROLE)"

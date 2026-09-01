@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """KanikoBuild sync hook for metacontroller.
 
-Runs on the control workstation (host kubectl + KUBECONFIG). Implements the
-metacontroller composite-controller webhook protocol: given a KanikoBuild
-object, returns the desired children (the kaniko pod) and the CR status.
+Runs IN-CLUSTER (was a workstation script on 192.168.1.147:8090 with a
+hardcoded kubeconfig — single point of failure). Uses the pod's service
+account; no kubeconfig, no kubectl binary. Implements the metacontroller
+composite-controller webhook protocol: given a KanikoBuild object, returns
+the desired children (the kaniko pod) and the CR status.
 
 A build is executed as a kaniko-executor pod (no Docker daemon anywhere):
   - an initContainer unpacks the base64 tar.gz context into an emptyDir
@@ -19,13 +21,12 @@ import base64
 import json
 import os
 import re
-import subprocess
-import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from kubernetes import client as k8s, config
 
 REGISTRY = os.getenv("KANIKO_REGISTRY", "miladyosregistry.transparentlyrotatableproxy.site")
 NAMESPACE = os.getenv("KANIKO_NAMESPACE", "sandman")
-KUBECTL = os.getenv("KUBECTL", "kubectl")
 PORT = int(os.getenv("HOOK_PORT", "8090"))
 
 def log(msg):
@@ -35,15 +36,6 @@ def log(msg):
             f.write(msg + "\n")
     except Exception:
         pass
-
-
-def kub(args, timeout=30):
-    """Run kubectl, return stdout; raise RuntimeError on failure."""
-    cmd = [KUBECTL, "--kubeconfig", os.environ.get("KUBECONFIG", "/home/laneone/kubeconfig")] + args
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    if r.returncode != 0:
-        raise RuntimeError(f"kubectl {' '.join(args)}: {r.stderr.strip()[:600]}")
-    return r.stdout
 
 
 def pod_name(cr_name):
@@ -112,13 +104,17 @@ def build_pod(obj):
 
 def pod_status(pname):
     """(phase, message) for a pod; message = failed container log tail."""
-    out = kub(["get", "pod", pname, "-n", NAMESPACE, "-o", "json"])
-    p = json.loads(out)
-    phase = p.get("status", {}).get("phase", "Pending")
+    try:
+        p = core.read_namespaced_pod(pname, NAMESPACE)
+    except k8s.ApiException as e:
+        if e.status == 404:
+            return None, None  # pod not created yet -> Pending
+        raise RuntimeError(f"pod lookup {pname}: {e}")
+    phase = p.status.phase
     msg = None
     if phase in ("Failed", "Error", "Unknown"):
         try:
-            msg = kub(["logs", pname, "-n", NAMESPACE, "--tail=25"], timeout=20)
+            msg = core.read_namespaced_pod_log(pname, NAMESPACE, tail_lines=25)
         except Exception:
             msg = None
     return phase, msg
@@ -201,5 +197,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    log(f"kaniko-build hook on :{PORT} registry={REGISTRY} ns={NAMESPACE}")
+    try:
+        config.load_incluster_config()
+    except Exception:
+        config.load_kube_config()  # dev fallback only
+    core = k8s.CoreV1Api()
+    log(f"kaniko-build hook on :{PORT} registry={REGISTRY} ns={NAMESPACE} (in-cluster)")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

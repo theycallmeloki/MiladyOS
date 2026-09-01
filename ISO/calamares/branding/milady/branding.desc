@@ -1,0 +1,32 @@
+---
+componentName:   milady
+welcomeStyleCalamares: true
+welcomeExpandingLogo: true
+windowExpanding: normal
+windowSize: 800px,580px
+windowPlacement: center
+strings:
+    productName:         MiladyOS
+    shortProductName:    MiladyOS
+    version:             0.0.0
+    shortVersion:        0.0.0
+    versionedName:       MiladyOS
+    shortVersionedName:  MiladyOS
+    bootloaderEntryName: MiladyOS
+    productUrl:          https://miladyos.transparentlyrotatableproxy.site/
+    supportUrl:          https://miladyos.transparentlyrotatableproxy.site/
+    knownIssuesUrl:      https://miladyos.transparentlyrotatableproxy.site/
+    releaseNotesUrl:     https://miladyos.transparentlyrotatableproxy.site/
+sidebar: widget
+navigation: widget
+images:
+    productLogo:         "milady.png"
+    productIcon:         "milady.png"
+    productWelcome:      "welcome.png"
+slideshow:               "show.qml"
+style:
+   SidebarBackground:    "#17141f"
+   SidebarText:          "#e8e4f0"
+   SidebarTextCurrent:   "#ffffff"
+   SidebarBackgroundCurrent: "#2b2340"
+slideshowAPI: 2

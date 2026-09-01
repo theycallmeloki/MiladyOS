@@ -1,0 +1,9 @@
+#!/bin/sh
+# MiladyOS live installer — X session client (openbox + Calamares).
+# Started by xinit from live-installer-session; DISPLAY is already set.
+set -eu
+
+# a WM keeps the installer window manageable; failure must not kill calamares
+openbox >/dev/null 2>&1 &
+
+exec calamares

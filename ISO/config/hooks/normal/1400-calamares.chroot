@@ -1,0 +1,18 @@
+#!/bin/sh
+# MiladyOS ISO — Calamares installer: overlay our /etc/calamares
+# (settings.conf, module configs, milady branding) over the
+# calamares-settings-debian defaults, and enable the live VT1 session.
+# The session unit is live-only (ConditionPathExists=/run/live/medium),
+# so installed systems keep a normal console.
+set -e
+
+# staged by build-in-container.sh into /usr/share/milady/calamares/
+cp -a /usr/share/milady/calamares/settings.conf /etc/calamares/
+# merge into the existing module dir: our files replace the Debian ones
+# with the same name; the rest of the Debian chain stays intact
+cp -a /usr/share/milady/calamares/modules/. /etc/calamares/modules/
+cp -a /usr/share/milady/calamares/branding /etc/calamares/
+
+systemctl enable milady-live-installer.service >/dev/null 2>&1 || true
+
+echo "milady: calamares config overlaid (/etc/calamares)"

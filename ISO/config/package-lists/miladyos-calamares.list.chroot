@@ -1,0 +1,19 @@
+# MiladyOS ISO — Calamares installer session (D2 install-to-disk).
+# calamares-settings-debian pulls calamares + rsync + cryptsetup + pkexec.
+# Minimal X session (VT1, root autologin via the live-installer service);
+# installed systems keep xorg+openbox as the thin desktop base.
+
+# --- installer ---
+calamares-settings-debian
+
+# --- X session for the installer GUI ---
+xserver-xorg
+xserver-xorg-video-modesetting
+xserver-xorg-video-qxl
+xserver-xorg-video-fbdev
+xserver-xorg-video-vesa
+xserver-xorg-input-libinput
+xinit
+openbox
+xterm
+fonts-dejavu-core
