@@ -431,11 +431,122 @@ else
 fi
 
 
-# === Final: Woodpecker CLI (cli-exec mode — no daemon, no forge) ===
-# Pipelines are triggered on-demand by the MCP re-points via
-# `woodpecker-cli exec` (woodpecker/runner.yml, scratch-build.yml). No
-# server/agent runs in Phase A; the container's foreground job is to stay
-# alive for the background services (MCP :6000, hermes, oracle, docs...).
+# === Phase B: Forgejo + Woodpecker server/agent (local forge, nothing auto-runs) ===
+# Phase A is cli-exec only (no daemon). Phase B adds the web UI: Forgejo is
+# the self-hosted forge (SQLite-backed, local admin, no GitHub — per the
+# migration ruling) that woodpecker-server authenticates against, and the
+# docker-backend agent executes pipelines on the host daemon. Nothing
+# auto-runs: pipelines fire only on deliberate triggers (a repo + webhook we
+# create ourselves).
+echo "=== Starting Forgejo + Woodpecker server/agent (Phase B) ==="
+if command -v forgejo > /dev/null 2>&1; then
+    FG=/var/lib/forgejo
+    mkdir -p "$FG/data" "$FG/custom/conf" "$FG/log"
+    cat > "$FG/custom/conf/app.ini" <<'INI'
+APP_NAME = MiladyOS Forge
+RUN_USER = milady
+RUN_MODE = prod
+[server]
+HTTP_PORT = 3000
+DOMAIN = localhost
+ROOT_URL = http://localhost:3000
+DISABLE_SSH = true
+LFS_START_SERVER = false
+[database]
+DB_TYPE = sqlite3
+PATH = /var/lib/forgejo/data/forgejo.db
+[service]
+DISABLE_REGISTRATION = true
+ENABLE_CAPTCHA = false
+MIN_PASSWORD_LEN = 6
+REQUIRE_SIGNIN_VIEW = false
+[security]
+INSTALL_LOCK = true
+[actions]
+ENABLED = false
+[mailer]
+ENABLED = false
+[log]
+MODE = console
+LEVEL = Info
+INI
+    forgejo web -w "$FG" > "$FG/log/forgejo.log" 2>&1 &
+    FG_READY=0
+    for _ in $(seq 1 45); do
+        if curl -sf -m 2 http://localhost:3000/api/v1/version > /dev/null 2>&1; then
+            FG_READY=1; break
+        fi
+        sleep 2
+    done
+    if [ "$FG_READY" != 1 ]; then
+        echo "WARNING: forgejo did not become ready — Phase B skipped"
+    else
+        echo "✓ forgejo ready on :3000"
+        # Bootstrap the local admin (idempotent). MIN_PASSWORD_LEN=6 admits milady.
+        forgejo admin user create -w "$FG" \
+            --admin --username "${JENKINS_ADMIN_ID:-milady}" \
+            --password "${JENKINS_ADMIN_PASSWORD:-milady}" \
+            --email milady@localhost --must-change-password=false > /dev/null 2>&1 || true
+        echo "✓ forgejo admin ${JENKINS_ADMIN_ID:-milady} ensured"
+        SECRETS=/var/lib/woodpecker/.secrets
+        touch "$SECRETS"; chmod 600 "$SECRETS"
+        if [ ! -s "$SECRETS" ]; then
+            # First boot: create the woodpecker OAuth app and persist the
+            # secrets (client_secret is only returned once, at creation).
+            WOODPECKER_AGENT_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
+            OAUTH_JSON="$(curl -sf -m 10 -u "${JENKINS_ADMIN_ID:-milady}:${JENKINS_ADMIN_PASSWORD:-milady}" -X POST \
+                http://localhost:3000/api/v1/user/applications/oauth2 \
+                -H "Content-Type: application/json" \
+                -d '{"name":"woodpecker","redirect_uris":["http://localhost:8000/authorize"],"confidential_client":true}')"
+            if [ -n "$OAUTH_JSON" ]; then
+                WOODPECKER_FORGEJO_CLIENT="$(echo "$OAUTH_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["client_id"])')"
+                WOODPECKER_FORGEJO_SECRET="$(echo "$OAUTH_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["client_secret"])')"
+                printf 'WOODPECKER_AGENT_SECRET=%s\nWOODPECKER_FORGEJO_CLIENT=%s\nWOODPECKER_FORGEJO_SECRET=%s\n' \
+                    "$WOODPECKER_AGENT_SECRET" "$WOODPECKER_FORGEJO_CLIENT" "$WOODPECKER_FORGEJO_SECRET" > "$SECRETS"
+                echo "✓ woodpecker OAuth app registered in forgejo"
+            else
+                echo "WARNING: forgejo OAuth app creation failed"
+            fi
+        fi
+        if [ -s "$SECRETS" ]; then
+            # shellcheck disable=SC1090
+            . "$SECRETS"
+            if command -v woodpecker-server > /dev/null 2>&1 && command -v woodpecker-agent > /dev/null 2>&1; then
+                WOODPECKER_FORGEJO=true \
+                WOODPECKER_FORGEJO_URL=http://localhost:3000 \
+                WOODPECKER_FORGEJO_CLIENT="$WOODPECKER_FORGEJO_CLIENT" \
+                WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
+                WOODPECKER_HOST=http://localhost:8000 \
+                WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
+                WOODPECKER_DATABASE_DRIVER=sqlite \
+                WOODPECKER_DATABASE_DATASOURCE=/var/lib/woodpecker/woodpecker.db \
+                WOODPECKER_GRPC_ADDR=:9000 \
+                WOODPECKER_LOG_LEVEL=info \
+                woodpecker-server > /var/lib/woodpecker/server.log 2>&1 &
+                sleep 3
+                WOODPECKER_SERVER=localhost:9000 \
+                WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
+                WOODPECKER_BACKEND=docker \
+                woodpecker-agent > /var/lib/woodpecker/agent.log 2>&1 &
+                sleep 5
+                if pgrep -x woodpecker-server > /dev/null && pgrep -x woodpecker-agent > /dev/null; then
+                    echo "✓ woodpecker-server :8000 (UI) + :9000 (gRPC), agent running"
+                else
+                    echo "WARNING: server/agent did not both start — check /var/lib/woodpecker/{server,agent}.log"
+                fi
+            else
+                echo "WARNING: woodpecker-server/agent binaries missing"
+            fi
+        fi
+    fi
+else
+    echo "WARNING: forgejo not found, skipping Phase B"
+fi
+
+# === Final: Woodpecker CLI (cli-exec mode) ===
+# On-demand pipelines via `woodpecker-cli exec` (Phase A) run alongside the
+# Phase B server; the container's foreground job is to stay alive for all the
+# background services (MCP :6000, hermes, oracle, docs...).
 echo "=== Starting Woodpecker CLI (cli-exec mode) ==="
 if command -v woodpecker-cli > /dev/null 2>&1; then
     woodpecker-cli --version
