@@ -551,8 +551,15 @@ USER root
 # root-owned /app, so all three pre-exist owned by milady. Pre-existing bugs:
 # redka never started (blocked the MCP redis dep) and the MCP server crashed
 # on PermissionError: 'templates'.
-RUN mkdir -p /data /var/lib/woodpecker /app/templates /app/metadata && \
-    chown -R milady:milady /data /var/lib/woodpecker /app/templates /app/metadata
+RUN mkdir -p /data /var/lib/woodpecker /app/templates /app/metadata \
+        /etc/filebrowser-metrics /etc/filebrowser-models && \
+    chown -R milady:milady /data /var/lib/woodpecker /app/templates /app/metadata \
+        /etc/filebrowser-metrics /etc/filebrowser-models
+
+# Caddy binds :80/:443 per the Caddyfile; the non-root app user cannot bind
+# ports <1024. CAP_NET_BIND_SERVICE on the binary fixes it (libcap2-bin came
+# in the apt pass). Pre-existing bug: caddy always failed to start.
+RUN setcap cap_net_bind_service=+ep /usr/local/bin/caddy
 
 # Original container login (Jenkins UI) was milady/milady — JENKINS_ADMIN_ID /
 # JENKINS_ADMIN_PASSWORD env, defaulted by firstboot. Jenkins is gone; keep
