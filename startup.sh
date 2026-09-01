@@ -195,21 +195,25 @@ if command -v filebrowser > /dev/null 2>&1; then
     mkdir -p /etc/filebrowser-metrics
     mkdir -p /etc/filebrowser-models
     
+        # Seed the auth user BEFORE starting the servers: a running server holds a
+    # bbolt lock on its db (post-start updates time out — first-run admin/admin
+    # was never re-pointed). v2.63 also enforces a 12-char minimum password, so
+    # literal 'milady' is rejected by the CLI; 'miladymilady' keeps the theme
+    # (JENKINS_ADMIN_PASSWORD is honored when >= 12 chars). On restarts the db
+    # already has the user; `users add` then fails harmlessly.
+    FBPASSWORD="${JENKINS_ADMIN_PASSWORD:-miladymilady}"
+    [ "${#FBPASSWORD}" -ge 12 ] || FBPASSWORD="miladymilady"
+    for fbdb in /etc/filebrowser-metrics/filebrowser.db /etc/filebrowser-models/filebrowser.db; do
+        [ -f "$fbdb" ] || filebrowser config init -d "$fbdb" >/dev/null 2>&1 || true
+        filebrowser users add "${JENKINS_ADMIN_ID:-milady}" "$FBPASSWORD" --perm.admin \
+            -d "$fbdb" >/dev/null 2>&1 || true
+    done
+
     # Start filebrowser instances
-        filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser-metrics/filebrowser.db -p 7331 &
+    filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser-metrics/filebrowser.db -p 7331 &
     filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser-models/filebrowser.db -p 1337 &
     
     sleep 5
-    # First run seeds admin/admin; re-point both to milady/milady (env-overridable,
-    # same defaults as the original JENKINS_ADMIN_ID/JENKINS_ADMIN_PASSWORD).
-    filebrowser users update 1 \
-        --username "${JENKINS_ADMIN_ID:-milady}" \
-        --password "${JENKINS_ADMIN_PASSWORD:-milady}" \
-        -d /etc/filebrowser-metrics/filebrowser.db || true
-    filebrowser users update 1 \
-        --username "${JENKINS_ADMIN_ID:-milady}" \
-        --password "${JENKINS_ADMIN_PASSWORD:-milady}" \
-        -d /etc/filebrowser-models/filebrowser.db || true
     echo "Filebrowser instances started"
 else
     echo "Filebrowser not available, skipping"
