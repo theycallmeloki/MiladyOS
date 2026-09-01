@@ -554,6 +554,12 @@ USER root
 RUN mkdir -p /data /var/lib/woodpecker /app/templates /app/metadata && \
     chown -R milady:milady /data /var/lib/woodpecker /app/templates /app/metadata
 
+# Original container login (Jenkins UI) was milady/milady — JENKINS_ADMIN_ID /
+# JENKINS_ADMIN_PASSWORD env, defaulted by firstboot. Jenkins is gone; keep
+# the OS user credential for parity (runtime surfaces are auth'd in startup.sh
+# with the same env defaults).
+RUN echo 'milady:milady' | chpasswd
+
 # Add and set permissions for the startup script
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh

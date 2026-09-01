@@ -196,10 +196,20 @@ if command -v filebrowser > /dev/null 2>&1; then
     mkdir -p /etc/filebrowser-models
     
     # Start filebrowser instances
-    filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser-metrics/filebrowser.db -p 7331 &
+        filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser-metrics/filebrowser.db -p 7331 &
     filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser-models/filebrowser.db -p 1337 &
     
     sleep 5
+    # First run seeds admin/admin; re-point both to milady/milady (env-overridable,
+    # same defaults as the original JENKINS_ADMIN_ID/JENKINS_ADMIN_PASSWORD).
+    filebrowser users update 1 \
+        --username "${JENKINS_ADMIN_ID:-milady}" \
+        --password "${JENKINS_ADMIN_PASSWORD:-milady}" \
+        -d /etc/filebrowser-metrics/filebrowser.db || true
+    filebrowser users update 1 \
+        --username "${JENKINS_ADMIN_ID:-milady}" \
+        --password "${JENKINS_ADMIN_PASSWORD:-milady}" \
+        -d /etc/filebrowser-models/filebrowser.db || true
     echo "Filebrowser instances started"
 else
     echo "Filebrowser not available, skipping"
@@ -395,10 +405,13 @@ if command -v gotty > /dev/null 2>&1; then
     # --permit-write allows input (interactive)
     # --reconnect attempts to reconnect on disconnect
     # --title-format sets the browser tab title
+    # Original container login (Jenkins UI) was milady/milady; GoTTY terminal
+    # is the operator surface now, so basic-auth it with the same defaults.
     gotty --port 8088 \
           --address 0.0.0.0 \
           --permit-write \
           --reconnect \
+          --credential "${JENKINS_ADMIN_ID:-milady}:${JENKINS_ADMIN_PASSWORD:-milady}" \
           --title-format "MiladyOS Terminal" \
           /bin/bash &
     sleep 2
