@@ -2,11 +2,11 @@
 """
 MiladyOS AlphaEvolve - Pipeline Evaluators
 
-Cascade evaluation system for Jenkins pipelines:
+Cascade evaluation system for Woodpecker CI pipelines:
 1. Syntax validation (fast, local)
 2. Static analysis (fast, local)
-3. Dry run validation (medium, requires Jenkins)
-4. Live execution (slow, requires Jenkins + resources)
+3. Dry run validation (local YAML structural check)
+4. Live execution (slow, runs the pipeline via the woodpecker runner)
 
 Each stage filters out bad candidates early to save compute.
 """
@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import colorlog
+import yaml
 
 logger = colorlog.getLogger("miladyos-evaluators")
 
@@ -63,26 +64,13 @@ class BaseEvaluator(ABC):
 
 class SyntaxEvaluator(BaseEvaluator):
     """
-    Fast local syntax validation for Jenkinsfiles.
+    Fast local syntax validation for Woodpecker pipeline YAML.
 
     Checks:
-    - Required pipeline structure (pipeline, stages, agent)
-    - Balanced braces and parentheses
-    - Valid stage definitions
-    - No obvious syntax errors
+    - YAML parses cleanly
+    - Required structure (steps; per-step image and commands)
+    - No hardcoded secrets
     """
-
-    REQUIRED_ELEMENTS = [
-        (r"\bpipeline\s*\{", "Missing 'pipeline' block"),
-        (r"\bstages\s*\{", "Missing 'stages' block"),
-        (r"\bagent\s+", "Missing 'agent' directive"),
-    ]
-
-    SYNTAX_ERRORS = [
-        (r"stage\s*\([^)]*\)\s*\{[^}]*stage\s*\(", "Nested stage definitions"),
-        (r'"\s*\+\s*"', "String concatenation (use GString interpolation)"),
-        (r"def\s+\w+\s*=.*\bpipeline\b", "Variable before pipeline block"),
-    ]
 
     async def evaluate(self, content: str, context: Dict[str, Any]) -> EvaluationResult:
         start = time.time()
@@ -90,43 +78,46 @@ class SyntaxEvaluator(BaseEvaluator):
         warnings = []
         metrics = {}
 
-        # Check required elements
-        for pattern, error_msg in self.REQUIRED_ELEMENTS:
-            if not re.search(pattern, content):
-                errors.append(error_msg)
+        try:
+            data = yaml.safe_load(content)
+        except Exception as e:
+            return EvaluationResult(
+                passed=False,
+                score=0.0,
+                metrics={
+                    "syntax_errors": 1,
+                    "syntax_warnings": 0,
+                    "line_count": len(content.split("\n")),
+                    "stage_count": 0,
+                },
+                errors=[f"YAML parse error: {e}"],
+                warnings=[],
+                duration_ms=(time.time() - start) * 1000,
+            )
 
-        # Check for syntax errors
-        for pattern, error_msg in self.SYNTAX_ERRORS:
-            if re.search(pattern, content):
-                errors.append(error_msg)
+        if not isinstance(data, dict) or "steps" not in data or not isinstance(data.get("steps"), dict):
+            errors.append("Missing top-level 'steps' mapping")
+        else:
+            for name, step in data["steps"].items():
+                if not isinstance(step, dict):
+                    errors.append(f"Step '{name}' is not a mapping")
+                    continue
+                if "image" not in step:
+                    errors.append(f"Step '{name}' is missing 'image'")
+                if "commands" not in step or not isinstance(step.get("commands"), list):
+                    errors.append(f"Step '{name}' is missing a 'commands' list")
 
-        # Check balanced delimiters
-        brace_balance = content.count("{") - content.count("}")
-        paren_balance = content.count("(") - content.count(")")
-        bracket_balance = content.count("[") - content.count("]")
+        if re.search(r"(password|token|api[_-]?key)\s*[:=]\s*['\"][^'\"]+['\"]", content, re.I):
+            errors.append("Hardcoded secret detected")
 
-        if brace_balance != 0:
-            errors.append(f"Unbalanced braces: {'+' if brace_balance > 0 else ''}{brace_balance}")
-        if paren_balance != 0:
-            errors.append(f"Unbalanced parentheses: {'+' if paren_balance > 0 else ''}{paren_balance}")
-        if bracket_balance != 0:
-            warnings.append(f"Unbalanced brackets: {'+' if bracket_balance > 0 else ''}{bracket_balance}")
-
-        # Check for common issues
-        if "sh '" in content and 'sh "' in content:
-            warnings.append("Mixed quote styles in sh commands")
-
-        if re.search(r"password\s*[=:]\s*['\"][^'\"]+['\"]", content, re.I):
-            errors.append("Hardcoded password detected")
-
-        if "sleep" in content and not re.search(r"sleep\s*\(\s*\d+\s*\)", content):
-            warnings.append("Sleep without explicit duration")
+        if "sleep " in content and "sleep 0" not in content:
+            warnings.append("Sleep usage — prefer woodpecker retries/backoff where possible")
 
         # Calculate metrics
         metrics["syntax_errors"] = len(errors)
         metrics["syntax_warnings"] = len(warnings)
         metrics["line_count"] = len(content.split("\n"))
-        metrics["stage_count"] = len(re.findall(r"\bstage\s*\(", content))
+        metrics["stage_count"] = len(data.get("steps", {})) if isinstance(data, dict) else 0
 
         passed = len(errors) == 0
         score = 1.0 if passed else 0.0
@@ -165,32 +156,29 @@ class StaticAnalysisEvaluator(BaseEvaluator):
 
         goal = context.get("goal", "reliability")
 
-        # Parallelization analysis
-        parallel_blocks = len(re.findall(r"\bparallel\s*\{", content))
-        stage_count = len(re.findall(r"\bstage\s*\(", content))
-        sh_commands = len(re.findall(r"\bsh\s+['\"]", content))
+        # Parallelization analysis (woodpecker: parallel groups / detach)
+        parallel_blocks = len(re.findall(r"^\s*parallel\s*:", content, re.M)) + content.count("detach:")
+        step_count = len(re.findall(r"^\s{2}[a-z0-9_-]+:\s*$", content, re.M))
+        command_count = len(re.findall(r"^\s*-\s+", content, re.M))
 
         metrics["parallel_blocks"] = parallel_blocks
-        metrics["parallelism_ratio"] = parallel_blocks / max(1, stage_count)
-        metrics["parallelism_score"] = min(1.0, parallel_blocks / max(1, stage_count - 1))
+        metrics["parallelism_ratio"] = parallel_blocks / max(1, step_count)
+        metrics["parallelism_score"] = min(1.0, parallel_blocks / max(1, step_count - 1))
 
-        # Error handling analysis
-        try_blocks = content.count("try {")
-        catch_blocks = content.count("catch ")
-        retry_count = len(re.findall(r"\bretry\s*\(\s*\d+\s*\)", content))
-        timeout_count = len(re.findall(r"\btimeout\s*\(", content))
+        # Error handling analysis (woodpecker: when / failure status steps)
+        when_count = len(re.findall(r"^\s+when\s*:", content, re.M))
+        failure_count = len(re.findall(r"status:\s*\[?[^\]]*failure", content, re.I))
 
-        metrics["try_catch_blocks"] = min(try_blocks, catch_blocks)
-        metrics["retry_count"] = retry_count
-        metrics["timeout_count"] = timeout_count
-        metrics["error_handling_score"] = min(1.0, (try_blocks + retry_count * 2) / max(1, sh_commands))
-        metrics["retry_coverage"] = min(1.0, retry_count / max(1, sh_commands // 2))
-        metrics["timeout_coverage"] = min(1.0, timeout_count / max(1, stage_count))
+        metrics["when_blocks"] = when_count
+        metrics["failure_handlers"] = failure_count
+        metrics["error_handling_score"] = min(1.0, (when_count + failure_count * 2) / max(1, step_count))
+        metrics["retry_coverage"] = min(1.0, failure_count / max(1, step_count))
+        metrics["timeout_coverage"] = min(1.0, when_count / max(1, step_count))
 
-        # Resource management
-        has_cleanup = "cleanWs()" in content or "deleteDir()" in content
+        # Resource management (woodpecker: volumes / cleanup steps)
+        has_cleanup = any(x in content for x in ["cleanup", "prune", "rm -rf"])
         has_docker_prune = "docker system prune" in content or "docker image prune" in content
-        has_resource_limits = "limits {" in content or re.search(r"memory\s*[=:]\s*['\"]", content)
+        has_resource_limits = "volumes:" in content or "memory" in content.lower() or "cpu" in content.lower()
 
         metrics["has_cleanup"] = 1.0 if has_cleanup else 0.0
         metrics["has_docker_cleanup"] = 1.0 if has_docker_prune else 0.0
@@ -201,11 +189,11 @@ class StaticAnalysisEvaluator(BaseEvaluator):
             (0.3 if has_resource_limits else 0.0)
         )
 
-        # Security analysis
-        uses_credentials = "credentials(" in content or "withCredentials" in content
-        uses_env_vars = "environment {" in content
+        # Security analysis (woodpecker: from_secret / secrets)
+        uses_credentials = "from_secret" in content or "secrets:" in content
+        uses_env_vars = "variables:" in content
         no_hardcoded_secrets = not re.search(
-            r"(password|secret|token|key)\s*[=:]\s*['\"][^$][^'\"]+['\"]",
+            r"(password|secret|token|api[_-]?key)\s*[:=]\s*['\"][^$][^'\"]+['\"]",
             content, re.I
         )
 
@@ -222,17 +210,17 @@ class StaticAnalysisEvaluator(BaseEvaluator):
             errors.append("Potential hardcoded secrets detected")
 
         # Best practices
-        has_post = "post {" in content
-        has_options = "options {" in content
-        has_parameters = "parameters {" in content
-        uses_shallow_clone = "depth: 1" in content or "shallow: true" in content
+        has_post = "when:" in content and "status:" in content
+        has_options = "skip_clone" in content or "volumes:" in content
+        has_parameters = "variables:" in content
+        uses_shallow_clone = "depth" in content or "filter:" in content
 
         metrics["has_post_actions"] = 1.0 if has_post else 0.0
         metrics["has_options"] = 1.0 if has_options else 0.0
         metrics["uses_shallow_clone"] = 1.0 if uses_shallow_clone else 0.0
 
         # Caching analysis
-        has_cache = any(x in content.lower() for x in ["cache", "stash", "unstash"])
+        has_cache = any(x in content.lower() for x in ["cache", "plugin", "volume"])
         has_npm_ci = "npm ci" in content
         has_pip_cache = "--cache-dir" in content or "PIP_CACHE_DIR" in content
 
@@ -244,12 +232,10 @@ class StaticAnalysisEvaluator(BaseEvaluator):
             (0.2 if parallel_blocks > 0 else 0.0)
         )
 
-        # Complexity penalty
+        # Complexity penalty (nesting via indentation)
         lines = len(content.split("\n"))
-        nesting_depth = max(
-            line.count("{") - line.count("}")
-            for line in content.split("\n")
-        )
+        indents = [len(line) - len(line.lstrip()) for line in content.split("\n") if line.strip()]
+        nesting_depth = max(indents) // 2 if indents else 0
 
         metrics["complexity_lines"] = lines
         metrics["max_nesting"] = nesting_depth
@@ -257,13 +243,11 @@ class StaticAnalysisEvaluator(BaseEvaluator):
 
         # Warnings for missing best practices
         if not has_post:
-            warnings.append("Missing post {} block for cleanup/notifications")
+            warnings.append("No when/status steps for failure handling")
         if not has_cleanup:
-            warnings.append("No workspace cleanup (cleanWs)")
-        if not uses_shallow_clone and "checkout" in content:
-            warnings.append("Consider shallow clone for faster checkout")
-        if sh_commands > 3 and retry_count == 0:
-            warnings.append("Multiple sh commands without retry logic")
+            warnings.append("No cleanup step (prune/rm)")
+        if command_count > 3 and failure_count == 0:
+            warnings.append("Multiple commands without failure handling")
 
         # Calculate overall score based on goal
         if goal == "speed":
@@ -308,20 +292,15 @@ class StaticAnalysisEvaluator(BaseEvaluator):
 
 
 # ============================================================================
-# Jenkins Dry Run Evaluator
+# Dry Run Evaluator
 # ============================================================================
 
-class JenkinsDryRunEvaluator(BaseEvaluator):
+class DryRunEvaluator(BaseEvaluator):
     """
-    Validate pipeline using Jenkins' declarative linter.
-
-    Requires Jenkins connection to use the pipeline-model-definition
-    plugin's validation endpoint.
+    Local dry-run: validates that the pipeline YAML parses and has the
+    shape the woodpecker compiler requires (steps, images, commands).
+    Catches candidates the compiler would reject at trigger time.
     """
-
-    def __init__(self, config: Dict[str, Any], jenkins_client=None):
-        super().__init__(config)
-        self.jenkins = jenkins_client
 
     async def evaluate(self, content: str, context: Dict[str, Any]) -> EvaluationResult:
         start = time.time()
@@ -329,35 +308,27 @@ class JenkinsDryRunEvaluator(BaseEvaluator):
         warnings = []
         metrics = {}
 
-        if not self.jenkins:
-            # Skip if no Jenkins connection
-            return EvaluationResult(
-                passed=True,
-                score=1.0,
-                metrics={"skipped": 1.0},
-                errors=[],
-                warnings=["Jenkins not available for dry run"],
-                duration_ms=(time.time() - start) * 1000,
-            )
-
         try:
-            # Use Jenkins declarative linter
-            result = await asyncio.to_thread(
-                self._validate_pipeline,
-                content
-            )
-
-            if result["valid"]:
-                metrics["dry_run_valid"] = 1.0
-                score = 1.0
-            else:
-                metrics["dry_run_valid"] = 0.0
-                errors.extend(result.get("errors", ["Validation failed"]))
-                score = 0.0
-
+            result = await asyncio.to_thread(self._validate_pipeline, content)
         except Exception as e:
             errors.append(f"Dry run failed: {str(e)}")
             metrics["dry_run_error"] = 1.0
+            score = 0.0
+            return EvaluationResult(
+                passed=False,
+                score=score,
+                metrics=metrics,
+                errors=errors,
+                warnings=warnings,
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        if result["valid"]:
+            metrics["dry_run_valid"] = 1.0
+            score = 1.0
+        else:
+            metrics["dry_run_valid"] = 0.0
+            errors.extend(result.get("errors", ["Validation failed"]))
             score = 0.0
 
         return EvaluationResult(
@@ -370,39 +341,43 @@ class JenkinsDryRunEvaluator(BaseEvaluator):
         )
 
     def _validate_pipeline(self, content: str) -> Dict[str, Any]:
-        """Call Jenkins pipeline linter."""
+        """Local structural validation (mirrors the woodpecker compiler
+        checks: parseable YAML, steps mapping, per-step image + commands)."""
         try:
-            # This would use the Jenkins API endpoint:
-            # POST /pipeline-model-converter/validate
-            # with the Jenkinsfile content
-
-            # For now, simulate validation
-            # In production, use: self.jenkins.jenkins.requester.post_url(...)
-
-            return {"valid": True}
-
+            data = yaml.safe_load(content)
         except Exception as e:
-            return {"valid": False, "errors": [str(e)]}
+            return {"valid": False, "errors": [f"YAML parse error: {e}"]}
+        if not isinstance(data, dict) or not isinstance(data.get("steps"), dict):
+            return {"valid": False, "errors": ["Missing top-level 'steps' mapping"]}
+        for name, step in data["steps"].items():
+            if not isinstance(step, dict):
+                return {"valid": False, "errors": [f"Step '{name}' is not a mapping"]}
+            if "image" not in step:
+                return {"valid": False, "errors": [f"Step '{name}' is missing 'image'"]}
+            if "commands" not in step or not isinstance(step.get("commands"), list):
+                return {"valid": False, "errors": [f"Step '{name}' is missing a 'commands' list"]}
+        return {"valid": True}
 
 
 # ============================================================================
 # Live Execution Evaluator
 # ============================================================================
 
-class LiveExecutionEvaluator(BaseEvaluator):
+class ExecutionEvaluator(BaseEvaluator):
     """
-    Execute pipeline and measure real metrics.
+    Execute pipeline via the woodpecker runner and measure real metrics.
 
-    Creates a temporary Jenkins job, runs it, and extracts:
+    Runs the candidate on the local woodpecker agent (milady/evolve repo)
+    and extracts:
     - Execution duration
     - Success/failure
-    - Resource usage
+    - Step exit codes
     - Error messages
     """
 
-    def __init__(self, config: Dict[str, Any], jenkins_client=None):
+    def __init__(self, config: Dict[str, Any], runner=None):
         super().__init__(config)
-        self.jenkins = jenkins_client
+        self.runner = runner
         self.timeout = config.get("timeout", 300)  # 5 minute default
 
     async def evaluate(self, content: str, context: Dict[str, Any]) -> EvaluationResult:
@@ -411,34 +386,29 @@ class LiveExecutionEvaluator(BaseEvaluator):
         warnings = []
         metrics = {}
 
-        if not self.jenkins:
+        if not self.runner:
             return EvaluationResult(
                 passed=True,
                 score=0.5,  # Uncertain without execution
                 metrics={"skipped": 1.0},
                 errors=[],
-                warnings=["Jenkins not available for live execution"],
+                warnings=["No pipeline runner available for live execution"],
                 duration_ms=(time.time() - start) * 1000,
             )
 
         try:
-            # Create test job
-            job_name = f"evolve-test-{context.get('candidate_id', 'unknown')[:8]}"
-
             result = await asyncio.to_thread(
                 self._execute_pipeline,
-                job_name,
-                content
+                content,
             )
 
-            metrics.update(result.get("metrics", {}))
+            metrics["duration_seconds"] = result.get("duration_seconds", 0.0)
+            metrics["success_rate"] = 1.0 if result.get("success") else 0.0
 
-            if result["success"]:
+            if result.get("success"):
                 score = 1.0
-                metrics["success_rate"] = 1.0
             else:
                 score = 0.0
-                metrics["success_rate"] = 0.0
                 errors.extend(result.get("errors", ["Execution failed"]))
 
         except asyncio.TimeoutError:
@@ -458,24 +428,25 @@ class LiveExecutionEvaluator(BaseEvaluator):
             duration_ms=(time.time() - start) * 1000,
         )
 
-    def _execute_pipeline(self, job_name: str, content: str) -> Dict[str, Any]:
-        """Execute pipeline in Jenkins."""
-        # This would:
-        # 1. Create a temporary pipeline job
-        # 2. Trigger a build
-        # 3. Wait for completion
-        # 4. Extract metrics from build result
-        # 5. Clean up test job
-
-        # Placeholder implementation
-        return {
-            "success": True,
-            "metrics": {
-                "duration_seconds": 60.0,
-                "stages_passed": 5,
-                "stages_failed": 0,
+    def _execute_pipeline(self, content: str) -> Dict[str, Any]:
+        """Execute the pipeline on the local woodpecker runner."""
+        try:
+            result = self.runner.run_content(
+                "milady/evolve",
+                content,
+                timeout=self.timeout,
+            )
+            return {
+                "success": result.get("success", False),
+                "duration_seconds": result.get("duration_seconds") or 0.0,
+                "errors": [] if result.get("success") else [f"pipeline status: {result.get('status')}"],
             }
-        }
+        except Exception as e:
+            return {
+                "success": False,
+                "duration_seconds": 0.0,
+                "errors": [str(e)],
+            }
 
 
 # ============================================================================
@@ -490,13 +461,13 @@ class CascadeEvaluator:
     if a candidate fails critical checks.
     """
 
-    def __init__(self, config: Dict[str, Any], jenkins_client=None):
+    def __init__(self, config: Dict[str, Any], runner=None):
         self.config = config
         self.evaluators = [
             ("syntax", SyntaxEvaluator(config), 1.0, True),  # name, evaluator, weight, required
             ("static", StaticAnalysisEvaluator(config), 1.0, False),
-            ("dry_run", JenkinsDryRunEvaluator(config, jenkins_client), 0.5, False),
-            ("execution", LiveExecutionEvaluator(config, jenkins_client), 2.0, False),
+            ("dry_run", DryRunEvaluator(config), 0.5, False),
+            ("execution", ExecutionEvaluator(config, runner), 2.0, False),
         ]
 
         # Filter based on config
@@ -570,34 +541,20 @@ class CascadeEvaluator:
 # ============================================================================
 
 def extract_metrics_from_console(console_output: str) -> Dict[str, float]:
-    """Extract metrics from Jenkins console output."""
+    """Extract generic metrics from a pipeline console output."""
     metrics = {}
 
-    # Duration patterns
-    duration_patterns = [
-        (r"Finished: \w+ in (\d+)m (\d+)s", lambda m: int(m[0]) * 60 + int(m[1])),
-        (r"Build took (\d+\.?\d*) seconds", lambda m: float(m[0])),
-        (r"Total time: (\d+):(\d+)", lambda m: int(m[0]) * 60 + int(m[1])),
-        (r"Duration: (\d+)ms", lambda m: float(m[0]) / 1000),
-    ]
-
-    for pattern, extractor in duration_patterns:
-        match = re.search(pattern, console_output, re.I)
-        if match:
-            metrics["duration_seconds"] = extractor(match.groups())
-            break
-
-    # Success/failure
-    if re.search(r"Finished:\s*SUCCESS", console_output, re.I):
-        metrics["success"] = 1.0
-    elif re.search(r"Finished:\s*(FAILURE|ABORTED)", console_output, re.I):
-        metrics["success"] = 0.0
-
     # Error/warning counts
-    metrics["error_count"] = len(re.findall(r"\[ERROR\]|\bERROR\b", console_output))
-    metrics["warning_count"] = len(re.findall(r"\[WARN\]|\bWARNING\b", console_output))
+    metrics["error_count"] = len(re.findall(r"\[ERROR\]|\bERROR\b|\berror:\b", console_output, re.I))
+    metrics["warning_count"] = len(re.findall(r"\[WARN\]|\bWARNING\b|\bwarning:\b", console_output, re.I))
 
-    # Stage counts
-    metrics["stages_started"] = len(re.findall(r"\[Pipeline\] stage", console_output))
+    # Exit-code markers (ad-hoc execute_command format)
+    exit_match = re.search(r"EXIT CODE:\s*(\d+)", console_output)
+    if exit_match:
+        metrics["exit_code"] = float(exit_match.group(1))
+        metrics["success"] = 1.0 if exit_match.group(1) == "0" else 0.0
+
+    # Step markers (woodpecker xtrace style "+ command")
+    metrics["command_count"] = float(len(re.findall(r"^\s*\+ ", console_output, re.M)))
 
     return metrics

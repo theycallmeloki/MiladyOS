@@ -9,6 +9,7 @@ import logging
 import click
 import colorlog
 from dotenv import load_dotenv
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -114,125 +115,92 @@ def mcp(all_tools, templates_dir, redis_host, redis_port, transport, host, port,
 
 @cli.command()
 @click.argument("template_name")
-@click.option("--job-name", help="Optional job name (defaults to template name)")
-@click.option("--server", default="default", help="Jenkins server to use")
-def deploy(template_name, job_name, server):
-    """Deploy a template to Jenkins."""
+@click.option("--job-name", help="Optional pipeline repo name (defaults to template name)")
+def deploy(template_name, job_name):
+    """Deploy a template as a woodpecker pipeline repo (forge + activate)."""
     from miladyos_metadata import metadata_manager
-    from miladyos_mcp import JenkinsUtils
+    from woodpecker_client import WoodpeckerClient
     import asyncio
-    
+
     job_name = job_name or template_name
-    
+
     async def deploy_async():
         try:
-            # Connect to Jenkins
-            jenkins_server = JenkinsUtils.connect_to_jenkins(server)
-            
-            # Get Jenkinsfile content
-            jenkinsfile_content = JenkinsUtils.get_jenkinsfile_content(template_name)
-            
-            # Delete existing job if it exists
-            await JenkinsUtils.delete_job_if_exists(jenkins_server, job_name)
-            
-            # Create new job
-            await JenkinsUtils.create_job(jenkins_server, job_name, jenkinsfile_content)
-            
+            template_path = Path(template_name)
+            if not template_path.exists():
+                template_path = Path(os.getenv("TEMPLATES_DIR", "templates")) / f"{template_name}.yml"
+            if not template_path.exists():
+                logger.error(f"Template not found: {template_name}")
+                return 1
+
+            client = WoodpeckerClient()
+            client.forge_create_repo(job_name)
+            repo = f"{client.forge_user}/{job_name}"
+            client.forge_upsert_file(repo, ".woodpecker.yml", template_path.read_text())
+            client.repo_id(repo)  # idempotent activation
+
             # Register deployment in metadata system
             deployment_info = metadata_manager.deploy_pipeline(
                 template_name,
                 job_name,
-                server
+                repo
             )
-            
-            logger.info(f"Successfully deployed template {template_name} as job {job_name} on server {server}")
+
+            logger.info(f"Successfully deployed template {template_name} as pipeline repo {repo}")
             logger.info(f"Deployment ID: {deployment_info['id']}")
             return 0
         except Exception as e:
             logger.error(f"Error deploying template: {e}")
             return 1
-    
+
     return asyncio.run(deploy_async())
 
 
 @cli.command()
 @click.argument("template_name")
-@click.option("--job-name", help="Optional job name (defaults to template name)")
-@click.option("--server", default="default", help="Jenkins server to use")
-@click.option("--no-stream", is_flag=True, help="Don't stream console output")
-def run(template_name, job_name, server, no_stream):
-    """Run a pipeline template on Jenkins."""
+@click.option("--repo", "repo_name", help="Pipeline repo to run in (default: milady/<template>)")
+@click.option("--no-stream", is_flag=True, help="Don't print console output")
+def run(template_name, repo_name, no_stream):
+    """Run a pipeline template on the local woodpecker agent."""
     from miladyos_metadata import metadata_manager
-    from miladyos_mcp import JenkinsUtils
+    from woodpecker_client import WoodpeckerClient
     import asyncio
-    
-    job_name = job_name or template_name
+
     stream_output = not no_stream
-    
+
     async def run_async():
         try:
-            # Connect to Jenkins
-            jenkins_server = JenkinsUtils.connect_to_jenkins(server)
-            
-            # Check if job exists
-            if not jenkins_server.job_exists(job_name):
-                logger.info(f"Job {job_name} does not exist. Deploying it first.")
-                
-                # Get Jenkinsfile content
-                jenkinsfile_content = JenkinsUtils.get_jenkinsfile_content(template_name)
-                
-                # Create the job
-                await JenkinsUtils.create_job(jenkins_server, job_name, jenkinsfile_content)
-                
-                # Register deployment in metadata system
-                metadata_manager.deploy_pipeline(
-                    template_name,
-                    job_name,
-                    server
-                )
-            
-            # Start the job
-            job_info = await JenkinsUtils.start_jenkins_job(jenkins_server, job_name)
-            
-            if job_info["status"] == "started":
-                build_number = job_info["build_number"]
-                
-                # Record execution in metadata system
-                execution_info = metadata_manager.record_execution(
-                    template_name=template_name,
-                    jenkins_job_name=job_name,
-                    server_name=server,
-                    build_number=build_number
-                )
-                
-                logger.info(f"Started job {job_name} build #{build_number}")
-                logger.info(f"Execution ID: {execution_info['id']}")
-                
-                # Stream job output if requested
-                if stream_output:
-                    logger.info("Streaming console output...")
-                    result = await JenkinsUtils.stream_job_output(jenkins_server, job_name, build_number)
-                    
-                    # Update execution status in metadata system
-                    metadata_manager.update_execution_status(
-                        execution_info["id"],
-                        "complete" if result["status"] == "SUCCESS" else "failed",
-                        result["status"],
-                        result["console_output"],
-                        jenkins_server.get_build_info(job_name, build_number).get("duration")
-                    )
-                    
-                    logger.info(f"Job completed with status: {result['status']}")
-                    return 0 if result["status"] == "SUCCESS" else 1
-                
-                return 0
-            else:
-                logger.info(f"Job {job_name} is queued. Queue number: {job_info['queue_number']}")
-                return 0
+            template_path = Path(template_name)
+            if not template_path.exists():
+                template_path = Path(os.getenv("TEMPLATES_DIR", "templates")) / f"{template_name}.yml"
+            if not template_path.exists():
+                logger.error(f"Template not found: {template_name}")
+                return 1
+
+            client = WoodpeckerClient()
+            repo = repo_name or f"{client.forge_user}/{template_name}"
+            result = await asyncio.to_thread(client.run_content, repo, template_path.read_text())
+
+            # Record execution in metadata system
+            execution_info = metadata_manager.record_execution(
+                template_name=template_name,
+                pipeline_name=template_name,
+                repo_name=repo,
+                pipeline_id=result["pipeline_id"],
+            )
+
+            logger.info(f"Ran template {template_name} in {repo} (pipeline #{result['pipeline_id']})")
+            logger.info(f"Execution ID: {execution_info['id']}")
+
+            if stream_output:
+                print(result["console"])
+                print(f"\nStatus: {result['status']}")
+
+            return 0 if result["success"] else 1
         except Exception as e:
             logger.error(f"Error running template: {e}")
             return 1
-    
+
     return asyncio.run(run_async())
 
 
@@ -259,22 +227,22 @@ def list_templates():
             # Fallback to filesystem directly
             templates = []
             try:
-                for file in os.listdir(templates_dir):
-                    if file.endswith(".Jenkinsfile"):
-                        template_name = file.replace('.Jenkinsfile', '')
-                        
+                for file in sorted(os.listdir(templates_dir)):
+                    if file.endswith(".yml"):
+                        template_name = file.replace(".yml", '')
+
                         # Try to extract description from file
                         description = "No description provided"
                         try:
                             with open(os.path.join(templates_dir, file), 'r') as f:
                                 content = f.read()
                                 for line in content.split("\n"):
-                                    if line.strip().startswith("// Description:"):
+                                    if line.strip().startswith("# Description:"):
                                         description = line.strip()[15:].strip()
                                         break
                         except Exception:
                             pass
-                            
+
                         templates.append({
                             "name": template_name,
                             "description": description,
@@ -301,20 +269,21 @@ def list_templates():
 @click.argument("template_name")
 def view_template(template_name):
     """View content of a template with line numbers."""
-    from miladyos_mcp import JenkinsUtils
-    
+    import os
+
     try:
-        # Get template content with line numbers
-        template_data = JenkinsUtils.get_jenkinsfile_content(template_name, with_line_numbers=True)
-        
-        # Print path and metadata first
-        logger.info(f"Template path: {template_data.get('path')}")
+        template_path = Path(template_name)
+        if not template_path.exists():
+            template_path = Path(os.getenv("TEMPLATES_DIR", "templates")) / f"{template_name}.yml"
+        if not template_path.exists():
+            raise FileNotFoundError(template_name)
+
+        logger.info(f"Template path: {template_path}")
         logger.info("")
-        
-        # Print the content with line numbers
-        for line_num, line_content in template_data.get("lines", []):
+
+        for line_num, line_content in enumerate(template_path.read_text().split("\n"), start=1):
             print(f"{line_num:4d} | {line_content}")
-        
+
         return 0
     except FileNotFoundError:
         logger.error(f"Template {template_name} not found")
