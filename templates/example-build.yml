@@ -1,0 +1,42 @@
+# Description: Example build pipeline that can be evolved for better performance
+# Usage: Evolution material — install deps, build, test with Node.js
+when:
+  event: manual
+
+variables:
+  NODE_VERSION: '18'
+  BUILD_ENV: production
+
+steps:
+  install:
+    image: node:18-alpine
+    commands:
+      # EVOLVE-BLOCK-START: {"type": "build", "language": "javascript", "goals": ["speed", "reliability"]}
+      - echo "BUILD_ENV=$BUILD_ENV"
+      - npm install
+
+  build:
+    image: node:18-alpine
+    commands:
+      - npm run build
+
+  test:
+    image: node:18-alpine
+    commands:
+      - npm test
+      # EVOLVE-BLOCK-END
+
+  archive:
+    image: node:18-alpine
+    when:
+      status: success
+    commands:
+      - ls -la dist/
+      - echo "Build completed successfully!"
+
+  cleanup:
+    image: node:18-alpine
+    when:
+      status: [success, failure]
+    commands:
+      - echo "pipeline finished"

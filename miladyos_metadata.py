@@ -103,7 +103,7 @@ class RedkaMetadataManager:
             Dictionary with template information
         """
         # Check if template exists in file system
-        template_path = os.path.join(self.templates_dir, f"{template_name}.Jenkinsfile")
+        template_path = os.path.join(self.templates_dir, f"{template_name}.yml")
         if not os.path.exists(template_path):
             logger.error(f"Template file not found: {template_path}")
             raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -172,8 +172,8 @@ class RedkaMetadataManager:
         template_files = []
         try:
             for file in os.listdir(self.templates_dir):
-                if file.endswith(".Jenkinsfile"):
-                    template_name = file.replace('.Jenkinsfile', '')
+                if file.endswith(".yml"):
+                    template_name = file.replace('.yml', '')
                     template_files.append(template_name)
         except Exception as e:
             logger.error(f"Error reading templates directory: {e}")
@@ -228,8 +228,8 @@ class RedkaMetadataManager:
             # Fallback to file system if Redis fails
             for template_name in template_files:
                 try:
-                    # Try to extract description from Jenkinsfile
-                    template_path = os.path.join(self.templates_dir, f"{template_name}.Jenkinsfile")
+                    # Try to extract description from the pipeline file
+                    template_path = os.path.join(self.templates_dir, f"{template_name}.yml")
                     description = "No description provided"
                     try:
                         with open(template_path, 'r') as f:
@@ -252,14 +252,14 @@ class RedkaMetadataManager:
         
         return templates
     
-    def deploy_pipeline(self, template_name: str, jenkins_job_name: str, server_name: str) -> Dict[str, Any]:
+    def deploy_pipeline(self, template_name: str, pipeline_name: str, repo_name: str) -> Dict[str, Any]:
         """
         Register a pipeline deployment with the metadata system.
         
         Args:
             template_name: Name of the template to deploy
-            jenkins_job_name: Name of the Jenkins job
-            server_name: Name of the Jenkins server
+            pipeline_name: Name of the pipeline
+            repo_name: Name of the repo
             
         Returns:
             Dictionary with deployment information
@@ -281,8 +281,8 @@ class RedkaMetadataManager:
             "id": deployment_id,
             "template_name": template_name,
             "template_version": template_data.get("version", 1),
-            "jenkins_job_name": jenkins_job_name,
-            "server_name": server_name,
+            "pipeline_name": pipeline_name,
+            "repo_name": repo_name,
             "deployed_at": now,
             "status": "deployed"
         }
@@ -296,18 +296,18 @@ class RedkaMetadataManager:
         self.redis.sadd(template_deployments_key, deployment_id)
         
         # Add deployment to job lookup index
-        job_index_key = f"miladyos:job_index:{server_name}:{jenkins_job_name}"
-        self.redis.set(job_index_key, deployment_id)
+        pipeline_index_key = f"miladyos:pipeline_index:{repo_name}:{pipeline_name}"
+        self.redis.set(pipeline_index_key, deployment_id)
         
-        logger.info(f"Deployed pipeline: {template_name} as {jenkins_job_name} on {server_name}")
+        logger.info(f"Deployed pipeline: {template_name} as {pipeline_name} on {repo_name}")
         return deployment_info
     
     def record_execution(self, 
                        deployment_id: str = None,
                        template_name: str = None, 
-                       jenkins_job_name: str = None, 
-                       server_name: str = None,
-                       build_number: int = None,
+                       pipeline_name: str = None, 
+                       repo_name: str = None,
+                       pipeline_id: int = None,
                        parameters: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Record a pipeline execution in the metadata system.
@@ -315,18 +315,18 @@ class RedkaMetadataManager:
         Args:
             deployment_id: ID of the deployment to execute
             template_name: Name of the template (required if deployment_id not provided)
-            jenkins_job_name: Name of the Jenkins job (required if deployment_id not provided)
-            server_name: Name of the Jenkins server (required if deployment_id not provided)
-            build_number: Jenkins build number
+            pipeline_name: Name of the pipeline (required if deployment_id not provided)
+            repo_name: Name of the repo (required if deployment_id not provided)
+            pipeline_id: pipeline id
             parameters: Parameters used for the execution
             
         Returns:
             Dictionary with execution information
         """
         # Find deployment ID if not provided
-        if not deployment_id and template_name and jenkins_job_name and server_name:
-            job_index_key = f"miladyos:job_index:{server_name}:{jenkins_job_name}"
-            deployment_id = self.redis.get(job_index_key)
+        if not deployment_id and template_name and pipeline_name and repo_name:
+            pipeline_index_key = f"miladyos:pipeline_index:{repo_name}:{pipeline_name}"
+            deployment_id = self.redis.get(pipeline_index_key)
         
         # Generate a unique execution ID
         execution_id = str(uuid.uuid4())
@@ -338,9 +338,9 @@ class RedkaMetadataManager:
             "id": execution_id,
             "deployment_id": deployment_id if deployment_id else "",
             "template_name": template_name if template_name else "",
-            "jenkins_job_name": jenkins_job_name if jenkins_job_name else "",
-            "server_name": server_name if server_name else "",
-            "build_number": str(build_number) if build_number is not None else "",
+            "pipeline_name": pipeline_name if pipeline_name else "",
+            "repo_name": repo_name if repo_name else "",
+            "pipeline_id": str(pipeline_id) if pipeline_id is not None else "",
             "parameters": json.dumps(parameters or {}),  # Store parameters as JSON string
             "started_at": now,
             "status": "running",
@@ -384,8 +384,8 @@ class RedkaMetadataManager:
                 self.redis.zadd(f"miladyos:template_executions:{template_name}", {execution_id: now_ts})
             
             # Job-specific execution list
-            if jenkins_job_name and server_name:
-                self.redis.zadd(f"miladyos:job_executions:{server_name}:{jenkins_job_name}", {execution_id: now_ts})
+            if pipeline_name and repo_name:
+                self.redis.zadd(f"miladyos:pipeline_executions:{repo_name}:{pipeline_name}", {execution_id: now_ts})
             
             # Status-specific set
             self.redis.sadd("miladyos:status:running", execution_id)
@@ -399,7 +399,7 @@ class RedkaMetadataManager:
         else:
             logger.info(f"Successfully verified execution in Redis: {execution_key}")
         
-        logger.info(f"Recorded execution: {execution_id} for {jenkins_job_name} #{build_number}")
+        logger.info(f"Recorded execution: {execution_id} for {pipeline_name} #{pipeline_id}")
         return execution_info
     
     def update_execution_status(self, execution_id: str, status: str, result: str = None,
@@ -492,10 +492,10 @@ class RedkaMetadataManager:
                 self.redis.zadd(f"miladyos:template_executions:{template_name}", {execution_id: time.time()})
             
             # Add to job-specific list if not already there
-            jenkins_job_name = updated_info.get("jenkins_job_name")
-            server_name = updated_info.get("server_name")
-            if jenkins_job_name and server_name:
-                self.redis.zadd(f"miladyos:job_executions:{server_name}:{jenkins_job_name}", {execution_id: time.time()})
+            pipeline_name = updated_info.get("pipeline_name")
+            repo_name = updated_info.get("repo_name")
+            if pipeline_name and repo_name:
+                self.redis.zadd(f"miladyos:pipeline_executions:{repo_name}:{pipeline_name}", {execution_id: time.time()})
             
             # Handle parameters (convert JSON string back to dict)
             if "parameters" in updated_info and updated_info["parameters"]:
@@ -770,7 +770,7 @@ class MetadataManager:
     """
     Metadata Management System for MiladyOS pipelines.
     Handles storage and retrieval of pipeline execution metadata,
-    independent of Jenkins build numbers.
+    independent of pipeline ids.
     """
 
     def __init__(self, metadata_dir: str = None, templates_dir: str = None):
@@ -846,7 +846,7 @@ class MetadataManager:
         metadata = self._load_metadata()
         
         # Check if template exists in file system
-        template_path = os.path.join(self.templates_dir, f"{template_name}.Jenkinsfile")
+        template_path = os.path.join(self.templates_dir, f"{template_name}.yml")
         if not os.path.exists(template_path):
             logger.error(f"Template file not found: {template_path}")
             raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -873,7 +873,7 @@ class MetadataManager:
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
             "version": 1,
-            "jenkins_jobs": []
+            "pipelines": []
         }
         
         # Update version if pipeline already exists
@@ -881,7 +881,7 @@ class MetadataManager:
             existing_info = metadata["pipelines"][template_name]
             pipeline_info["version"] = existing_info.get("version", 0) + 1
             pipeline_info["created_at"] = existing_info.get("created_at", pipeline_info["created_at"])
-            pipeline_info["jenkins_jobs"] = existing_info.get("jenkins_jobs", [])
+            pipeline_info["pipelines"] = existing_info.get("pipelines", [])
         
         metadata["pipelines"][template_name] = pipeline_info
         self._save_metadata(metadata)
@@ -899,8 +899,8 @@ class MetadataManager:
         # First, check the file system for templates
         template_files = []
         for file in os.listdir(self.templates_dir):
-            if file.endswith(".Jenkinsfile"):
-                template_name = file.replace('.Jenkinsfile', '')
+            if file.endswith(".yml"):
+                template_name = file.replace('.yml', '')
                 template_files.append(template_name)
         
         # Then, update metadata to ensure it's in sync with the file system
@@ -935,14 +935,14 @@ class MetadataManager:
         
         return templates
     
-    def deploy_pipeline(self, template_name: str, jenkins_job_name: str, server_name: str) -> Dict[str, Any]:
+    def deploy_pipeline(self, template_name: str, pipeline_name: str, repo_name: str) -> Dict[str, Any]:
         """
         Register a pipeline deployment with the metadata system.
         
         Args:
             template_name: Name of the template to deploy
-            jenkins_job_name: Name of the Jenkins job
-            server_name: Name of the Jenkins server
+            pipeline_name: Name of the pipeline
+            repo_name: Name of the repo
             
         Returns:
             Dictionary with deployment information
@@ -961,16 +961,16 @@ class MetadataManager:
             "id": deployment_id,
             "template_name": template_name,
             "template_version": pipeline_info.get("version", 1),
-            "jenkins_job_name": jenkins_job_name,
-            "server_name": server_name,
+            "pipeline_name": pipeline_name,
+            "repo_name": repo_name,
             "deployed_at": datetime.now().isoformat(),
             "status": "deployed"
         }
         
         # Update pipeline info
-        pipeline_info["jenkins_jobs"].append({
-            "job_name": jenkins_job_name,
-            "server_name": server_name,
+        pipeline_info["pipelines"].append({
+            "pipeline_name": pipeline_name,
+            "repo_name": repo_name,
             "deployment_id": deployment_id,
             "deployed_at": deployment_info["deployed_at"]
         })
@@ -978,15 +978,15 @@ class MetadataManager:
         metadata["pipelines"][template_name] = pipeline_info
         self._save_metadata(metadata)
         
-        logger.info(f"Deployed pipeline: {template_name} as {jenkins_job_name} on {server_name}")
+        logger.info(f"Deployed pipeline: {template_name} as {pipeline_name} on {repo_name}")
         return deployment_info
     
     def record_execution(self, 
                       deployment_id: str = None,
                       template_name: str = None, 
-                      jenkins_job_name: str = None, 
-                      server_name: str = None,
-                      build_number: int = None,
+                      pipeline_name: str = None, 
+                      repo_name: str = None,
+                      pipeline_id: int = None,
                       parameters: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Record a pipeline execution in the metadata system.
@@ -994,9 +994,9 @@ class MetadataManager:
         Args:
             deployment_id: ID of the deployment to execute
             template_name: Name of the template (required if deployment_id not provided)
-            jenkins_job_name: Name of the Jenkins job (required if deployment_id not provided)
-            server_name: Name of the Jenkins server (required if deployment_id not provided)
-            build_number: Jenkins build number
+            pipeline_name: Name of the pipeline (required if deployment_id not provided)
+            repo_name: Name of the repo (required if deployment_id not provided)
+            pipeline_id: pipeline id
             parameters: Parameters used for the execution
             
         Returns:
@@ -1008,12 +1008,12 @@ class MetadataManager:
         execution_id = str(uuid.uuid4())
         
         # Find deployment info if deployment_id not provided
-        if not deployment_id and template_name and jenkins_job_name and server_name:
+        if not deployment_id and template_name and pipeline_name and repo_name:
             if template_name in metadata["pipelines"]:
                 pipeline_info = metadata["pipelines"][template_name]
-                for job_info in pipeline_info.get("jenkins_jobs", []):
-                    if (job_info["job_name"] == jenkins_job_name and 
-                        job_info["server_name"] == server_name):
+                for job_info in pipeline_info.get("pipelines", []):
+                    if (job_info["pipeline_name"] == pipeline_name and 
+                        job_info["repo_name"] == repo_name):
                         deployment_id = job_info["deployment_id"]
                         break
         
@@ -1022,9 +1022,9 @@ class MetadataManager:
             "id": execution_id,
             "deployment_id": deployment_id,
             "template_name": template_name,
-            "jenkins_job_name": jenkins_job_name,
-            "server_name": server_name,
-            "build_number": build_number,
+            "pipeline_name": pipeline_name,
+            "repo_name": repo_name,
+            "pipeline_id": pipeline_id,
             "parameters": parameters or {},
             "started_at": datetime.now().isoformat(),
             "status": "running",
@@ -1037,7 +1037,7 @@ class MetadataManager:
         metadata["executions"].append(execution_info)
         self._save_metadata(metadata)
         
-        logger.info(f"Recorded execution: {execution_id} for {jenkins_job_name} #{build_number}")
+        logger.info(f"Recorded execution: {execution_id} for {pipeline_name} #{pipeline_id}")
         return execution_info
     
     def update_execution_status(self, execution_id: str, status: str, result: str = None,

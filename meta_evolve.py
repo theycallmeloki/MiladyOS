@@ -174,6 +174,7 @@ class MetaEvolutionEngine:
         and learns which parameters work best for this template type.
         """
         from alpha_evolve import AlphaEvolveEngine
+        from woodpecker_client import WoodpeckerClient
 
         logger.info(f"Starting meta-evolution for {template_path}")
 
@@ -204,7 +205,7 @@ class MetaEvolutionEngine:
                     try:
                         # Create engine with candidate config
                         full_config = self._merge_config(candidate.config)
-                        engine = AlphaEvolveEngine(full_config)
+                        engine = AlphaEvolveEngine(full_config, runner=WoodpeckerClient())
 
                         # Run a short evolution
                         full_config["evolution"]["max_generations"] = 10  # Quick test
@@ -325,25 +326,29 @@ class EvolveBlockGenerator:
     }
 
     def analyze_template(self, content: str) -> List[EvolveBlockSpec]:
-        """Analyze a template and identify potential EVOLVE-BLOCK candidates."""
+        """Analyze a YAML pipeline template for EVOLVE-BLOCK candidates."""
         specs = []
 
-        # Find stages without EVOLVE-BLOCK markers
+        # Find steps (2-space indented "<name>:" keys) without markers
         import re
 
-        # Find all stage blocks
-        stage_pattern = r"stage\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}"
-        stages = re.findall(stage_pattern, content, re.DOTALL)
+        # Split into step blocks: each step is "<name>:" followed by its
+        # indented properties until the next 2-space key.
+        step_headers = list(re.finditer(r"^  ([a-z0-9_-]+):\s*$", content, re.M))
+        for idx, header in enumerate(step_headers):
+            start = header.end()
+            end = step_headers[idx + 1].start() if idx + 1 < len(step_headers) else len(content)
+            step_name = header.group(1)
+            step_content = content[start:end]
 
-        for stage_name, stage_content in stages:
             # Skip if already has EVOLVE-BLOCK
-            if "EVOLVE-BLOCK" in stage_content:
+            if "EVOLVE-BLOCK" in step_content or "EVOLVE-BLOCK" in step_name:
                 continue
 
-            # Classify the stage
-            block_type = self._classify_stage(stage_name, stage_content)
-            language = self._detect_language(stage_content)
-            complexity = self._estimate_complexity(stage_content)
+            # Skip control keys (when/variables at the top level are 0-indent)
+            block_type = self._classify_stage(step_name, step_content)
+            language = self._detect_language(step_content)
+            complexity = self._estimate_complexity(step_content)
 
             if block_type:
                 spec = EvolveBlockSpec(
@@ -357,14 +362,14 @@ class EvolveBlockGenerator:
         return specs
 
     def inject_evolve_blocks(self, content: str, specs: List[EvolveBlockSpec]) -> str:
-        """Inject EVOLVE-BLOCK markers into a template."""
+        """Inject EVOLVE-BLOCK markers into a YAML template (as comments)."""
         import re
 
         modified = content
 
         for spec in specs:
-            # Find matching stage
-            pattern = rf"(stage\s*\(\s*['\"][^'\"]*{spec.block_type}[^'\"]*['\"]\s*\)\s*\{{)"
+            # Find the first step whose name/content matches the block type
+            pattern = rf"^  ([a-z0-9_-]*{re.escape(spec.block_type)}[a-z0-9_-]*):\s*$"
 
             def replacement(match):
                 metadata = json.dumps({
@@ -374,13 +379,9 @@ class EvolveBlockGenerator:
                     "optimization_priority": spec.goals,
                 }, indent=2)
 
-                return f"""// EVOLVE-BLOCK-START: {metadata}
-{match.group(1)}"""
+                return f"# EVOLVE-BLOCK-START: {metadata}\n{match.group(0)}"
 
             modified = re.sub(pattern, replacement, modified, flags=re.IGNORECASE, count=1)
-
-            # Add END marker (simplified - would need proper brace matching in production)
-            # For now, we'll add a comment suggesting where to add it
 
         return modified
 
@@ -499,7 +500,8 @@ class EvolutionChainManager:
 
         # Run evolution
         config = load_config()
-        engine = AlphaEvolveEngine(config)
+        from woodpecker_client import WoodpeckerClient
+        engine = AlphaEvolveEngine(config, runner=WoodpeckerClient())
         result = await engine.evolve(str(template_path), goal)
 
         # Record in chain
@@ -520,12 +522,12 @@ class EvolutionChainManager:
 
         if evolved_dir.exists():
             # Find most recent evolved version
-            evolved_files = list(evolved_dir.glob(f"{template_name}_evolved_*.Jenkinsfile"))
+            evolved_files = list(evolved_dir.glob(f"{template_name}_evolved_*.yml"))
             if evolved_files:
                 return max(evolved_files, key=lambda f: f.stat().st_mtime)
 
         # Fall back to original
-        return Path("templates") / f"{template_name}.Jenkinsfile"
+        return Path("templates") / f"{template_name}.yml"
 
 
 # ============================================================================
@@ -552,7 +554,7 @@ async def main():
         config = load_config()
         engine = MetaEvolutionEngine(config)
 
-        template_path = Path("templates") / f"{template}.Jenkinsfile"
+        template_path = Path("templates") / f"{template}.yml"
         if not template_path.exists():
             click.echo(f"Template not found: {template}")
             return
@@ -572,7 +574,7 @@ async def main():
     @click.option("--template", "-t", required=True, help="Template to analyze")
     def analyze(template: str):
         """Analyze a template for evolution opportunities."""
-        template_path = Path("templates") / f"{template}.Jenkinsfile"
+        template_path = Path("templates") / f"{template}.yml"
         if not template_path.exists():
             click.echo(f"Template not found: {template}")
             return
@@ -594,7 +596,7 @@ async def main():
     @click.option("--output", "-o", help="Output file (default: modify in place)")
     def inject_blocks(template: str, output: str):
         """Inject EVOLVE-BLOCK markers into a template."""
-        template_path = Path("templates") / f"{template}.Jenkinsfile"
+        template_path = Path("templates") / f"{template}.yml"
         if not template_path.exists():
             click.echo(f"Template not found: {template}")
             return
