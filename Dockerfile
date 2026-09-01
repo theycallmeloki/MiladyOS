@@ -565,9 +565,9 @@ USER root
 # redka never started (blocked the MCP redis dep) and the MCP server crashed
 # on PermissionError: 'templates'.
 # /etc/woodpecker lets the agent persist its config (avoids the boot-log error).
-RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata \
+RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata /app/evolved_templates \
         /etc/filebrowser-metrics /etc/filebrowser-models && \
-    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata \
+    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata /app/evolved_templates \
         /etc/filebrowser-metrics /etc/filebrowser-models
 # MiladyOS UI branding: logo.svg -> header logo + favicon (custom.css/js hooks,
 # served at /assets/custom.* via WOODPECKER_CUSTOM_*_FILE), and the rasterized
