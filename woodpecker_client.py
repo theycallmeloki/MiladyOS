@@ -1,0 +1,249 @@
+"""Woodpecker/Forgejo plumbing behind the MCP pipeline tools.
+
+Model B: milady only sees local files + "submit run". This client hides the
+forge repo/file mechanics, the API token, repo activation and pipeline
+triggering. Every endpoint here was verified live against woodpecker v3.18 +
+forgejo 16.0.3; startup.sh performs the boot-time token dance that persists
+WOODPECKER_TOKEN to /var/lib/woodpecker/.secrets (this client re-reads the
+file lazily, since the MCP server boots before Phase B runs).
+"""
+
+import base64
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import httpx
+
+logger = logging.getLogger("woodpecker")
+
+SECRETS_FILE = Path("/var/lib/woodpecker/.secrets")
+
+
+def _load_secrets() -> Dict[str, str]:
+    secrets: Dict[str, str] = {}
+    try:
+        for line in SECRETS_FILE.read_text().splitlines():
+            line = line.strip()
+            if line and "=" in line and not line.startswith("#"):
+                key, _, value = line.partition("=")
+                secrets[key] = value
+    except OSError:
+        pass
+    return secrets
+
+
+class WoodpeckerClient:
+    """Thin, verified client for the local Woodpecker/Forgejo stack."""
+
+    def __init__(self) -> None:
+        self.wp_url = os.getenv("WOODPECKER_URL", "http://localhost:8000").rstrip("/")
+        self.forge_url = os.getenv("FORGE_PUBLIC_URL", "http://172.17.0.1:3000").rstrip("/")
+        self.forge_user = os.getenv("JENKINS_ADMIN_ID", "milady")
+        self.forge_pass = os.getenv("JENKINS_ADMIN_PASSWORD", "milady")
+        self._token: Optional[str] = None
+        self._repo_ids: Dict[str, int] = {}
+        self._timeout = httpx.Timeout(30.0)
+
+    # ---- auth --------------------------------------------------------------
+
+    def token(self) -> str:
+        # Lazy + re-read per call: startup.sh writes .secrets after the MCP
+        # server boots, so the token may appear long after first use.
+        if self._token is None:
+            self._token = os.getenv("WOODPECKER_TOKEN") or _load_secrets().get("WOODPECKER_TOKEN", "")
+        if not self._token:
+            raise RuntimeError(
+                "WOODPECKER_TOKEN missing — the startup token dance has not run; "
+                "check /var/lib/woodpecker/.secrets"
+            )
+        return self._token
+
+    def _wp_headers(self) -> Dict[str, str]:
+        return {"Authorization": f"Bearer {self.token()}"}
+
+    # ---- forge plumbing (repo + file mechanics) -----------------------------
+
+    def forge_create_repo(self, name: str) -> None:
+        """Create the forge repo if missing (auto-init on main)."""
+        with httpx.Client(timeout=self._timeout) as client:
+            response = client.post(
+                f"{self.forge_url}/api/v1/user/repos",
+                auth=(self.forge_user, self.forge_pass),
+                json={"name": name, "auto_init": True, "private": False, "default_branch": "main"},
+            )
+            if response.status_code == 409:
+                return
+            if response.status_code != 201:
+                raise RuntimeError(f"forge create repo {name}: {response.status_code} {response.text[:200]}")
+
+    def forge_upsert_file(self, repo: str, path: str, content: str) -> None:
+        """Create or update a file in the forge repo (contents API)."""
+        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        with httpx.Client(timeout=self._timeout) as client:
+            current = client.get(
+                f"{self.forge_url}/api/v1/repos/{repo}/contents/{path}",
+                auth=(self.forge_user, self.forge_pass),
+            )
+            payload: Dict[str, Any] = {"content": encoded, "message": f"miladyos_mcp: update {path}"}
+            if current.status_code == 200:
+                payload["sha"] = current.json()["sha"]
+            elif current.status_code != 404:
+                raise RuntimeError(f"forge read {path}: {current.status_code} {current.text[:200]}")
+            response = client.post(
+                f"{self.forge_url}/api/v1/repos/{repo}/contents/{path}",
+                auth=(self.forge_user, self.forge_pass),
+                json=payload,
+            )
+            if response.status_code not in (200, 201):
+                raise RuntimeError(f"forge write {path}: {response.status_code} {response.text[:200]}")
+
+    # ---- woodpecker surface (activate / trigger / status / logs) ------------
+
+    def repo_id(self, repo: str) -> int:
+        """Woodpecker repo id; activates the repo first if needed (idempotent)."""
+        cached = self._repo_ids.get(repo)
+        if cached is not None:
+            return cached
+        with httpx.Client(timeout=self._timeout) as client:
+            listed = client.get(f"{self.wp_url}/api/repos", headers=self._wp_headers())
+            listed.raise_for_status()
+            for row in listed.json():
+                if row.get("full_name") == repo:
+                    self._repo_ids[repo] = int(row["id"])
+                    return int(row["id"])
+            remote = client.get(
+                f"{self.forge_url}/api/v1/repos/{repo}",
+                auth=(self.forge_user, self.forge_pass),
+            )
+            remote.raise_for_status()
+            remote_id = int(remote.json()["id"])
+            response = client.post(
+                f"{self.wp_url}/api/repos?forge_remote_id={remote_id}",
+                headers=self._wp_headers(),
+            )
+            if response.status_code not in (200, 201):
+                raise RuntimeError(f"activate {repo}: {response.status_code} {response.text[:200]}")
+            self._repo_ids[repo] = int(response.json()["id"])
+            return int(response.json()["id"])
+
+    def trigger(
+        self,
+        repo: str,
+        branch: str = "main",
+        variables: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Trigger a pipeline; returns the created pipeline's summary."""
+        repo_id = self.repo_id(repo)
+        payload: Dict[str, Any] = {"branch": branch}
+        if variables:
+            payload["variables"] = variables
+        with httpx.Client(timeout=self._timeout) as client:
+            response = client.post(
+                f"{self.wp_url}/api/repos/{repo_id}/pipelines",
+                headers=self._wp_headers(),
+                json=payload,
+            )
+            if response.status_code not in (200, 201):
+                raise RuntimeError(f"trigger {repo}: {response.status_code} {response.text[:200]}")
+            pipeline = response.json()
+            return {
+                "pipeline_id": int(pipeline["id"]),
+                "number": pipeline.get("number"),
+                "status": pipeline.get("status"),
+                "event": pipeline.get("event"),
+                "repo": repo,
+            }
+
+    def pipeline_status(self, repo: str, pipeline_id: int) -> Dict[str, Any]:
+        """Pipeline state plus a per-step summary."""
+        raw = self._pipeline(repo, pipeline_id)
+        steps = []
+        for workflow in raw.get("workflows", []):
+            for step in workflow.get("children", []):
+                steps.append(
+                    {
+                        "name": step.get("name"),
+                        "state": step.get("state"),
+                        "exit_code": step.get("exit_code"),
+                    }
+                )
+        return {
+            "pipeline_id": pipeline_id,
+            "number": raw.get("number"),
+            "status": raw.get("status"),
+            "event": raw.get("event"),
+            "branch": raw.get("branch"),
+            "created": raw.get("created"),
+            "steps": steps,
+        }
+
+    def pipeline_logs(self, repo: str, pipeline_id: int) -> List[Dict[str, Any]]:
+        """Per-step logs, decoded from the base64-per-line wire format."""
+        raw = self._pipeline(repo, pipeline_id)
+        repo_id = self.repo_id(repo)
+        out: List[Dict[str, Any]] = []
+        with httpx.Client(timeout=self._timeout) as client:
+            for workflow in raw.get("workflows", []):
+                for step in workflow.get("children", []):
+                    step_id = step.get("id")
+                    if not step_id:
+                        continue
+                    logs_response = client.get(
+                        f"{self.wp_url}/api/repos/{repo_id}/logs/{pipeline_id}/{step_id}",
+                        headers=self._wp_headers(),
+                    )
+                    lines: List[str] = []
+                    if logs_response.status_code == 200:
+                        for entry in logs_response.json():
+                            if isinstance(entry, str):
+                                try:
+                                    lines.append(
+                                        base64.b64decode(entry).decode("utf-8", "replace").rstrip("\n")
+                                    )
+                                except Exception:
+                                    lines.append(entry)
+                            else:
+                                lines.append(str(entry))
+                    out.append(
+                        {
+                            "step": step.get("name"),
+                            "state": step.get("state"),
+                            "exit_code": step.get("exit_code"),
+                            "lines": lines,
+                        }
+                    )
+        return out
+
+    def list_pipelines(self, repo: str, limit: int = 10) -> List[Dict[str, Any]]:
+        repo_id = self.repo_id(repo)
+        with httpx.Client(timeout=self._timeout) as client:
+            response = client.get(
+                f"{self.wp_url}/api/repos/{repo_id}/pipelines",
+                params={"limit": limit},
+                headers=self._wp_headers(),
+            )
+            response.raise_for_status()
+            return [
+                {
+                    "pipeline_id": p.get("id"),
+                    "number": p.get("number"),
+                    "status": p.get("status"),
+                    "event": p.get("event"),
+                    "branch": p.get("branch"),
+                    "created": p.get("created"),
+                }
+                for p in response.json()
+            ]
+
+    def _pipeline(self, repo: str, pipeline_id: int) -> Dict[str, Any]:
+        repo_id = self.repo_id(repo)
+        with httpx.Client(timeout=self._timeout) as client:
+            response = client.get(
+                f"{self.wp_url}/api/repos/{repo_id}/pipelines/{pipeline_id}",
+                headers=self._wp_headers(),
+            )
+            response.raise_for_status()
+            return response.json()

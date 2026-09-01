@@ -183,7 +183,7 @@ RUN uv venv .venv && \
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # Copy Python source files
-COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_evaluators.py meta_evolve.py milady_oracle.py /app/
+COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_evaluators.py meta_evolve.py milady_oracle.py woodpecker_client.py /app/
 
 # Copy TempleOS HolyC scripts for Milady Oracle
 COPY templeos/ /opt/templeos/scripts/
