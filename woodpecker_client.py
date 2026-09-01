@@ -42,8 +42,8 @@ class WoodpeckerClient:
     def __init__(self) -> None:
         self.wp_url = os.getenv("WOODPECKER_URL", "http://localhost:8000").rstrip("/")
         self.forge_url = os.getenv("FORGE_PUBLIC_URL", "http://172.17.0.1:3000").rstrip("/")
-        self.forge_user = os.getenv("JENKINS_ADMIN_ID", "milady")
-        self.forge_pass = os.getenv("JENKINS_ADMIN_PASSWORD", "milady")
+        self.forge_user = os.getenv("MILADY_ADMIN_ID", "milady")
+        self.forge_pass = os.getenv("MILADY_ADMIN_PASSWORD", "milady")
         self._token: Optional[str] = None
         self._repo_ids: Dict[str, int] = {}
         self._timeout = httpx.Timeout(30.0)

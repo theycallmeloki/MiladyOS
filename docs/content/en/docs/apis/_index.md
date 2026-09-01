@@ -107,21 +107,21 @@ Execute arbitrary CLI commands (with session tracking).
 
 ---
 
-#### create_jenkins_job
+#### create_pipeline
 
-Create a Jenkins pipeline job from Jenkinsfile content.
+Create a pipeline repo from `.woodpecker.yml` content.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `job_name` | string | Yes | Name of the Jenkins job to create |
-| `jenkinsfile_content` | string | Yes | Full Jenkinsfile pipeline script content |
-| `server_name` | string | No | Jenkins server (default: default) |
+| `repo_name` | string | Yes | Name of the pipeline repo to create |
+| `pipeline_content` | string | Yes | Full `.woodpecker.yml` pipeline content |
+
 
 ```json
 // Request
 {
   "job_name": "youtube-dl",
-  "jenkinsfile_content": "pipeline { agent any; stages { stage('x') { steps { echo 'hi' } } } }"
+  "pipeline_content": "when:\n  event: manual\nsteps:\n  hi:\n    image: alpine:3.20\n    commands:\n      - echo hi"
 }
 
 // Response
@@ -135,7 +135,7 @@ Create a Jenkins pipeline job from Jenkinsfile content.
 
 #### evolve_template
 
-Start evolutionary optimization of a Jenkins pipeline.
+Start evolutionary optimization of a Woodpecker CI pipeline.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -200,7 +200,7 @@ Check status of running/completed evolution.
   "status": "completed",
   "generations": 47,
   "best_fitness": 0.8234,
-  "output_path": "evolved_templates/example-build_evolved_speed_20240115.Jenkinsfile"
+  "output_path": "evolved_templates/example-build_evolved_speed_20240115.yml"
 }
 ```
 
@@ -250,7 +250,7 @@ List all evolved template versions.
   "success": true,
   "templates": [
     {
-      "filename": "example-build_evolved_speed_20240115_143022.Jenkinsfile",
+      "filename": "example-build_evolved_speed_20240115_143022.yml",
       "original_template": "example-build",
       "path": "evolved_templates/...",
       "metadata": {

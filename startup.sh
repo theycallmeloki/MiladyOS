@@ -199,13 +199,13 @@ if command -v filebrowser > /dev/null 2>&1; then
     # bbolt lock on its db (post-start updates time out — first-run admin/admin
     # was never re-pointed). v2.63 also enforces a 12-char minimum password, so
     # literal 'milady' is rejected by the CLI; 'miladymilady' keeps the theme
-    # (JENKINS_ADMIN_PASSWORD is honored when >= 12 chars). On restarts the db
+    # (MILADY_ADMIN_PASSWORD is honored when >= 12 chars). On restarts the db
     # already has the user; `users add` then fails harmlessly.
-    FBPASSWORD="${JENKINS_ADMIN_PASSWORD:-miladymilady}"
+    FBPASSWORD="${MILADY_ADMIN_PASSWORD:-miladymilady}"
     [ "${#FBPASSWORD}" -ge 12 ] || FBPASSWORD="miladymilady"
     for fbdb in /etc/filebrowser-metrics/filebrowser.db /etc/filebrowser-models/filebrowser.db; do
         [ -f "$fbdb" ] || filebrowser config init -d "$fbdb" >/dev/null 2>&1 || true
-        filebrowser users add "${JENKINS_ADMIN_ID:-milady}" "$FBPASSWORD" --perm.admin \
+        filebrowser users add "${MILADY_ADMIN_ID:-milady}" "$FBPASSWORD" --perm.admin \
             -d "$fbdb" >/dev/null 2>&1 || true
     done
 
@@ -409,13 +409,13 @@ if command -v gotty > /dev/null 2>&1; then
     # --permit-write allows input (interactive)
     # --reconnect attempts to reconnect on disconnect
     # --title-format sets the browser tab title
-    # Original container login (Jenkins UI) was milady/milady; GoTTY terminal
+    # Original container login was milady/milady; GoTTY terminal
     # is the operator surface now, so basic-auth it with the same defaults.
     gotty --port 8088 \
           --address 0.0.0.0 \
           --permit-write \
           --reconnect \
-          --credential "${JENKINS_ADMIN_ID:-milady}:${JENKINS_ADMIN_PASSWORD:-milady}" \
+          --credential "${MILADY_ADMIN_ID:-milady}:${MILADY_ADMIN_PASSWORD:-milady}" \
           --title-format "MiladyOS Terminal" \
           /bin/bash &
     sleep 2
@@ -495,10 +495,10 @@ INI
         echo "✓ forgejo ready on :3000"
         # Bootstrap the local admin (idempotent). MIN_PASSWORD_LEN=6 admits milady.
         forgejo admin user create -w "$FG" \
-            --admin --username "${JENKINS_ADMIN_ID:-milady}" \
-            --password "${JENKINS_ADMIN_PASSWORD:-milady}" \
+            --admin --username "${MILADY_ADMIN_ID:-milady}" \
+            --password "${MILADY_ADMIN_PASSWORD:-milady}" \
             --email milady@localhost --must-change-password=false > /dev/null 2>&1 || true
-        echo "✓ forgejo admin ${JENKINS_ADMIN_ID:-milady} ensured"
+        echo "✓ forgejo admin ${MILADY_ADMIN_ID:-milady} ensured"
         # MiladyOS logo as the forge profile picture (the woodpecker UI shows
         # the forge avatar). The web settings endpoint needs a session cookie
         # (basic auth 303s to /user/login); re-upload is idempotent.
@@ -506,8 +506,8 @@ INI
             FGSESSION=$(mktemp)
             curl -sf -m 10 -c "$FGSESSION" "http://localhost:3000/user/login" > /dev/null 2>&1
             curl -sf -m 10 -b "$FGSESSION" -c "$FGSESSION" -X POST "http://localhost:3000/user/login" \
-                --data-urlencode "user_name=${JENKINS_ADMIN_ID:-milady}" \
-                --data-urlencode "password=${JENKINS_ADMIN_PASSWORD:-milady}" > /dev/null 2>&1
+                --data-urlencode "user_name=${MILADY_ADMIN_ID:-milady}" \
+                --data-urlencode "password=${MILADY_ADMIN_PASSWORD:-milady}" > /dev/null 2>&1
             curl -sf -m 20 -b "$FGSESSION" -X POST "http://localhost:3000/user/settings/avatar" \
                 -F "source=local" -F "avatar=@/etc/woodpecker/milady-avatar.png" > /dev/null 2>&1 \
                 && echo "✓ forge avatar set to the MiladyOS logo" || echo "WARNING: forge avatar upload failed"
@@ -520,7 +520,7 @@ INI
             # secrets (client_secret is only returned once, at creation).
             WOODPECKER_AGENT_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
             WOODPECKER_GRPC_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
-            OAUTH_JSON="$(curl -sf -m 10 -u "${JENKINS_ADMIN_ID:-milady}:${JENKINS_ADMIN_PASSWORD:-milady}" -X POST \
+            OAUTH_JSON="$(curl -sf -m 10 -u "${MILADY_ADMIN_ID:-milady}:${MILADY_ADMIN_PASSWORD:-milady}" -X POST \
                 http://localhost:3000/api/v1/user/applications/oauth2 \
                 -H "Content-Type: application/json" \
                 -d '{"name":"woodpecker","redirect_uris":["http://localhost:8000/authorize"],"confidential_client":true}')"
@@ -555,7 +555,7 @@ INI
                 WOODPECKER_HOST=http://localhost:8000 \
                 WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
                 WOODPECKER_OPEN=true \
-                WOODPECKER_ADMIN="${JENKINS_ADMIN_ID:-milady}" \
+                WOODPECKER_ADMIN="${MILADY_ADMIN_ID:-milady}" \
                 WOODPECKER_GRPC_SECRET="$WOODPECKER_GRPC_SECRET" \
                 WOODPECKER_CUSTOM_CSS_FILE=/etc/woodpecker/custom.css \
                 WOODPECKER_CUSTOM_JS_FILE=/etc/woodpecker/custom.js \
@@ -588,8 +588,8 @@ INI
                     WPSESS=$(mktemp)
                     curl -sf -m 10 -c "$WPSESS" "http://localhost:3000/user/login" > /dev/null 2>&1
                     curl -sf -m 10 -b "$WPSESS" -c "$WPSESS" -X POST "http://localhost:3000/user/login" \
-                        --data-urlencode "user_name=${JENKINS_ADMIN_ID:-milady}" \
-                        --data-urlencode "password=${JENKINS_ADMIN_PASSWORD:-milady}" > /dev/null 2>&1
+                        --data-urlencode "user_name=${MILADY_ADMIN_ID:-milady}" \
+                        --data-urlencode "password=${MILADY_ADMIN_PASSWORD:-milady}" > /dev/null 2>&1
                     AUTH="http://localhost:3000/login/oauth/authorize?client_id=${WOODPECKER_FORGEJO_CLIENT}&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fauthorize&response_type=code"
                     LOC="$(curl -sf -m 10 -b "$WPSESS" -c "$WPSESS" -o /dev/null -w '%{redirect_url}' "$AUTH")"
                     if [ -z "$LOC" ]; then

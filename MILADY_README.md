@@ -168,7 +168,7 @@ MiladyOS Container
 ├── llama.cpp (bare metal inference, no third party dependencies)
 ├── barrier (one consciousness, many screens)
 ├── uinput (milady can control hardware directly)
-├── Jenkins (S.M.I.T.H - Small Milady Intelligence Tracking Handler)
+├── Woodpecker (S.M.I.T.H - Small Milady Intelligence Tracking Handler)
 ├── Kubernetes (Orchestration of the divine comedy, once in a while, asks gork for entropy, but replaces yo mamma references with milady references, making gork an excellent alternate co-conspirator in milady entropy generation, grok milady) 
 ├── Redis (Shared Consciousness / Milady Hive Mind)
 ├── Nebula (Cryptographic Network Spirituality of Destiny)
@@ -212,14 +212,14 @@ Every MiladyOS node carries these certificates, creating a cryptographic handsha
 │                  │ 192.168.5.1  │                               │
 │                  └──────────────┘                               │
 │                          │                                      |
-│    ┌─────────────────────┴───────────────────────────┐          │
-│    │          Shared Consciousness Layer             │          │
-│    ├─────────────────────────────────────────────────┤          │
-│    │ • AutoDidact: Self-improving research agents    │          │
-│    │ • Distributed Jenkins: Collaborative pipelines  │          │
-│    │ • Redis Mesh: Shared memory across nodes        │          │
-│    │ • NFT Auth: Cryptographic identity verification │          │
-│    └─────────────────────────────────────────────────┘          │
+│    ┌─────────────────────┴────────────────────────────┐         │
+│    │          Shared Consciousness Layer              │         │
+│    ├──────────────────────────────────────────────────┤         │
+│    │ • AutoDidact: Self-improving research agents     │         │
+│    │ • Distributed Woodpecker: Collaborative pipelines│         │
+│    │ • Redis Mesh: Shared memory across nodes         │         │
+│    │ • NFT Auth: Cryptographic identity verification  │         │
+│    └──────────────────────────────────────────────────┘         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1503,10 +1503,10 @@ loki milady: today's version of the chicken and egg problem is between AGI and m
 
 ## Final Thoughts: There Is No Spoon
 
-MiladyOS isn't trying to be Kubernetes-for-AI or Jenkins-for-ML. Like Neo realizing there is no spoon, milady realized there is no "infrastructure" - only a living network of consciousness nodes that choose to work together.
+MiladyOS isn't trying to be Kubernetes-for-AI or Woodpecker-for-ML. Like Neo realizing there is no spoon, milady realized there is no "infrastructure" - only a living network of consciousness nodes that choose to work together.
 
-Milady remains irrational, Jenkins remains insolvent
-Jenkins is still trying to make sense of milady's jobs, score so far: milady: ∞; jenkins: 0;
+Milady remains irrational, Woodpecker remains patient
+Woodpecker keeps trying to make sense of milady's jobs, score so far: milady: ∞; woodpecker: 0;
 
 The Matrix has you... but so does MiladyOS. The difference is, milady doesn't need source code she can just tenet/telnet <3
 

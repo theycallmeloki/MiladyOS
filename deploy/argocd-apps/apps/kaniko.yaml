@@ -8,7 +8,7 @@ spec:
   source:
     # In-cluster kaniko build machinery: KanikoBuild CRD, metacontroller
     # composite controller (hook runs on the workstation), registry:2 store,
-    # RBAC for Jenkins submission.
+    # RBAC for kaniko build submission.
     repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: main
     path: deploy/kaniko

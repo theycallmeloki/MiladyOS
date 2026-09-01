@@ -62,7 +62,7 @@ miladyos mcp --redis-host redis.example.com --redis-port 6379
 
 ### deploy
 
-Deploy a pipeline template to Jenkins.
+Deploy a pipeline template as a woodpecker pipeline repo.
 
 ```bash
 miladyos deploy [options]
@@ -71,8 +71,8 @@ miladyos deploy [options]
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--template` | string | required | Template name to deploy |
-| `--job-name` | string | template name | Jenkins job name |
-| `--server` | string | default | Jenkins server configuration |
+| `--job-name` | string | template name | Pipeline repo name |
+
 | `--templates-dir` | path | templates | Templates directory |
 
 **Examples:**
@@ -84,8 +84,8 @@ miladyos deploy --template example-build
 # Deploy with custom job name
 miladyos deploy --template docker-deploy --job-name production-deploy
 
-# Deploy to specific Jenkins server
-miladyos deploy --template my-pipeline --server staging-jenkins
+# Deploy to the default forge user
+miladyos deploy --template my-pipeline
 ```
 
 ---
@@ -100,9 +100,9 @@ miladyos run [options]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--job-name` | string | required | Jenkins job to run |
+| `--repo` | string | milady/<template> | Pipeline repo to run in |
 | `--parameters` | JSON | {} | Build parameters as JSON |
-| `--server` | string | default | Jenkins server |
+
 | `--no-stream` | flag | false | Disable output streaming |
 | `--wait` | flag | false | Wait for completion |
 
@@ -184,7 +184,7 @@ miladyos view-template --template example-build
 
 **Output:**
 ```
-   1 | // Jenkinsfile for example-build
+   1 | # example-build.yml
    2 | // Description: Example build pipeline that can be evolved
    3 | pipeline {
    4 |     agent any
@@ -285,7 +285,7 @@ Generations: 47
 Best Fitness: 0.8234
 Archive Size: 15
 Duration: 342.5s
-Output: evolved_templates/example-build_evolved_speed_20240115_143022.Jenkinsfile
+Output: evolved_templates/example-build_evolved_speed_20240115_143022.yml
 ```
 
 ---
@@ -457,7 +457,7 @@ python meta_evolve.py inject-blocks [options]
 python meta_evolve.py inject-blocks --template my-pipeline
 
 # Inject to new file
-python meta_evolve.py inject-blocks --template my-pipeline --output my-pipeline-evolvable.Jenkinsfile
+python meta_evolve.py inject-blocks --template my-pipeline --output my-pipeline-evolvable.yml
 ```
 
 ---
@@ -470,9 +470,9 @@ These environment variables affect CLI behavior:
 |----------|---------|-------------|
 | `REDIS_HOST` | localhost | Redis server host |
 | `REDIS_PORT` | 6379 | Redis server port |
-| `JENKINS_URL` | http://localhost:8080 | Jenkins server URL |
-| `JENKINS_ADMIN_ID` | milady | Jenkins username |
-| `JENKINS_ADMIN_PASSWORD` | milady | Jenkins password |
+| `MILADYOS_URL` | http://localhost:8000 | Control-plane URL |
+| `MILADY_ADMIN_ID` | milady | Admin username |
+| `MILADY_ADMIN_PASSWORD` | milady | Admin password |
 | `TEMPLATES_DIR` | templates | Templates directory |
 | `METADATA_DIR` | metadata | Metadata directory |
 | `SQLITE_DB_PATH` | /data/redka/data.db | SQLite database path |
@@ -488,7 +488,7 @@ These environment variables affect CLI behavior:
 | 1 | General error |
 | 2 | Invalid arguments |
 | 3 | Template not found |
-| 4 | Jenkins connection failed |
+| 4 | Pipeline run failed |
 | 5 | Evolution failed |
 
 ---
