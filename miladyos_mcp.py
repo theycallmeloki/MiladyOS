@@ -1411,8 +1411,8 @@ class MiladyOSToolServer:
     default="/data/redka/data.db",
     help="Path to SQLite database file",
 )
-def main(all_tools: bool, templates_dir: str,
-         redis_host: str, redis_port: int) -> int:
+def main(all_tools: bool, templates_dir: str, metadata_dir: str,
+         redis_host: str, redis_port: int, sqlite_db_path: str) -> int:
     """Run the MiladyOS Tools MCP Server.
 
     Provides MCP-compatible tools for MiladyOS pipeline management.
