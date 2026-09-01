@@ -538,6 +538,8 @@ RUN set -e; \
 # (verified: schema initializes, driver name is 'sqlite3'). All sha256/version
 # pinned. The server/agent stay idle until startup.sh wires them to
 # /var/lib/woodpecker (reserved above).
+COPY woodpecker/install-cli.sh /opt/install-woodpecker-cli.sh
+RUN bash /opt/install-woodpecker-cli.sh && rm /opt/install-woodpecker-cli.sh
 COPY woodpecker/install-agent.sh /opt/install-woodpecker-agent.sh
 COPY woodpecker/install-forgejo.sh /opt/install-forgejo.sh
 COPY --from=woodpeckerci/woodpecker-server:v3.18.0 /bin/woodpecker-server /usr/local/bin/woodpecker-server
