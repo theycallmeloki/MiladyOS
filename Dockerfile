@@ -564,11 +564,15 @@ USER root
 # root-owned /app, so all three pre-exist owned by milady. Pre-existing bugs:
 # redka never started (blocked the MCP redis dep) and the MCP server crashed
 # on PermissionError: 'templates'.
-# /etc/woodpecker lets the agent persist its config (avoids the boot-log error)
-RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata \
-        /etc/filebrowser-metrics /etc/filebrowser-models && \
-    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata \
-        /etc/filebrowser-metrics /etc/filebrowser-models
+# MiladyOS UI branding: logo.svg -> header logo + favicon (custom.css/js hooks,
+# served at /assets/custom.* via WOODPECKER_CUSTOM_*_FILE), and the rasterized
+# avatar used by startup.sh to set the forge user's profile picture.
+COPY logo.svg /opt/milady-logo.svg
+COPY woodpecker/branding.py /opt/branding.py
+COPY woodpecker/milady-avatar.png /opt/milady-avatar.png
+RUN python3 /opt/branding.py /opt/milady-logo.svg /etc/woodpecker/custom.css /etc/woodpecker/custom.js && \
+    install -m 0644 /opt/milady-avatar.png /etc/woodpecker/milady-avatar.png && \
+    rm -f /opt/branding.py /opt/milady-logo.svg /opt/milady-avatar.png
 
 # Caddy binds :80/:443 per the Caddyfile; the non-root app user cannot bind
 # ports <1024. CAP_NET_BIND_SERVICE on the binary fixes it (libcap2-bin came
