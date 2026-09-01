@@ -88,15 +88,15 @@ class WoodpeckerClient:
                 auth=(self.forge_user, self.forge_pass),
             )
             payload: Dict[str, Any] = {"content": encoded, "message": f"miladyos_mcp: update {path}"}
+            url = f"{self.forge_url}/api/v1/repos/{repo}/contents/{path}"
             if current.status_code == 200:
+                # Exists -> PUT with the current sha (POST is create-only).
                 payload["sha"] = current.json()["sha"]
-            elif current.status_code != 404:
+                response = client.put(url, auth=(self.forge_user, self.forge_pass), json=payload)
+            elif current.status_code == 404:
+                response = client.post(url, auth=(self.forge_user, self.forge_pass), json=payload)
+            else:
                 raise RuntimeError(f"forge read {path}: {current.status_code} {current.text[:200]}")
-            response = client.post(
-                f"{self.forge_url}/api/v1/repos/{repo}/contents/{path}",
-                auth=(self.forge_user, self.forge_pass),
-                json=payload,
-            )
             if response.status_code not in (200, 201):
                 raise RuntimeError(f"forge write {path}: {response.status_code} {response.text[:200]}")
 
@@ -149,8 +149,11 @@ class WoodpeckerClient:
             if response.status_code not in (200, 201):
                 raise RuntimeError(f"trigger {repo}: {response.status_code} {response.text[:200]}")
             pipeline = response.json()
+            # NOTE: the API's {pipeline} path param resolves by NUMBER, not
+            # the DB id (verified: GET /pipelines/{db_id} 404s when they
+            # diverge). Return the number as pipeline_id.
             return {
-                "pipeline_id": int(pipeline["id"]),
+                "pipeline_id": int(pipeline["number"]),
                 "number": pipeline.get("number"),
                 "status": pipeline.get("status"),
                 "event": pipeline.get("event"),
@@ -198,15 +201,21 @@ class WoodpeckerClient:
                     lines: List[str] = []
                     if logs_response.status_code == 200:
                         for entry in logs_response.json():
-                            if isinstance(entry, str):
-                                try:
-                                    lines.append(
-                                        base64.b64decode(entry).decode("utf-8", "replace").rstrip("\n")
-                                    )
-                                except Exception:
-                                    lines.append(entry)
+                            # v3.18 returns one JSON object per line
+                            # ({id, step_id, line, data}) — not raw base64.
+                            if isinstance(entry, dict):
+                                data = entry.get("data", "")
                             else:
-                                lines.append(str(entry))
+                                data = entry
+                            if not isinstance(data, str):
+                                lines.append(str(data))
+                                continue
+                            try:
+                                lines.append(
+                                    base64.b64decode(data).decode("utf-8", "replace").rstrip("\n")
+                                )
+                            except Exception:
+                                lines.append(data)
                     out.append(
                         {
                             "step": step.get("name"),
@@ -228,7 +237,7 @@ class WoodpeckerClient:
             response.raise_for_status()
             return [
                 {
-                    "pipeline_id": p.get("id"),
+                    "pipeline_id": p.get("number"),
                     "number": p.get("number"),
                     "status": p.get("status"),
                     "event": p.get("event"),
