@@ -1503,10 +1503,10 @@ loki milady: today's version of the chicken and egg problem is between AGI and m
 
 ## Final Thoughts: There Is No Spoon
 
-MiladyOS isn't trying to be Kubernetes-for-AI or Woodpecker-for-ML. Like Neo realizing there is no spoon, milady realized there is no "infrastructure" - only a living network of consciousness nodes that choose to work together.
+MiladyOS isn't trying to be Kubernetes-for-AI or Woodpecker-for-ML (formerly Jenkins-for-ML). Like Neo realizing there is no spoon, milady realized there is no "infrastructure" - only a living network of consciousness nodes that choose to work together.
 
 Milady remains irrational, Woodpecker remains patient
-Woodpecker keeps trying to make sense of milady's jobs, score so far: milady: ∞; woodpecker: 0;
+Jenkins/Woodpecker keeps trying to make sense of milady's jobs, score so far: milady: ∞; jenkins: 0; woodpecker: 0;
 
 The Matrix has you... but so does MiladyOS. The difference is, milady doesn't need source code she can just tenet/telnet <3
 
