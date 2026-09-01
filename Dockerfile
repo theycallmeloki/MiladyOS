@@ -525,14 +525,23 @@ RUN set -e; \
     rm -f /tmp/milady-linux-amd64 /tmp/milady.sha256 && \
     command -v milady >/dev/null || exit 1
 
-# ---------- CI: Woodpecker CLI (cli-exec mode, no server/forge) ----------
-# Jenkins replaced 2026-09 (debian rebase). Phase A runs pipelines on-demand
-# via `woodpecker-cli exec` (woodpecker/runner.yml, scratch-build.yml) — no
-# daemon, no forge, nothing auto-runs. Binary pinned + sha256-verified by
-# install-cli.sh (v3.18.0). plugins.txt / casc.yaml / jenkins-theme/ are dead;
-# file removal is part of the cutover commit, not this rewrite.
+# ---------- CI: Woodpecker (cli-exec + forge/server/agent) ----------
+# Phase A runs pipelines on-demand via `woodpecker-cli exec` — no daemon, no
+# forge, nothing auto-runs. Binary pinned + sha256-verified by install-cli.sh
+# (v3.18.0). plugins.txt / casc.yaml / jenkins-theme/ are dead; file removal
+# is part of the cutover commit, not this rewrite.
 COPY woodpecker/install-cli.sh /opt/install-woodpecker-cli.sh
 RUN bash /opt/install-woodpecker-cli.sh && rm /opt/install-woodpecker-cli.sh
+# Phase B (2026-09): forge + server + agent. Forgejo is the self-hosted forge
+# (SQLite-backed, local admin only, no GitHub); server/agent are the same
+# pinned 3.18.0 release family as the cli. All three sha256-verified by the
+# install scripts. The server/agent stay idle until startup.sh wires them to
+# /var/lib/woodpecker (reserved above).
+COPY woodpecker/install-server-agent.sh /opt/install-woodpecker-server-agent.sh
+COPY woodpecker/install-forgejo.sh /opt/install-forgejo.sh
+RUN bash /opt/install-woodpecker-server-agent.sh && \
+    bash /opt/install-forgejo.sh && \
+    rm /opt/install-woodpecker-server-agent.sh /opt/install-forgejo.sh
 
 COPY Caddyfile /etc/caddy/Caddyfile
 
@@ -551,9 +560,9 @@ USER root
 # root-owned /app, so all three pre-exist owned by milady. Pre-existing bugs:
 # redka never started (blocked the MCP redis dep) and the MCP server crashed
 # on PermissionError: 'templates'.
-RUN mkdir -p /data /var/lib/woodpecker /app/templates /app/metadata \
+RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /app/templates /app/metadata \
         /etc/filebrowser-metrics /etc/filebrowser-models && \
-    chown -R milady:milady /data /var/lib/woodpecker /app/templates /app/metadata \
+    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /app/templates /app/metadata \
         /etc/filebrowser-metrics /etc/filebrowser-models
 
 # Caddy binds :80/:443 per the Caddyfile; the non-root app user cannot bind
