@@ -34,6 +34,11 @@ a[href="/"]::before {{
 html[data-theme="dark"] a[href="/"]::before {{
   filter: invert(1);
 }}
+/* Hide the upstream version chip next to the logo — MiladyOS has its own
+   5-octet versioning, the woodpecker version number is noise here. */
+a[href="/"] span.text-xs {{
+  display: none;
+}}
 """
 
 js = f"""// MiladyOS branding — generated from logo.svg (custom.js).
