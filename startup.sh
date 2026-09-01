@@ -516,12 +516,16 @@ INI
                 # server binary comes from the official image, sqlite-enabled).
                 # NOTE: comments must stay OUT of the backslash-continued env
                 # list — a comment line there orphans the preceding assignment.
+                # OPEN=true lets the first forge login register (and become
+                # admin). Safe here: forgejo registration is disabled, so the
+                # only forge account is the local admin milady.
                 WOODPECKER_FORGEJO=true \
                 WOODPECKER_FORGEJO_URL=http://localhost:3000 \
                 WOODPECKER_FORGEJO_CLIENT="$WOODPECKER_FORGEJO_CLIENT" \
                 WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
                 WOODPECKER_HOST=http://localhost:8000 \
                 WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
+                WOODPECKER_OPEN=true \
                 WOODPECKER_DATABASE_DRIVER=sqlite3 \
                 WOODPECKER_DATABASE_DATASOURCE=/var/lib/woodpecker/woodpecker.db \
                 WOODPECKER_GRPC_ADDR=:9000 \
