@@ -511,15 +511,17 @@ INI
         if [ -s "$SECRETS" ]; then
             # shellcheck disable=SC1090
             . "$SECRETS"
-            if command -v woodpecker-server > /dev/null 2>&1 && command -v woodpecker-agent > /dev/null 2>&1; then
+                if command -v woodpecker-server > /dev/null 2>&1 && command -v woodpecker-agent > /dev/null 2>&1; then
+                # v3.18 driver name is 'sqlite3' (release binaries lack it — the
+                # server binary comes from the official image, sqlite-enabled).
+                # NOTE: comments must stay OUT of the backslash-continued env
+                # list — a comment line there orphans the preceding assignment.
                 WOODPECKER_FORGEJO=true \
                 WOODPECKER_FORGEJO_URL=http://localhost:3000 \
                 WOODPECKER_FORGEJO_CLIENT="$WOODPECKER_FORGEJO_CLIENT" \
                 WOODPECKER_FORGEJO_SECRET="$WOODPECKER_FORGEJO_SECRET" \
                 WOODPECKER_HOST=http://localhost:8000 \
                 WOODPECKER_AGENT_SECRET="$WOODPECKER_AGENT_SECRET" \
-                # v3.18 driver name is 'sqlite3' (release binaries lack it —
-                # the server binary comes from the official image, sqlite-enabled).
                 WOODPECKER_DATABASE_DRIVER=sqlite3 \
                 WOODPECKER_DATABASE_DATASOURCE=/var/lib/woodpecker/woodpecker.db \
                 WOODPECKER_GRPC_ADDR=:9000 \
