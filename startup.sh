@@ -177,7 +177,6 @@ if command -v ollama > /dev/null 2>&1; then
     OLLAMA_HOST=0.0.0.0 ollama serve &
     sleep 5
     
-    # Check if ollama is running
     if pgrep -x "ollama" > /dev/null; then
         echo "Ollama started successfully"
     else
