@@ -99,7 +99,7 @@ EVOLUTION_GOALS = {
         name="speed",
         description="Optimize for faster execution time",
         fitness_weights={
-            "duration_seconds": -1.0,  # Lower is better
+            "duration_score": 1.0,  # 0-1, higher = faster (normalized by evaluator)
             "success_rate": 0.3,
             "parallelism_score": 0.5,
         },
@@ -309,30 +309,29 @@ Output the improved pipeline YAML only, no explanations:
             return self._fallback_mutation(prompt, EVOLUTION_GOALS.get("speed"))
 
     def _fallback_mutation(self, code: str, goal: EvolutionGoal) -> str:
-        """Rule-based fallback when LLM is unavailable."""
+        """Rule-based fallback when LLM is unavailable (YAML-safe edits)."""
         import random
 
         mutations = {
             "speed": [
-                (r"checkout scm", 'checkout([$class: "GitSCM", extensions: [[$class: "CloneOption", depth: 1, shallow: true]]])'),
-                (r"sh 'npm install'", "sh 'npm ci --prefer-offline'"),
-                (r"sh 'pip install", "sh 'pip install --no-cache-dir"),
+                ("npm install", "npm ci --prefer-offline"),
+                ("pip install ", "pip install --no-cache-dir "),
             ],
             "reliability": [
-                (r"(sh '[^']*')", r"retry(3) { \1 }"),
-                (r"steps \{", "steps {\n                timeout(time: 15, unit: 'MINUTES') {"),
+                ("npm test", "npm test -- --reporter=dot"),
+                ("sleep 10", "sleep 5"),
             ],
             "resources": [
-                (r"agent any", 'agent { label "small" }'),
+                ("alpine:3.20", "alpine:3.20-slim"),
             ],
         }
 
         modified = code
         goal_mutations = mutations.get(goal.name, [])
 
-        for pattern, replacement in goal_mutations:
+        for old, new in goal_mutations:
             if random.random() < 0.4:
-                modified = re.sub(pattern, replacement, modified, count=1)
+                modified = modified.replace(old, new, 1)
 
         return modified
 
@@ -459,13 +458,14 @@ class PipelineEvaluator:
                 content,
                 timeout=timeout,
             )
+            duration = result.get("duration_seconds") or 0.0
             return {
-                "duration_seconds": result.get("duration_seconds") or 0.0,
+                "duration_score": max(0.0, 1.0 - (duration / timeout)),
                 "success_rate": 1.0 if result.get("success") else 0.0,
             }
         except Exception as e:
             return {
-                "duration_seconds": 0.0,
+                "duration_score": 0.0,
                 "success_rate": 0.0,
                 "execution_error": str(e),
             }
@@ -971,7 +971,8 @@ def evolve(template: str, goal: str, config: str, generations: int):
     if not template_path.exists():
         raise click.ClickException(f"Template not found: {template}")
 
-    engine = AlphaEvolveEngine(config_data)
+    from woodpecker_client import WoodpeckerClient
+    engine = AlphaEvolveEngine(config_data, runner=WoodpeckerClient())
 
     async def run():
         return await engine.evolve(str(template_path), goal)
