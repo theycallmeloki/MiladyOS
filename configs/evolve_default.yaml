@@ -77,17 +77,11 @@ evaluator:
 
   # Metrics to extract
   metrics:
-    - "duration_seconds"
+    - "duration_score"
     - "success_rate"
     - "resource_usage"
     - "error_count"
     - "warning_count"
-
-# Jenkins integration
-jenkins:
-  url: "${JENKINS_URL:-http://localhost:8080}"
-  username: "${JENKINS_USER:-milady}"
-  password: "${JENKINS_PASSWORD:-milady}"
   test_job_prefix: "evolve-test-"
   cleanup_test_jobs: true
 

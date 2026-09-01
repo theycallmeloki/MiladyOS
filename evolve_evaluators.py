@@ -402,7 +402,8 @@ class ExecutionEvaluator(BaseEvaluator):
                 content,
             )
 
-            metrics["duration_seconds"] = result.get("duration_seconds", 0.0)
+            duration = result.get("duration_seconds", 0.0) or 0.0
+            metrics["duration_score"] = max(0.0, 1.0 - (duration / self.timeout))
             metrics["success_rate"] = 1.0 if result.get("success") else 0.0
 
             if result.get("success"):

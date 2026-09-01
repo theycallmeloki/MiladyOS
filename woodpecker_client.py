@@ -165,8 +165,8 @@ class WoodpeckerClient:
         """Pipeline state plus a per-step summary."""
         raw = self._pipeline(repo, pipeline_id)
         steps = []
-        for workflow in raw.get("workflows", []):
-            for step in workflow.get("children", []):
+        for workflow in raw.get("workflows", []) or []:
+            for step in workflow.get("children", []) or []:
                 steps.append(
                     {
                         "name": step.get("name"),
@@ -192,8 +192,8 @@ class WoodpeckerClient:
         repo_id = self.repo_id(repo)
         out: List[Dict[str, Any]] = []
         with httpx.Client(timeout=self._timeout) as client:
-            for workflow in raw.get("workflows", []):
-                for step in workflow.get("children", []):
+            for workflow in raw.get("workflows", []) or []:
+                for step in workflow.get("children", []) or []:
                     step_id = step.get("id")
                     if not step_id:
                         continue
@@ -203,7 +203,7 @@ class WoodpeckerClient:
                     )
                     lines: List[str] = []
                     if logs_response.status_code == 200:
-                        for entry in logs_response.json():
+                        for entry in logs_response.json() or []:
                             # v3.18 returns one JSON object per line
                             # ({id, step_id, line, data}) — not raw base64.
                             if isinstance(entry, dict):
