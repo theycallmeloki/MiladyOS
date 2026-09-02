@@ -135,7 +135,16 @@ steps:
         git -C "$work" config user.name "sandman build-bus"
         git -C "$work" config user.email "buildbus@sandman.local"
         sed -E -i "s#(image:[[:space:]]*)$REG/[^ ]*#\1$DEST#" "$work/$DEPLOY_FILE"
-        grep -q "$DEST" "$work/$DEPLOY_FILE"
+        if ! grep -q "$DEST" "$work/$DEPLOY_FILE"; then
+          echo "promote: no image line for $REG in $DEPLOY_FILE"
+          rm -rf "$work"
+          exit 1
+        fi
+        if [ -z "$(git -C "$work" status --porcelain)" ]; then
+          echo "promote: no change (already at $DEST)"
+          rm -rf "$work"
+          exit 0
+        fi
         git -C "$work" add -A
         git -C "$work" commit -q -m "symphony: build-bus image $DEST"
         git -C "$work" push -q origin HEAD:main
