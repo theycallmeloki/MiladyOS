@@ -15,6 +15,12 @@ rules:
   - apiGroups: [build.miladyos.io]
     resources: [kanikobuilds, kanikobuilds/status]
     verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, create, delete]
+    # submitters ship big build contexts as ConfigMaps referenced by
+    # KanikoBuild.spec.contextConfigMap (the hook mounts them into the
+    # kaniko init pod; inline contextBase64 stays for small contexts)
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

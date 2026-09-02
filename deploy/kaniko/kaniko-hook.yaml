@@ -53,7 +53,7 @@ spec:
       serviceAccountName: kaniko-hook
       containers:
         - name: hook
-          image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-hook:1
+          image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-hook:2
           imagePullPolicy: Always
           ports:
             - containerPort: 8090

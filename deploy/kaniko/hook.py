@@ -49,9 +49,49 @@ def build_pod(obj):
     spec = obj.get("spec", {})
     name = meta["name"]
     dest = spec.get("destination") or f"{REGISTRY}/{spec.get('image', 'build')}:{spec.get('tag', 'latest')}"
-    ctx_b64 = spec["contextBase64"]
+    ctx_b64 = spec.get("contextBase64")
+    ctx_cm = spec.get("contextConfigMap")
+    ctx_key = spec.get("contextKey", "context.tar.gz")
     timeout = spec.get("timeoutSeconds", 900)
     pname = pod_name(name)
+
+    # Build context ships either inline (argv, small contexts) or in a
+    # ConfigMap in the CR's namespace (binaryData key, up to ~750KB raw after
+    # the 1MB configmap cap). Inline base64 rides the init argv and hits the
+    # Linux MAX_ARG_STRLEN (128KB/arg) ceiling — configmap contexts don't.
+    if ctx_b64 is not None:
+        context_init = {
+            "name": "context",
+            "image": "busybox:1.36",
+            "command": [
+                "sh", "-c",
+                f"mkdir -p /workspace && echo '{ctx_b64}' | base64 -d > /workspace/context.tar.gz "
+                "&& tar tzf /workspace/context.tar.gz >/dev/null",
+            ],
+            "volumeMounts": [{"name": "ws", "mountPath": "/workspace"}],
+        }
+        volumes = [{"name": "ws", "emptyDir": {}}]
+    else:
+        context_init = {
+            "name": "context",
+            "image": "busybox:1.36",
+            "command": [
+                "sh", "-c",
+                "mkdir -p /workspace && cp /ctx/context.tar.gz /workspace/context.tar.gz "
+                "&& tar tzf /workspace/context.tar.gz >/dev/null",
+            ],
+            "volumeMounts": [
+                {"name": "ws", "mountPath": "/workspace"},
+                {"name": "ctx", "mountPath": "/ctx", "readOnly": True},
+            ],
+        }
+        volumes = [
+            {"name": "ws", "emptyDir": {}},
+            {"name": "ctx", "configMap": {
+                "name": ctx_cm,
+                "items": [{"key": ctx_key, "path": "context.tar.gz"}],
+            }},
+        ]
 
     pod = {
         "apiVersion": "v1",
@@ -64,16 +104,7 @@ def build_pod(obj):
         "spec": {
             "restartPolicy": "Never",
             "activeDeadlineSeconds": timeout,
-            "initContainers": [{
-                "name": "context",
-                "image": "busybox:1.36",
-                "command": [
-                    "sh", "-c",
-                    f"mkdir -p /workspace && echo '{ctx_b64}' | base64 -d > /workspace/context.tar.gz "
-                    "&& tar tzf /workspace/context.tar.gz >/dev/null",
-                ],
-                "volumeMounts": [{"name": "ws", "mountPath": "/workspace"}],
-            }],
+            "initContainers": [context_init],
             "containers": [{
                 "name": "kaniko",
                 "image": "gcr.io/kaniko-project/executor:latest",
@@ -87,7 +118,7 @@ def build_pod(obj):
                 "volumeMounts": [{"name": "ws", "mountPath": "/workspace"}],
                 "resources": spec.get("resources") or {},
             }],
-            "volumes": [{"name": "ws", "emptyDir": {}}],
+            "volumes": volumes,
         },
     }
     auth = spec.get("authSecret")
@@ -132,6 +163,12 @@ def sync(req):
         return {"status": {"phase": "Failed", "message": "missing name"}}
     status = obj.get("status", {})
     generation = meta.get("generation", 0)
+    spec = obj.get("spec", {})
+    if not spec.get("contextBase64") and not spec.get("contextConfigMap"):
+        return {"status": {"phase": "Failed",
+                           "message": "spec.contextBase64 or spec.contextConfigMap required",
+                           "observedGeneration": generation,
+                           "completionTime": json_now()}, "children": []}
     # Terminal latch: once the build finished for this spec generation, never
     # re-create the pod (the GC'd pod would otherwise respawn and rebuild).
     if status.get("phase") in ("Succeeded", "Failed") and status.get("observedGeneration") == generation:
