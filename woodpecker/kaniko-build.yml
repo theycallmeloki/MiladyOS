@@ -1,0 +1,40 @@
+# MiladyOS kaniko-build pipeline — the agent CI/CD path into the build fabric.
+#
+# Runs kaniko-submit (deploy/kaniko/kaniko-submit.py) against the CURRENT
+# repo checkout (CI_WORKSPACE): the pipeline repo itself is the build
+# context (Dockerfile at root + .dockerignore respected). The build runs as
+# a KanikoBuild pod in the sandman namespace and lands in
+# miladyosregistry.transparentlyrotatableproxy.site.
+#
+# Trigger (deliberate only — nothing auto-runs):
+#   POST /api/repos/{repo_id}/pipelines
+#     variables: { "DESTINATION": "miladyosregistry.../<image>:<tag>" }
+#     optional:  KANIKO_TIMEOUT (seconds)
+#
+# Secrets (repo-level): kubeconfig_content — cluster kubeconfig for the
+# kaniko submit. v3.18 injects via `from_secret` under environment (the
+# legacy `secrets:` step list is gone).
+#
+# Step image: miladyosregistry.../kaniko-submit:<tag> (python3 + kubectl +
+# kaniko-submit.py at /app). Registry-skip guard lives inside the helper
+# (tag already present -> exit 0, nothing rebuilt).
+when:
+  - event: manual
+
+steps:
+  kaniko-build:
+    image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-submit:1
+    environment:
+      KUBECONFIG_CONTENT:
+        from_secret: kubeconfig_content
+    commands:
+      - |
+        set -e
+        # woodpecker steps are separate containers: write the kubeconfig into
+        # the SHARED workspace, not /root (which resets between steps).
+        mkdir -p "$CI_WORKSPACE/.kube"
+        printf '%s' "$KUBECONFIG_CONTENT" > "$CI_WORKSPACE/.kube/config"
+        chmod 600 "$CI_WORKSPACE/.kube/config"
+        export KUBECONFIG="$CI_WORKSPACE/.kube/config"
+        if [ -n "$KANIKO_TIMEOUT" ]; then TIMEOUT="$KANIKO_TIMEOUT"; else TIMEOUT=1500; fi
+        python3 /app/kaniko-submit.py --context "$CI_WORKSPACE" --destination "$DESTINATION" --timeout-seconds "$TIMEOUT"
