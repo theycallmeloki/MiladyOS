@@ -2,7 +2,7 @@
   "mcpServers": {
     "miladyos": {
       "type": "sse",
-      "url": "https://mcp.transparentlyrotatableproxy.me/sse",
+      "url": "https://mcp.transparentlyrotatableproxy.site/sse",
       "env": {}
     }
   }
