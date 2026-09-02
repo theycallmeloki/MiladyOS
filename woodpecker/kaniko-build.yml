@@ -23,7 +23,7 @@ when:
 
 steps:
   kaniko-build:
-    image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-submit:1
+    image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-submit:2
     environment:
       KUBECONFIG_CONTENT:
         from_secret: kubeconfig_content

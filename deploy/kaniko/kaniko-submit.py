@@ -126,7 +126,10 @@ def apply_cr(name, spec, namespace, cm_data=None):
             "binaryData": {"context.tar.gz": cm_data},
         }, cm_file)
         cm_file.close()
-        kubectl(["apply", "-f", cm_file.name])
+        # Server-side apply: client-side apply stamps a last-applied
+        # configuration annotation (whole manifest), so a context CM over
+        # ~190KB raw exceeds the 256KB annotation limit and is rejected.
+        kubectl(["apply", "--server-side=true", "-f", cm_file.name])
         os.unlink(cm_file.name)
         spec["contextConfigMap"] = cm_name
 
@@ -139,7 +142,7 @@ def apply_cr(name, spec, namespace, cm_data=None):
     cr_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
     json.dump(cr, cr_file)
     cr_file.close()
-    kubectl(["apply", "-f", cr_file.name])
+    kubectl(["apply", "--server-side=true", "-f", cr_file.name])
     os.unlink(cr_file.name)
 
 
