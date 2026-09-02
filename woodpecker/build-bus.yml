@@ -122,29 +122,21 @@ steps:
     commands:
       - |
         set -e
-        [ "$PROMOTE" = "1" ] || { echo "promote skipped (PROMOTE != 1)"; exit 0; }
-        DEPLOY_REPO="${DEPLOY_REPO:-theycallmeloki/self-hosted-k8s-private}"
-        DEPLOY_FILE="${DEPLOY_FILE:-deploy/symphony/deployment.yaml}"
+        if [ "$PROMOTE" != "1" ]; then
+          echo "promote skipped (PROMOTE != 1)"
+          exit 0
+        fi
+        if [ -z "$DEPLOY_REPO" ]; then DEPLOY_REPO=theycallmeloki/self-hosted-k8s-private; fi
+        if [ -z "$DEPLOY_FILE" ]; then DEPLOY_FILE=deploy/symphony/deployment.yaml; fi
         DEST="$(cat "$CI_WORKSPACE/.destination")"
-        REG="${DEST%%/*}"
-        IMG_TAG="${DEST#*/}"
+        REG="$(echo "$DEST" | cut -d/ -f1)"
         work="$(mktemp -d)"
-        git -C "$work" clone -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${DEPLOY_REPO}.git" .
+        git -C "$work" clone -q "https://x-access-token:$GITHUB_TOKEN@github.com/$DEPLOY_REPO.git" .
         git -C "$work" config user.name "sandman build-bus"
         git -C "$work" config user.email "buildbus@sandman.local"
-        python3 - "$work/$DEPLOY_FILE" "$REG" "$IMG_TAG" <<'PY'
-        import re, sys
-        path, reg, img_tag = sys.argv[1], sys.argv[2], sys.argv[3]
-        with open(path) as f:
-            s = f.read()
-        pat = re.compile(r"(image:\s*)" + re.escape(reg) + r"/[^\s]+")
-        new, n = pat.subn(rf"\g<1>{reg}/{img_tag}", s)
-        assert n >= 1, f"no {reg} image line in {path}"
-        with open(path, "w") as f:
-            f.write(new)
-        print(f"bumped {path} -> {reg}/{img_tag}")
-        PY
+        sed -E -i "s#(image:[[:space:]]*)$REG/[^ ]*#\1$DEST#" "$work/$DEPLOY_FILE"
+        grep -q "$DEST" "$work/$DEPLOY_FILE"
         git -C "$work" add -A
-        git -C "$work" commit -q -m "symphony: build-bus image ${IMG_TAG}"
+        git -C "$work" commit -q -m "symphony: build-bus image $DEST"
         git -C "$work" push -q origin HEAD:main
         rm -rf "$work"
