@@ -1,0 +1,150 @@
+# build-bus — build any sandman-mirrored repo as a KanikoBuild image.
+#
+# The cluster-change build bus: an event-driven sandman git-input pipeline
+# (one per watched repo URL) delivers each new commit/delta to this
+# pipeline, which
+#   1. fetch-context  — pulls the mapped repo's tree at REVISION out of the
+#      sandman control plane (SANDMAN_ADDR, no credentials needed) into the
+#      step workspace as the build context (Dockerfile at root + .dockerignore)
+#   2. kaniko-build   — submits a KanikoBuild CR (existing hook/CRD) with
+#      registry-skip guard: <IMAGE>:<rev12> already present => nothing rebuilt
+#   3. promote        — when PROMOTE=1, git-ops: bump the image tag in the
+#      target deployment repo (DEPLOY_REPO / DEPLOY_FILE) and push; ArgoCD
+#      self-heal applies.
+#
+# Variables (reach steps as $VAR):
+#   SANDMAN_ADDR  sandman control plane (default http://192.168.1.15:4242)
+#   REPO_URL      mapped repo clone URL (e.g. https://github.com/theycallmeloki/symphony.git)
+#   REVISION      mapped commit id (default: the repo's current head)
+#   IMAGE         registry image name (default symphony)
+#   REGISTRY      (default miladyosregistry.transparentlyrotatableproxy.site)
+#   PROMOTE       "1" to run the git-ops promotion step
+#   DEPLOY_REPO   deployment git repo (default theycallmeloki/self-hosted-k8s-private)
+#   DEPLOY_FILE   deployment manifest path (default deploy/symphony/deployment.yaml)
+#
+# Secrets (repo-level): kubeconfig_content (cluster kubeconfig for kaniko
+# submit); GITHUB_TOKEN (promotion git-ops push).
+#
+# Trigger (deliberate only — nothing auto-runs):
+#   POST /api/repos/{buildbus_repo_id}/pipelines  variables: {...}
+
+when:
+  - event: manual
+
+steps:
+  fetch-context:
+    image: python:3.12-alpine
+    commands:
+      - |
+        python3 - <<'PY'
+        import json, os, urllib.request, sys
+        from pathlib import Path
+
+        base = os.environ.get("SANDMAN_ADDR", "http://192.168.1.15:4242").rstrip("/")
+        repo_url = os.environ.get("REPO_URL", "")
+        if not repo_url:
+            print("REPO_URL not set; nothing to build", flush=True)
+            sys.exit(1)
+        name = repo_url.rstrip("/")
+        if name.endswith(".git"):
+            name = name[:-4]
+        name = name.split("/")[-1]
+        rev = os.environ.get("REVISION", "")
+
+        def get(path):
+            with urllib.request.urlopen(base + path, timeout=20) as r:
+                return r.read()
+
+        try:
+            head = json.loads(get(f"/api/v1/repos/{name}/branches/master/head"))
+        except Exception as e:
+            print(f"repo {name} not mapped on {base}: {e}", flush=True)
+            sys.exit(2)
+        head_id = rev or head["id"]
+        listing = json.loads(get(f"/api/v1/commits/{head_id}/files"))
+        if isinstance(listing, dict):
+            listing = listing.get("files", [])
+        paths = [f.get("path") for f in listing if isinstance(f, dict) and f.get("path")]
+        paths = [p for p in paths if p and not p.startswith(".git/") and p != ".git"]
+
+        src = Path(os.environ["CI_WORKSPACE"]) / "src"
+        src.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for p in paths:
+            out = src / p
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(get(f"/api/v1/commits/{head_id}/files/{p}"))
+            n += 1
+        registry = os.environ.get("REGISTRY", "miladyosregistry.transparentlyrotatableproxy.site")
+        image = os.environ.get("IMAGE", "symphony")
+        tag = head_id[:12]
+        dest = f"{registry}/{image}:{tag}"
+        Path(os.environ["CI_WORKSPACE"], ".destination").write_text(dest)
+        # registry-skip guard (tags/list is authless; manifest HEAD is not):
+        # a tag already present means this revision is already built
+        ws = Path(os.environ["CI_WORKSPACE"])
+        try:
+            with urllib.request.urlopen(f"https://{registry}/v2/{image}/tags/list", timeout=20) as r:
+                tags = json.load(r).get("tags", []) or []
+            if tag in tags:
+                (ws / ".skip").write_text("present\n")
+                print(f"registry-skip: {dest} already exists", flush=True)
+        except Exception as e:
+            print(f"skip check failed ({e}); will build", flush=True)
+        print(f"context: {n} files of {name}@{head_id} -> {dest}", flush=True)
+        PY
+
+  kaniko-build:
+    image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-submit:2
+    environment:
+      KUBECONFIG_CONTENT:
+        from_secret: kubeconfig_content
+    commands:
+      - |
+        set -e
+        if [ -f "$CI_WORKSPACE/.skip" ]; then
+          echo "registry-skip: $(cat "$CI_WORKSPACE/.destination") already built"
+          exit 0
+        fi
+        mkdir -p "$CI_WORKSPACE/.kube"
+        printf '%s' "$KUBECONFIG_CONTENT" > "$CI_WORKSPACE/.kube/config"
+        chmod 600 "$CI_WORKSPACE/.kube/config"
+        export KUBECONFIG="$CI_WORKSPACE/.kube/config"
+        DEST="$(cat "$CI_WORKSPACE/.destination")"
+        echo "building $DEST"
+        python3 /app/kaniko-submit.py --context "$CI_WORKSPACE/src" --destination "$DEST" --timeout-seconds 1800
+
+  promote:
+    image: docker.io/alpine/git:latest
+    environment:
+      GITHUB_TOKEN:
+        from_secret: GITHUB_TOKEN
+    commands:
+      - |
+        set -e
+        [ "$PROMOTE" = "1" ] || { echo "promote skipped (PROMOTE != 1)"; exit 0; }
+        DEPLOY_REPO="${DEPLOY_REPO:-theycallmeloki/self-hosted-k8s-private}"
+        DEPLOY_FILE="${DEPLOY_FILE:-deploy/symphony/deployment.yaml}"
+        DEST="$(cat "$CI_WORKSPACE/.destination")"
+        REG="${DEST%%/*}"
+        IMG_TAG="${DEST#*/}"
+        work="$(mktemp -d)"
+        git -C "$work" clone -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${DEPLOY_REPO}.git" .
+        git -C "$work" config user.name "sandman build-bus"
+        git -C "$work" config user.email "buildbus@sandman.local"
+        python3 - "$work/$DEPLOY_FILE" "$REG" "$IMG_TAG" <<'PY'
+        import re, sys
+        path, reg, img_tag = sys.argv[1], sys.argv[2], sys.argv[3]
+        with open(path) as f:
+            s = f.read()
+        pat = re.compile(r"(image:\s*)" + re.escape(reg) + r"/[^\s]+")
+        new, n = pat.subn(rf"\g<1>{reg}/{img_tag}", s)
+        assert n >= 1, f"no {reg} image line in {path}"
+        with open(path, "w") as f:
+            f.write(new)
+        print(f"bumped {path} -> {reg}/{img_tag}")
+        PY
+        git -C "$work" add -A
+        git -C "$work" commit -q -m "symphony: build-bus image ${IMG_TAG}"
+        git -C "$work" push -q origin HEAD:main
+        rm -rf "$work"
