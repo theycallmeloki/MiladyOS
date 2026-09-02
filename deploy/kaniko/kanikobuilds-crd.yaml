@@ -34,8 +34,6 @@ spec:
           properties:
             spec:
               type: object
-              required:
-                - contextBase64
               properties:
                 image:
                   type: string
@@ -48,7 +46,13 @@ spec:
                   description: Full destination ref, overrides image/tag (e.g. 192.168.1.202:5000/foo:1)
                 contextBase64:
                   type: string
-                  description: Build context as base64-encoded tar.gz (must contain Dockerfile at root)
+                  description: Build context as base64-encoded tar.gz (must contain Dockerfile at root). Small contexts only — inline argv caps at ~128KB base64.
+                contextConfigMap:
+                  type: string
+                  description: ConfigMap (same namespace) holding the build context tar.gz under spec.contextKey (default context.tar.gz). Use for contexts too large for contextBase64; the hook mounts it instead of argv.
+                contextKey:
+                  type: string
+                  description: "ConfigMap key holding the context tar.gz (default: context.tar.gz)"
                 authSecret:
                   type: string
                   description: Optional docker-registry secret (dockerconfigjson) for authenticated registries
@@ -59,6 +63,24 @@ spec:
                 resources:
                   type: object
                   description: Resource requests/limits for the kaniko pod
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Building, Succeeded, Failed]
+                pod:
+                  type: string
+                message:
+                  type: string
+                observedGeneration:
+                  type: integer
+                startTime:
+                  type: string
+                  format: date-time
+                completionTime:
+                  type: string
+                  format: date-time
             status:
               type: object
               properties:
