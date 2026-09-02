@@ -4,6 +4,10 @@
 *.pt
 *.log
 wandb/
+eval/
+data/
+r1_training
+r2_training
 *.bin
 outputs/
 lore_training_1b/
