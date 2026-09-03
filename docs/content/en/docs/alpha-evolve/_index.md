@@ -213,7 +213,22 @@ pipeline {
 }
 ```
 
+### Mechanical enforcement (evolve_fence)
+
+The fence is a **hard invariant**, not an LLM suggestion. AlphaEvolve clamps
+every generated candidate against the template's immutable skeleton
+(`evolve_fence.apply_fence`): only the lines strictly between an
+`EVOLVE-BLOCK-START` and its `EVOLVE-BLOCK-END` may change. Any edit the model
+makes elsewhere — image refs, env/secret bindings, other steps, the marker
+lines themselves — is mechanically discarded, and the skeleton is rebuilt
+byte-identical from the template. Markers are comment lines, so in a Woodpecker
+pipeline they use `#` (e.g. `# EVOLVE-BLOCK-START: {...}`) inside the step's
+`commands` block scalar; at runtime they are inert shell comments. A template
+with **no** markers is treated as legacy whole-file-evolvable (passed through
+unchanged), matching the pre-fence behaviour.
+
 ### Block Metadata
+
 
 The JSON metadata after `EVOLVE-BLOCK-START:` provides context to the LLM:
 

@@ -92,10 +92,11 @@ def main() -> int:
         processing_class=tokenizer,
     )
     print("Starting SFT...", flush=True)
+    os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
     trainer.train()
     print("SFT done — saving LoRA", flush=True)
     os.makedirs(OUT, exist_ok=True)
-    model.save_lora(os.path.join(OUT, "lora"))
+    model.save_pretrained(os.path.join(OUT, "lora"))
     print(f"LoRA saved to {OUT}/lora", flush=True)
     return 0
 
