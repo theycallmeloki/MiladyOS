@@ -13,8 +13,41 @@ air-gapped, on `debian:13.4`. Pipelines fire only on deliberate triggers
 | `install-agent.sh` | pinned woodpecker-agent **v3.18.0** (sha256-verified) |
 | `runner.yml` | ad-hoc command runner — the `execute_command` MCP backend (local agent) |
 | `scratch-build.yml` | build a Dockerfile on the **host daemon** + push with registry-skip guard |
+| `kaniko-build.yml` | agent CI submits a KanikoBuild to the fabric (kaniko-submit helper) |
+| `build-bus.yml` | the deploy bus — build a sandman-mirrored repo as a KanikoBuild image; git-ops promote on PROMOTE=1 |
 | `branding.py` | Woodpecker UI branding — logo.svg header, favicon, forge avatar |
 | `milady-avatar.png` | forge avatar asset |
+
+## Pipeline ownership & sync (one author per artifact)
+
+Each control-plane pipeline has **one authoring home**; every other copy is
+**derived** (materialized) and is NEVER hand-edited. Derived copies must stay
+**byte-identical** to the author so a drift check is a plain `cmp`. If you are
+about to change one of these pipelines, edit the author and re-sync the
+derived copies — an independent pi/ACP agent touching a derived copy in place
+is exactly how these silently diverge.
+
+| Pipeline | AUTHOR (edit here) | Derived copies (sync, don't hand-edit) |
+|----------|--------------------|-----------------------------------------|
+| `build-bus.yml` | `sandman-pipelines/buildbus/.woodpecker.yml` | gitea `milady/buildbus` `.woodpecker.yml`; this `build-bus.yml` |
+| `kaniko-build.yml` | this `kaniko-build.yml` | gitea `milady/kaniko` `.woodpecker.yml` |
+| `scratch-build.yml` | this `scratch-build.yml` | none (Phase-A cli-exec only) |
+
+Sync commands:
+
+- **build-bus**: edit `sandman-pipelines/buildbus/.woodpecker.yml`, then
+  `sandman-pipelines/tools/buildbus-sync.sh push` (→ gitea `milady/buildbus`),
+  then `cp sandman-pipelines/buildbus/.woodpecker.yml woodpecker/build-bus.yml`
+  and commit here. `buildbus-sync.sh fetch` is the reverse.
+- **kaniko-build**: edit this file, then push it to gitea `milady/kaniko`
+  (contents API / git push). Keep the `kaniko-submit:<tag>` in sync with the
+  helper image actually in the registry.
+
+History note (why this README exists): buildbus changes used to be authored
+here (`24a7e81`, `e1c861f`, `f0d8065`), then the deploy-chain hardening landed
+only in `sandman-pipelines/buildbus/`, so this builtin silently carried the
+**pre-hardening promote** (unguarded — would re-seed the historical mis-promote
+hole on fresh instances). Re-synced 2026-09-04.
 
 ## Standing rulings (operator, 2026-09-01)
 
