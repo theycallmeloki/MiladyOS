@@ -182,7 +182,7 @@ RUN uv venv .venv && \
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # Copy Python source files
-COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_evaluators.py meta_evolve.py milady_oracle.py woodpecker_client.py /app/
+COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_fence.py evolve_evaluators.py meta_evolve.py milady_oracle.py woodpecker_client.py /app/
 
 # Copy TempleOS HolyC scripts for Milady Oracle
 COPY templeos/ /opt/templeos/scripts/
@@ -565,10 +565,13 @@ USER root
 # redka never started (blocked the MCP redis dep) and the MCP server crashed
 # on PermissionError: 'templates'.
 # /etc/woodpecker lets the agent persist its config (avoids the boot-log error).
-RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata /app/evolved_templates \
+RUN mkdir -p /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata /app/configs /app/evolved_templates \
         /etc/filebrowser-metrics /etc/filebrowser-models && \
-    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata /app/evolved_templates \
+    chown -R milady:milady /data /var/lib/woodpecker /var/lib/forgejo /etc/woodpecker /app/templates /app/metadata /app/configs /app/evolved_templates \
         /etc/filebrowser-metrics /etc/filebrowser-models
+
+# AlphaEvolve default config (load_config() reads configs/evolve_default.yaml)
+COPY configs/evolve_default.yaml /app/configs/evolve_default.yaml
 # MiladyOS UI branding: logo.svg -> header logo + favicon (custom.css/js hooks,
 # served at /assets/custom.* via WOODPECKER_CUSTOM_*_FILE), and the rasterized
 # avatar used by startup.sh to set the forge user's profile picture.
