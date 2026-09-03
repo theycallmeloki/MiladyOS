@@ -1,0 +1,13 @@
+{
+  "name": "kaniko-builder",
+  "description": "kaniko build bus: datum dirs (spec.json + Dockerfile + context) become KanikoBuilds into miladyosregistry",
+  "transform": {
+    "image": "miladyosregistry.transparentlyrotatableproxy.site/kaniko-builder:3",
+    "cmd": ["/runner.sh"],
+    "secrets": [{"name": "kubeconfig", "key": "KUBECONFIG_CONTENT", "envVar": "KUBECONFIG_CONTENT"}]
+  },
+  "input": {"repo": "builds", "glob": "/*"},
+  "parallelism": {"constant": 1},
+  "outputBranch": "master",
+  "standby": false
+}
