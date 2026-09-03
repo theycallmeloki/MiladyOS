@@ -77,6 +77,7 @@ steps:
             n += 1
         registry = os.environ.get("REGISTRY", "miladyosregistry.transparentlyrotatableproxy.site")
         image = os.environ.get("IMAGE", "symphony")
+        # rev12 tag rule: MUST match rev12() in sandman-pipelines tools/bus_identity.py
         tag = head_id[:12]
         dest = f"{registry}/{image}:{tag}"
         Path(os.environ["CI_WORKSPACE"], ".destination").write_text(dest)
@@ -126,10 +127,26 @@ steps:
           echo "promote skipped (PROMOTE != 1)"
           exit 0
         fi
+        # Identity guard: the default deployment target is the symphony
+        # manifest. Any OTHER source repo must name its own DEPLOY_REPO /
+        # DEPLOY_FILE explicitly - otherwise a stray PROMOTE=1 from a
+        # non-symphony watch (the historical mis-promote class that
+        # rewrote the symphony yaml with a port image) fails loudly here
+        # instead of corrupting an unrelated manifest.
+        SRC="$(echo "$REPO_URL" | sed -E 's#.*/##; s#\.git$##')"
+        if [ "$SRC" != "symphony" ] && { [ -z "$DEPLOY_REPO" ] || [ -z "$DEPLOY_FILE" ]; }; then
+          echo "promote refused: source $SRC is not symphony and no explicit DEPLOY_REPO/DEPLOY_FILE given"
+          exit 1
+        fi
         if [ -z "$DEPLOY_REPO" ]; then DEPLOY_REPO=theycallmeloki/self-hosted-k8s-private; fi
         if [ -z "$DEPLOY_FILE" ]; then DEPLOY_FILE=deploy/symphony/deployment.yaml; fi
         DEST="$(cat "$CI_WORKSPACE/.destination")"
         REG="$(echo "$DEST" | cut -d/ -f1)"
+        # The registry tag's existence is guaranteed upstream: kaniko-build
+        # either pushed it or registry-skipped because it already exists, and
+        # buildbus exits before promote when kaniko fails. No re-check here —
+        # the promote runtime's egress cannot reliably reach the registry
+        # (curl/wget to it 404 via the step proxy), and the check is redundant.
         work="$(mktemp -d)"
         git -C "$work" clone -q "https://x-access-token:$GITHUB_TOKEN@github.com/$DEPLOY_REPO.git" .
         git -C "$work" config user.name "sandman build-bus"
@@ -146,6 +163,6 @@ steps:
           exit 0
         fi
         git -C "$work" add -A
-        git -C "$work" commit -q -m "symphony: build-bus image $DEST"
+        git -C "$work" commit -q -m "build-bus image $DEST (source $SRC)"
         git -C "$work" push -q origin HEAD:main
         rm -rf "$work"
