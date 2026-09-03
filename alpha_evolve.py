@@ -32,6 +32,8 @@ import colorlog
 import redis
 import yaml
 
+import evolve_fence
+
 # Configure logging
 logger = colorlog.getLogger("miladyos-alpha-evolve")
 handler = colorlog.StreamHandler()
@@ -269,7 +271,9 @@ REQUIREMENTS:
 3. Make meaningful improvements, not just cosmetic changes
 4. Do not add unnecessary complexity
 5. Ensure the pipeline remains runnable (valid YAML, steps with images)
-6. Keep the EVOLVE-BLOCK-START/END comment markers intact
+6. ONLY change lines between an EVOLVE-BLOCK-START and EVOLVE-BLOCK-END
+   marker. Keep both marker comment lines and every line OUTSIDE them
+   byte-identical — the skeleton is immutable and edits to it are discarded.
 
 Output the improved pipeline YAML only, no explanations:
 ```yaml
@@ -491,6 +495,10 @@ class AlphaEvolveEngine:
         self.llm = LLMEnsemble(config)
         self.evaluator = PipelineEvaluator(config, runner=runner)
         self.redis_client = self._setup_redis()
+        # Immutable skeleton root for the mechanical EVOLVE-BLOCK fence; set
+        # per-evolve() run (see evolve()). When a template has markers, every
+        # generated candidate is clamped so only fenced payloads may change.
+        self._fence_template: Optional[str] = None
 
         # Evolution parameters
         evo_config = config.get("evolution", {})
@@ -542,6 +550,9 @@ class AlphaEvolveEngine:
         # Load template
         template_content = Path(template_path).read_text()
         template_name = Path(template_path).stem
+        # Mechanical EVOLVE-BLOCK fence root: block payloads are the only
+        # mutable region; the surrounding skeleton stays byte-immutable.
+        self._fence_template = template_content
 
         # Initialize state
         state = EvolutionState(
@@ -553,7 +564,6 @@ class AlphaEvolveEngine:
         logger.info(f"Starting evolution: {state.evolution_id}")
         logger.info(f"Template: {template_name}, Goal: {goal_name}")
 
-        # Initialize island populations
         await self._initialize_populations(state, template_content, goal)
 
         # Evolution loop
@@ -626,6 +636,27 @@ class AlphaEvolveEngine:
 
         return results
 
+    def _enforce_fence(self, content: str) -> str:
+        """Clamp a candidate into the template's immutable skeleton.
+
+        Only the EVOLVE-BLOCK payloads the template author marked may change;
+        any edit the LLM makes outside them is mechanically discarded (the
+        surrounding skeleton is byte-rebuilt from the template). Templates
+        without markers pass through unchanged (legacy whole-file evolution).
+        """
+        tpl = getattr(self, "_fence_template", None)
+        if not tpl:
+            return content
+        out, stats = evolve_fence.apply_fence(tpl, content)
+        if not stats.get("fenced"):
+            return content
+        if stats.get("changed_payloads"):
+            logger.info(
+                "fence: %s block(s); adopted edits in %s payload(s)",
+                stats.get("blocks"), stats.get("changed_payloads"),
+            )
+        return out
+
     async def _initialize_populations(
         self,
         state: EvolutionState,
@@ -657,6 +688,7 @@ class AlphaEvolveEngine:
                     {"island": island_idx},
                     temperature=0.7 + (island_idx * 0.1)  # Vary temperature by island
                 )
+                variant_content = self._enforce_fence(variant_content)
 
                 variant = Candidate(
                     id=str(uuid.uuid4()),
@@ -826,6 +858,7 @@ class AlphaEvolveEngine:
                     p1 = self._tournament_select(population)
                     p2 = self._tournament_select(population)
                     child_content = self._crossover(p1.content, p2.content)
+                child_content = self._enforce_fence(child_content)
 
                 child = Candidate(
                     id=str(uuid.uuid4()),

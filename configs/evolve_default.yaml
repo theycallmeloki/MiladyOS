@@ -63,6 +63,13 @@ map_elites:
 
 # Evaluator configuration
 evaluator:
+  # live_execution: when TRUE, each candidate pipeline is ACTUALLY run
+  # on the woodpecker runner (run_content -> real per-candidate pipeline)
+  # and success_rate/duration_score come from the live run. Expensive and
+  # side-effecting: only enable for cheap, side-effect-free (non-deploy,
+  # non-registry-push) candidates. OFF by default -> fitness is static
+  # heuristics + YAML gate only.
+  live_execution: false
   # Cascade evaluation (fast checks first)
   cascade:
     - name: "syntax"
