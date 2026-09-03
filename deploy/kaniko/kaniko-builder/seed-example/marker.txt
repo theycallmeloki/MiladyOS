@@ -1,0 +1,1 @@
+miladyos kaniko build bus: end to end
