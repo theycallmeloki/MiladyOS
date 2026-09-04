@@ -53,8 +53,10 @@ class WoodpeckerClient:
 
     def token(self) -> str:
         # Lazy + re-read per call: startup.sh writes .secrets after the MCP
-        # server boots, so the token may appear long after first use.
-        if self._token is None:
+        # server boots, so the token may appear long after first use. Re-read
+        # whenever we hold nothing (including "" from an early empty read) —
+        # caching "" would strand this client forever.
+        if not self._token:
             self._token = os.getenv("WOODPECKER_TOKEN") or _load_secrets().get("WOODPECKER_TOKEN", "")
         if not self._token:
             raise RuntimeError(
