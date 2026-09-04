@@ -1,18 +1,20 @@
-# Builds and publishes a milady binary GitHub release for every commit to
-# main. Version follows the MiladyOS 5-octet scheme (version.json prefix +
-# monotonic git commit count, see ISO/version.sh), so each release is tagged
-# and named 0.0.0.0.<count> — the same cadence that tags the container image.
+# Builds and publishes a milady binary GitHub release — MANUAL ONLY.
 #
-# Modeled on theycallmeloki/sandman's release workflow (tag-driven build of
-# per-platform binaries + .sha256 sidecars, gh release with a changelog), but
-# triggered per main commit instead of per v* tag because MiladyOS versions by
-# commit count rather than tags.
+# MiladyOS versions by git commit count (version.json prefix + rev-list count,
+# see ISO/version.sh), so cutting a release is "Run workflow" in the GitHub UI
+# (Actions -> Release milady binary -> Run workflow): it builds the per-platform
+# binaries tagged 0.0.0.0.<count> and creates the release. This does NOT run per
+# commit — Docker Hub image tags handle that cadence; a milady release is an
+# explicit, deliberate act.
+#
+# Modeled on theycallmeloki/sandman's release mechanics: per-OS/arch binaries +
+# .sha256 sidecars, gh release with a changelog. Version is derived at run time,
+# so consecutive manual runs bump the commit-count octet automatically.
 
 name: Release milady binary
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: write
