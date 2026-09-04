@@ -174,7 +174,7 @@ class MetaEvolutionEngine:
         and learns which parameters work best for this template type.
         """
         from alpha_evolve import AlphaEvolveEngine
-        from woodpecker_client import WoodpeckerClient
+        from woodpecker import WoodpeckerClient
 
         logger.info(f"Starting meta-evolution for {template_path}")
 
@@ -500,7 +500,7 @@ class EvolutionChainManager:
 
         # Run evolution
         config = load_config()
-        from woodpecker_client import WoodpeckerClient
+        from woodpecker import WoodpeckerClient
         engine = AlphaEvolveEngine(config, runner=WoodpeckerClient())
         result = await engine.evolve(str(template_path), goal)
 

@@ -119,7 +119,7 @@ def mcp(all_tools, templates_dir, redis_host, redis_port, transport, host, port,
 def deploy(template_name, job_name):
     """Deploy a template as a woodpecker pipeline repo (forge + activate)."""
     from miladyos_metadata import metadata_manager
-    from woodpecker_client import WoodpeckerClient
+    from woodpecker import WoodpeckerClient
     import asyncio
 
     job_name = job_name or template_name
@@ -163,7 +163,7 @@ def deploy(template_name, job_name):
 def run(template_name, repo_name, no_stream):
     """Run a pipeline template on the local woodpecker agent."""
     from miladyos_metadata import metadata_manager
-    from woodpecker_client import WoodpeckerClient
+    from woodpecker import WoodpeckerClient
     import asyncio
 
     stream_output = not no_stream

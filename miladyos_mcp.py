@@ -9,7 +9,7 @@ import click
 import anyio
 from miladyos_metadata import REDIS_AVAILABLE
 from pathlib import Path as FSPath
-from woodpecker_client import WoodpeckerClient
+from woodpecker import MiladyCI, WoodpeckerClient
 # NOTE: bare `Path` is shadowed inside _execute_tool by the local
 # `from pathlib import Path` in the list_evolved_templates branch, so the
 # file/pipeline branches use the aliased FSPath.
@@ -113,7 +113,6 @@ class Config:
     # Default supported tools
     DEFAULT_TOOLS = [
         "hello_world",
-        "create_pipeline",
         "execute_command",
         "evolve_template",
         "evolution_status",
@@ -124,10 +123,11 @@ class Config:
         "read_file",
         "write_file",
         "edit_file",
-        "run_pipeline",
-        "pipeline_status",
-        "pipeline_logs",
-        "list_pipelines",
+        "job_define",
+        "job_run",
+        "job_status",
+        "job_logs",
+        "job_list",
     ]
 
 
@@ -159,45 +159,6 @@ class MiladyOSToolServer:
         return tool_registry
         
         
-    @staticmethod
-    def _wp_ad_hoc_pipeline(command: str, working_directory: str, session_id: str) -> str:
-        """Ad-hoc pipeline for execute_command (Woodpecker backend).
-
-        Mirrors the old execute_command contract: echo the invocation, run
-        the command, report the exit code. The command and
-        working directory are baked into the YAML (deterministic — no
-        reliance on the trigger-variables-to-env channel), JSON-quoted so
-        arbitrary command strings survive YAML parsing. Runs in the shared
-        workspace volume (the clone dir).
-        """
-        script = [
-            'echo "==== COMMAND EXECUTION ===="',
-            f'echo "COMMAND: {command}"',
-            f'echo "SESSION: {session_id}"',
-            'echo "WORKING DIR: $(pwd)"',
-            'echo "TIME: $(date)"',
-            'echo "==== OUTPUT ===="',
-        ]
-        if working_directory and working_directory != "/tmp/workspace":
-            script.append(f'cd "{working_directory}" || true')
-        script.extend(
-            [
-                f"{command} 2>&1; EC=$?",
-                'echo "==== END OUTPUT ===="',
-                'echo "EXIT CODE: $EC"',
-                "exit $EC",
-            ]
-        )
-        lines = "\n".join(f"      - {json.dumps(line)}" for line in script)
-        return (
-            "when:\n"
-            "  event: manual\n"
-            "steps:\n"
-            "  execute:\n"
-            "    image: alpine:3.20\n"
-            "    commands:\n"
-            f"{lines}\n"
-        )
 
     def _define_all_tools(self) -> Dict[str, Dict[str, Any]]:
         """Define all available tools."""
@@ -209,24 +170,6 @@ class MiladyOSToolServer:
                     "type": "object",
                     "properties": {},
                     "required": []
-                }
-            },
-            "create_pipeline": {
-                "name": "Create Pipeline",
-                "description": "Create a pipeline repo from .woodpecker.yml content (Woodpecker backend)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "repo_name": {
-                            "type": "string",
-                            "description": "Name of the pipeline repo to create"
-                        },
-                        "pipeline_content": {
-                            "type": "string",
-                            "description": "Full .woodpecker.yml pipeline content (Woodpecker CI)"
-                        }
-                    },
-                    "required": ["repo_name", "pipeline_content"]
                 }
             },
             "execute_command": {
@@ -304,86 +247,6 @@ class MiladyOSToolServer:
                         }
                     },
                     "required": ["path", "old_string", "new_string"]
-                }
-            },
-            "run_pipeline": {
-                "name": "Run Pipeline",
-                "description": "Submit a pipeline run end to end. Optionally pushes a local pipeline file to the repo first (the local file is the source; the forge repo + activation + trigger are internal mechanics)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "repo": {
-                            "type": "string",
-                            "description": "Repo name, e.g. 'youtube-dl' or 'milady/youtube-dl' (default owner: milady)"
-                        },
-                        "source_file": {
-                            "type": "string",
-                            "description": "Optional local pipeline file to push as .woodpecker.yml before running"
-                        },
-                        "variables": {
-                            "type": "object",
-                            "description": "Key/value parameters passed to the pipeline — available in steps as $VAR env (avoid ${VAR}: woodpecker's config interpolation eats braced vars)"
-                        },
-                        "branch": {
-                            "type": "string",
-                            "description": "Branch to run (default: main)"
-                        }
-                    },
-                    "required": ["repo"]
-                }
-            },
-            "pipeline_status": {
-                "name": "Pipeline Status",
-                "description": "Get a pipeline's state and per-step summary",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "repo": {
-                            "type": "string",
-                            "description": "Repo name, e.g. 'milady/youtube-dl'"
-                        },
-                        "pipeline_id": {
-                            "type": "integer",
-                            "description": "Pipeline id from run_pipeline"
-                        }
-                    },
-                    "required": ["repo", "pipeline_id"]
-                }
-            },
-            "pipeline_logs": {
-                "name": "Pipeline Logs",
-                "description": "Get a pipeline's per-step console logs (decoded)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "repo": {
-                            "type": "string",
-                            "description": "Repo name, e.g. 'milady/youtube-dl'"
-                        },
-                        "pipeline_id": {
-                            "type": "integer",
-                            "description": "Pipeline id from run_pipeline"
-                        }
-                    },
-                    "required": ["repo", "pipeline_id"]
-                }
-            },
-            "list_pipelines": {
-                "name": "List Pipelines",
-                "description": "List recent pipeline runs for a repo",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "repo": {
-                            "type": "string",
-                            "description": "Repo name, e.g. 'milady/youtube-dl'"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Max runs to return (default: 10)"
-                        }
-                    },
-                    "required": ["repo"]
                 }
             },
             "evolve_template": {
@@ -491,7 +354,111 @@ class MiladyOSToolServer:
                     },
                     "required": []
                 }
-            }}
+            },
+            "job_define": {
+                "name": "Define Job",
+                "description": "Define (or re-provision) a reusable job on the MiladyOS CI from plain steps yml (steps -> image + commands). The woodpecker manual-trigger gate, forge repo (milady/<name>) and activation are handled here - milady only names the job and writes steps. Known builder jobs (kaniko-build, build-bus) keep their kaniko backend.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Job name (bare -> milady/<name>; owner/name allowed)"
+                        },
+                        "yml": {
+                            "type": "string",
+                            "description": "Plain steps yml: steps -> image + commands"
+                        },
+                        "backend": {
+                            "type": "string",
+                            "enum": ["auto", "node", "kaniko"],
+                            "description": "auto (default): known builder jobs -> kaniko, new jobs -> node agent",
+                            "default": "auto"
+                        }
+                    },
+                    "required": ["name", "yml"]
+                }
+            },
+            "job_run": {
+                "name": "Run Job",
+                "description": "Run a defined/known job by logical name + variables (no forge repo or pipeline id needed).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Job name (bare -> milady/<name>; owner/name allowed)"
+                        },
+                        "variables": {
+                            "type": "object",
+                            "description": "Key/value params - reach steps as $VAR env (avoid ${VAR}: woodpecker interpolation eats braced vars)"
+                        },
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch to run (default: main)",
+                            "default": "main"
+                        }
+                    },
+                    "required": ["name"]
+                }
+            },
+            "job_status": {
+                "name": "Job Status",
+                "description": "Get a job run's state + per-step summary by name + number.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Job name (bare -> milady/<name>; owner/name allowed)"
+                        },
+                        "number": {
+                            "type": "integer",
+                            "description": "Pipeline number from job_run / job_define"
+                        }
+                    },
+                    "required": ["name", "number"]
+                }
+            },
+            "job_logs": {
+                "name": "Job Logs",
+                "description": "Get a job run's per-step console logs (decoded) by name + number.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Job name (bare -> milady/<name>; owner/name allowed)"
+                        },
+                        "number": {
+                            "type": "integer",
+                            "description": "Pipeline number from job_run / job_define"
+                        }
+                    },
+                    "required": ["name", "number"]
+                }
+            },
+            "job_list": {
+                "name": "List Job Runs",
+                "description": "List recent runs for a job by name.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Job name (bare -> milady/<name>; owner/name allowed)"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max runs to return (default: 10)",
+                            "default": 10
+                        }
+                    },
+                    "required": ["name"]
+                }
+            },
+        }
+
 
     async def initialize(self) -> Server:
         """Initialize by loading tools from metadata."""
@@ -596,97 +563,26 @@ class MiladyOSToolServer:
                     "status": "success"
                 }
                                 
-            elif tool_id == "create_pipeline":
-                repo_name = arguments.get("repo_name")
-                pipeline_content = arguments.get("pipeline_content")
-
-                if not repo_name or not pipeline_content:
-                    return {
-                        "success": False,
-                        "error": "repo_name and pipeline_content (.woodpecker.yml) are required",
-                        "status": "error"
-                    }
-
+            elif tool_id == "job_define":
+                name = arguments.get("name") or ""
+                yml = arguments.get("yml")
+                backend = arguments.get("backend", "auto") or "auto"
+                if not name or not yml:
+                    return {"success": False, "status": "error",
+                            "error": "name and yml (plain steps: image + commands) are required"}
                 try:
-                    client = WoodpeckerClient()
-                    client.forge_create_repo(repo_name)
-                    repo = f"{client.forge_user}/{repo_name}"
-                    client.forge_upsert_file(repo, ".woodpecker.yml", pipeline_content)
-                    client.repo_id(repo)  # idempotent activation
-                    return {
-                        "success": True,
-                        "status": "success",
-                        "message": f"Pipeline repo {repo_name} created and activated",
-                        "repo_name": repo_name,
-                        "repo": repo
-                    }
+                    return MiladyCI().define(name, yml, backend)
                 except Exception as e:
-                    logger.error(f"Error creating pipeline {repo_name}: {e}")
-                    return {
-                        "success": False,
-                        "status": "error",
-                        "error": f"Failed to create pipeline {repo_name}: {str(e)}"
-                    }
+                    logger.error(f"job_define {name} failed: {e}")
+                    return {"success": False, "status": "error", "error": f"job_define failed: {e}"}
+
             elif tool_id == "execute_command":
                 command = arguments.get("command")
                 working_directory = arguments.get("working_directory", "/tmp/workspace")
                 session_id = arguments.get("session_id", str(uuid.uuid4()))
-
-                if not command:
-                    return {
-                        "error": "command is required",
-                        "status": "error"
-                    }
-
-                logger.info(f"Executing command (woodpecker): {command}")
-
-                try:
-                    client = WoodpeckerClient()
-                    repo = f"{client.forge_user}/ad-hoc"
-                    client.forge_create_repo("ad-hoc")
-                    client.forge_upsert_file(
-                        repo, ".woodpecker.yml",
-                        self._wp_ad_hoc_pipeline(command, working_directory, session_id),
-                    )
-                    triggered = client.trigger(repo, "main")
-                    pipeline_id = triggered["pipeline_id"]
-                    # Block + stream (parity with the old execute_command
-                    # contract): poll until the pipeline finishes, then
-                    # return the full console output.
-                    status = None
-                    deadline = time.time() + 600
-                    while time.time() < deadline:
-                        status = client.pipeline_status(repo, pipeline_id)
-                        if status["status"] in ("success", "failure", "error", "killed", "declined"):
-                            break
-                        await asyncio.sleep(3)
-                    if status is None:
-                        return {
-                            "command": command,
-                            "status": "ERROR",
-                            "error": "pipeline did not finish within 600s",
-                            "success": False,
-                            "pipeline_id": pipeline_id,
-                        }
-                    logs = client.pipeline_logs(repo, pipeline_id)
-                    console = "\n".join(line for step in logs for line in step["lines"])
-                    ok = status["status"] == "success"
-                    return {
-                        "command": command,
-                        "status": "SUCCESS" if ok else "FAILURE",
-                        "console_output": console,
-                        "success": ok,
-                        "pipeline_id": pipeline_id,
-                        "session_id": session_id,
-                    }
-                except Exception as e:
-                    logger.error(f"execute_command failed: {e}")
-                    return {
-                        "command": command,
-                        "status": "ERROR",
-                        "error": str(e),
-                        "success": False,
-                    }
+                return await asyncio.to_thread(
+                    MiladyCI().execute, command, working_directory, session_id
+                )
 
             elif tool_id == "read_file":
                 path_arg = arguments.get("path")
@@ -736,64 +632,50 @@ class MiladyOSToolServer:
                 except Exception as e:
                     return {"success": False, "status": "error", "error": f"edit_file failed: {e}"}
 
-            elif tool_id == "run_pipeline":
-                repo = arguments.get("repo") or ""
-                source_file = arguments.get("source_file") or ""
+            elif tool_id == "job_run":
+                name = arguments.get("name") or ""
                 variables = arguments.get("variables") or {}
                 branch = arguments.get("branch") or "main"
-                if not repo:
-                    return {"success": False, "status": "error", "error": "repo is required"}
+                if not name:
+                    return {"success": False, "status": "error", "error": "name is required"}
                 try:
-                    client = WoodpeckerClient()
-                    if "/" not in repo:
-                        repo = f"{client.forge_user}/{repo}"
-                    if source_file:
-                        path = FSPath(source_file)
-                        if not path.is_absolute():
-                            path = FSPath("/app") / path
-                        client.forge_create_repo(repo.split("/", 1)[1])
-                        client.forge_upsert_file(repo, ".woodpecker.yml", path.read_text())
-                    result = client.trigger(repo, branch, variables)
-                    result["success"] = True
-                    return result
+                    return MiladyCI().run(name, variables, branch)
                 except Exception as e:
-                    logger.error(f"run_pipeline {repo} failed: {e}")
-                    return {"success": False, "status": "error", "error": f"run_pipeline failed: {e}", "repo": repo}
+                    logger.error(f"job_run {name} failed: {e}")
+                    return {"success": False, "status": "error", "error": str(e)}
 
-            elif tool_id == "pipeline_status":
-                repo = arguments.get("repo") or ""
-                pipeline_id = arguments.get("pipeline_id")
-                if not repo or not pipeline_id:
-                    return {"success": False, "status": "error", "error": "repo and pipeline_id are required"}
+            elif tool_id == "job_status":
+                name = arguments.get("name") or ""
+                number = arguments.get("number")
+                if not name or number is None:
+                    return {"success": False, "status": "error",
+                            "error": "name and number are required"}
                 try:
-                    result = WoodpeckerClient().pipeline_status(repo, int(pipeline_id))
-                    result["success"] = True
-                    return result
+                    return MiladyCI().status(name, int(number))
                 except Exception as e:
-                    return {"success": False, "status": "error", "error": f"pipeline_status failed: {e}"}
+                    return {"success": False, "status": "error", "error": f"job_status failed: {e}"}
 
-            elif tool_id == "pipeline_logs":
-                repo = arguments.get("repo") or ""
-                pipeline_id = arguments.get("pipeline_id")
-                if not repo or not pipeline_id:
-                    return {"success": False, "status": "error", "error": "repo and pipeline_id are required"}
+            elif tool_id == "job_logs":
+                name = arguments.get("name") or ""
+                number = arguments.get("number")
+                if not name or number is None:
+                    return {"success": False, "status": "error",
+                            "error": "name and number are required"}
                 try:
-                    result = WoodpeckerClient().pipeline_logs(repo, int(pipeline_id))
-                    return {"success": True, "pipeline_id": int(pipeline_id), "steps": result}
+                    return MiladyCI().logs(name, int(number))
                 except Exception as e:
-                    return {"success": False, "status": "error", "error": f"pipeline_logs failed: {e}"}
+                    return {"success": False, "status": "error", "error": f"job_logs failed: {e}"}
 
-            elif tool_id == "list_pipelines":
-                repo = arguments.get("repo") or ""
+            elif tool_id == "job_list":
+                name = arguments.get("name") or ""
                 limit = arguments.get("limit", 10)
-                if not repo:
-                    return {"success": False, "status": "error", "error": "repo is required"}
+                if not name:
+                    return {"success": False, "status": "error", "error": "name is required"}
                 try:
-                    result = WoodpeckerClient().list_pipelines(repo, int(limit))
-                    return {"success": True, "pipelines": result}
+                    return MiladyCI().list_runs(name, int(limit))
                 except Exception as e:
-                    return {"success": False, "status": "error", "error": f"list_pipelines failed: {e}"}
-                        
+                    return {"success": False, "status": "error", "error": f"job_list failed: {e}"}
+
             elif tool_id == "evolve_template":
                 template_name = arguments.get("template_name")
                 goal = arguments.get("goal", "reliability")

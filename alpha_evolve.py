@@ -1004,7 +1004,7 @@ def evolve(template: str, goal: str, config: str, generations: int):
     if not template_path.exists():
         raise click.ClickException(f"Template not found: {template}")
 
-    from woodpecker_client import WoodpeckerClient
+    from woodpecker import WoodpeckerClient
     engine = AlphaEvolveEngine(config_data, runner=WoodpeckerClient())
 
     async def run():
