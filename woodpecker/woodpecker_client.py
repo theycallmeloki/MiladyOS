@@ -15,6 +15,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
@@ -129,6 +130,37 @@ class WoodpeckerClient:
                 raise RuntimeError(f"activate {repo}: {response.status_code} {response.text[:200]}")
             self._repo_ids[repo] = int(response.json()["id"])
             return int(response.json()["id"])
+
+
+    def forge_remote(self, repo: str) -> str:
+        """Authenticated git URL for a forge repo (creds embedded; local forge)."""
+        parts = urlsplit(self.forge_url)
+        netloc = f"{quote(self.forge_user)}:{quote(self.forge_pass)}@{parts.netloc}"
+        path = "/" + repo.lstrip("/") + ".git"
+        return urlunsplit((parts.scheme, netloc, path, "", ""))
+
+    def repo_secret_set(self, repo: str, name: str, value: str) -> None:
+        """Ensure a repo-level woodpecker secret exists (name -> value).
+
+        Idempotent: if the secret already exists it is left as-is (secrets are
+        write-once here — value is not returned by the API, so we never
+        overwrite blindly).
+        """
+        rid = self.repo_id(repo)
+        with httpx.Client(timeout=self._timeout) as client:
+            listed = client.get(f"{self.wp_url}/api/repos/{rid}/secrets", headers=self._wp_headers())
+            listed.raise_for_status()
+            if any((s.get("name") or "") == name for s in listed.json()):
+                return
+            response = client.post(
+                f"{self.wp_url}/api/repos/{rid}/secrets",
+                headers=self._wp_headers(),
+                json={"name": name, "value": value},
+            )
+            if response.status_code not in (200, 201, 204):
+                raise RuntimeError(
+                    f"wp set secret {name}: {response.status_code} {response.text[:200]}"
+                )
 
     def trigger(
         self,

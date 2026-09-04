@@ -20,7 +20,9 @@ Conventions
 """
 
 import json
-import time
+import os
+import shutil
+import tempfile
 from typing import Any, Dict, List, Optional
 
 from .woodpecker_client import WoodpeckerClient
@@ -109,6 +111,174 @@ def ad_hoc_pipeline(command: str, working_directory: str, session_id: str) -> st
         "    commands:\n"
         f"{lines}\n"
     )
+
+
+
+# Kaniko build pipeline injected into an imported build-context repo so it is
+# runnable via job_run(name, {DESTINATION: ...}). Canonical source:
+# woodpecker/kaniko-build.yml (kept in sync). The repo itself is the build
+# context (Dockerfile at root + .dockerignore); kaniko-submit builds/pushes.
+KANIKO_BUILD_YML = """# MiladyOS kaniko-build pipeline — the agent CI/CD path into the build fabric.
+#
+# Runs kaniko-submit (deploy/kaniko/kaniko-submit.py) against the CURRENT
+# repo checkout (CI_WORKSPACE): the pipeline repo itself is the build
+# context (Dockerfile at root + .dockerignore respected). The build runs as
+# a KanikoBuild pod in the sandman namespace and lands in
+# miladyosregistry.transparentlyrotatableproxy.site.
+#
+# Trigger (deliberate only — nothing auto-runs):
+#   POST /api/repos/{repo_id}/pipelines
+#     variables: { "DESTINATION": "miladyosregistry.../<image>:<tag>" }
+#     optional:  KANIKO_TIMEOUT (seconds)
+#
+# Secrets (repo-level): kubeconfig_content — cluster kubeconfig for the
+# kaniko submit. v3.18 injects via `from_secret` under environment (the
+# legacy `secrets:` step list is gone).
+#
+# Evolvable region (EVOLVE-BLOCK, below in the kaniko-build step): the
+# KANIKO_TIMEOUT default and the kaniko-submit flags. Everything else in this
+# file is fixed machinery (kubeconfig write, from_secret binding, registry
+# path) — AlphaEvolve mechanically discards any edit outside the markers.
+# Step image: miladyosregistry.../kaniko-submit:<tag> (python3 + kubectl +
+# kaniko-submit.py at /app). Registry-skip guard lives inside the helper
+# (tag already present -> exit 0, nothing rebuilt).
+when:
+  - event: manual
+
+steps:
+  kaniko-build:
+    image: miladyosregistry.transparentlyrotatableproxy.site/kaniko-submit:2
+    environment:
+      KUBECONFIG_CONTENT:
+        from_secret: kubeconfig_content
+    commands:
+      - |
+        set -e
+        # woodpecker steps are separate containers: write the kubeconfig into
+        # the SHARED workspace, not /root (which resets between steps).
+        mkdir -p "$CI_WORKSPACE/.kube"
+        printf '%s' "$KUBECONFIG_CONTENT" > "$CI_WORKSPACE/.kube/config"
+        chmod 600 "$CI_WORKSPACE/.kube/config"
+        export KUBECONFIG="$CI_WORKSPACE/.kube/config"
+        # EVOLVE-BLOCK-START: {"type": "kaniko-submit", "optimization_targets": ["reliability", "resources"]}
+        if [ -n "$KANIKO_TIMEOUT" ]; then TIMEOUT="$KANIKO_TIMEOUT"; else TIMEOUT=1500; fi
+        python3 /app/kaniko-submit.py --context "$CI_WORKSPACE" --destination "$DESTINATION" --timeout-seconds "$TIMEOUT"
+        # EVOLVE-BLOCK-END
+"""
+
+
+def _kaniko_template() -> str:
+    """Return the kaniko .woodpecker.yml body (env path override, else embedded)."""
+    path = os.environ.get("MILADY_KANIKO_TEMPLATE")
+    if path:
+        try:
+            return open(path).read()
+        except OSError as e:
+            raise RuntimeError(f"cannot read MILADY_KANIKO_TEMPLATE {path}: {e}") from e
+    return KANIKO_BUILD_YML
+
+
+def _kubeconfig_source() -> Optional[str]:
+    """Kubeconfig content to attach as the repo secret, or None if unset.
+
+    Prefers MILADY_KUBECONFIG_CONTENT (env), else reads MILADY_KUBECONFIG (a
+    path). Neither is baked into the public image — set at container runtime.
+    """
+    if os.environ.get("MILADY_KUBECONFIG_CONTENT"):
+        return os.environ["MILADY_KUBECONFIG_CONTENT"]
+    path = os.environ.get("MILADY_KUBECONFIG")
+    if path:
+        try:
+            return open(path).read()
+        except OSError:
+            return None
+    return None
+
+
+def _untar(data: bytes, dest: str) -> None:
+    """Safely extract a gzip tar into dest (rejects traversal; files + symlinks)."""
+    import io
+    import shutil as _sh
+    import tarfile
+
+    real_dest = os.path.realpath(dest)
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+        for member in tf:
+            name = member.name.lstrip("/")
+            if not name or "\\" in name:
+                continue
+            parts = name.split("/")
+            if ".." in parts:
+                raise ValueError(f"unsafe archive path: {member.name!r}")
+            target = os.path.realpath(os.path.join(dest, *parts))
+            if target != real_dest and not target.startswith(real_dest + os.sep):
+                raise ValueError(f"archive path escapes root: {member.name!r}")
+            if member.isdir():
+                os.makedirs(target, exist_ok=True)
+            elif member.issym():
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                if os.path.lexists(target):
+                    os.remove(target)
+                os.symlink(member.linkname, target)
+            elif member.isfile():
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with open(target, "wb") as out:
+                    src = tf.extractfile(member)
+                    _sh.copyfileobj(src, out)  # type: ignore[arg-type]
+                    if src is not None:
+                        src.close()
+
+
+def _git_env() -> Dict[str, str]:
+    import copy as _c
+    env = _c.copy(os.environ)
+    env.update({
+        "GIT_AUTHOR_NAME": "MiladyCI",
+        "GIT_AUTHOR_EMAIL": "milady@miladyos.local",
+        "GIT_COMMITTER_NAME": "MiladyCI",
+        "GIT_COMMITTER_EMAIL": "milady@miladyos.local",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_ASKPASS": "echo",
+    })
+    return env
+
+
+def _git_run(args, cwd):
+    import subprocess
+    res = subprocess.run(args, cwd=cwd, env=_git_env(),
+                         capture_output=True, text=True)
+    return res
+
+
+def _git_snapshot(dir_path: str, label: str) -> str:
+    """Turn dir into a fresh single-commit repo on main; returns the commit sha."""
+    import subprocess
+    init = _git_run(["git", "init", "-q", "-b", "main"], dir_path)
+    if init.returncode != 0:
+        _git_run(["git", "init", "-q"], dir_path)
+        _git_run(["git", "symbolic-ref", "HEAD", "refs/heads/main"], dir_path)
+    if _git_run(["git", "add", "-A"], dir_path).returncode != 0:
+        raise RuntimeError("git add failed during import")
+    commit = _git_run(["git", "commit", "-q", "-m", f"milady import: {label}"], dir_path)
+    if commit.returncode != 0:
+        raise RuntimeError(f"git commit failed during import: {commit.stderr.strip()}")
+    head = _git_run(["git", "rev-parse", "HEAD"], dir_path)
+    return head.stdout.strip()
+
+
+def _git_push(dir_path: str, remote: str) -> bool:
+    """Force-push main to remote; returns True iff the remote ref == local head."""
+    import subprocess
+    _git_run(["git", "remote", "remove", "origin"], dir_path)
+    add = _git_run(["git", "remote", "add", "origin", remote], dir_path)
+    if add.returncode != 0:
+        raise RuntimeError("git remote add failed during import")
+    push = _git_run(["git", "push", "-q", "-f", "origin", "main"], dir_path)
+    if push.returncode != 0:
+        raise RuntimeError(f"git push failed: {push.stderr.strip()}")
+    local = _git_run(["git", "rev-parse", "HEAD"], dir_path).stdout.strip()
+    ls = _git_run(["git", "ls-remote", "origin", "refs/heads/main"], dir_path)
+    return local in ls.stdout
 
 
 class MiladyCI:
@@ -203,6 +373,61 @@ class MiladyCI:
         return {"success": True, "pipelines": pipelines}
 
     # ---- one-shot command execution (execute_command backend) --------------
+
+
+    def import_context(self, name: str, tar_gz: bytes) -> Dict[str, Any]:
+        """Land a slurped build-context tarball as a reusable job repo.
+
+        Unpacks the gzip tar into ``milady/<name>`` via a single git commit
+        (ref-checked after push), and, when the tree is a kaniko build context
+        (Dockerfile present, no existing .woodpecker.yml), injects the kaniko
+        pipeline so ``job_run(name, {DESTINATION: ...})`` builds it. Returns
+        the landed repo + commit sha.
+        """
+        import re
+        name = name.strip().strip("/")
+        if not name or "/" in name:
+            raise ValueError("job name must be a bare name (no '/')")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) or name.startswith("."):
+            raise ValueError(f"invalid job name: {name!r}")
+
+        client = self.client
+        repo = _resolve_repo(name, client)
+        client.forge_create_repo(repo.split("/", 1)[1])
+
+        work = tempfile.mkdtemp(prefix="milady-import-")
+        try:
+            _untar(tar_gz, work)
+            injected = False
+            if not os.path.exists(os.path.join(work, ".woodpecker.yml")) and \
+                    os.path.exists(os.path.join(work, "Dockerfile")):
+                with open(os.path.join(work, ".woodpecker.yml"), "w") as fh:
+                    fh.write(_kaniko_template())
+                injected = True
+            commit = _git_snapshot(work, name)
+
+            secret_source = _kubeconfig_source()
+            secret_attached = False
+            if secret_source:
+                client.repo_secret_set(repo, "kubeconfig_content", secret_source)
+                secret_attached = True
+
+            if not _git_push(work, client.forge_remote(repo)):
+                raise RuntimeError("git push ref mismatch after import")
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+        return {
+            "success": True,
+            "status": "imported",
+            "name": name,
+            "repo": repo,
+            "backend": self.backend_for(name),
+            "commit": commit,
+            "branch": "main",
+            "kaniko": injected,
+            "kubeconfig_secret": secret_attached,
+        }
 
     def execute(
         self,
