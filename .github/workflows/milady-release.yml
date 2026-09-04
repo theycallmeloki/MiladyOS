@@ -1,0 +1,74 @@
+# Builds and publishes a milady binary GitHub release for every commit to
+# main. Version follows the MiladyOS 5-octet scheme (version.json prefix +
+# monotonic git commit count, see ISO/version.sh), so each release is tagged
+# and named 0.0.0.0.<count> — the same cadence that tags the container image.
+#
+# Modeled on theycallmeloki/sandman's release workflow (tag-driven build of
+# per-platform binaries + .sha256 sidecars, gh release with a changelog), but
+# triggered per main commit instead of per v* tag because MiladyOS versions by
+# commit count rather than tags.
+
+name: Release milady binary
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # changelog needs the previous release's tag
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: milady/go.mod
+          cache: true
+
+      - name: Derive version
+        id: version
+        run: echo "version=$(ISO/version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Build release binaries
+        run: |
+          cd milady
+          mkdir -p ../dist
+          for target in "linux amd64" "linux arm64"; do
+            set -- $target
+            GOOS=$1 GOARCH=$2 CGO_ENABLED=0 go build -trimpath \
+              -ldflags "-X github.com/theycallmeloki/MiladyOS/milady/internal/version.Version=${{ steps.version.outputs.version }} -X github.com/theycallmeloki/MiladyOS/milady/internal/version.Commit=$GITHUB_SHA" \
+              -o ../dist/milady-$1-$2 ./cmd/milady
+            # cd so sha256sum records the bare filename: the asset label then
+            # matches the downloaded name (same reasoning as sandman).
+            (cd ../dist && sha256sum milady-$1-$2 > milady-$1-$2.sha256)
+          done
+          ls -la ../dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          prev=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          echo "Automated release $VERSION." > /tmp/notes.txt
+          if [ -n "$prev" ]; then
+            echo "" >> /tmp/notes.txt
+            echo "## Changes since $prev" >> /tmp/notes.txt
+            git log --oneline --no-merges "$prev..HEAD" >> /tmp/notes.txt || true
+          fi
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "release $VERSION exists; uploading assets"
+            gh release upload "$VERSION" dist/* --clobber
+          else
+            gh release create "$VERSION" dist/* \
+              --title "milady $VERSION" --notes-file /tmp/notes.txt
+          fi
+          gh release view "$VERSION" --json name,tagName,assets \
+            -q '"published " + .name + " (" + .tagName + ") with " + ([.assets[].name] | join(", "))'
