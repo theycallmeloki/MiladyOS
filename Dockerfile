@@ -201,7 +201,10 @@ RUN useradd --uid 1000 --create-home --shell /bin/bash milady
 # boots the daemon fast without a network-bound first bootstrap. The daemon
 # is launched by startup.sh and driven via emacsclient by the MCP server.
 COPY emacs/miladyos-emacs.el /home/milady/.emacs
-RUN chown milady:milady /home/milady/.emacs && \
+# emacs-gotty: what gotty launches — attaches an emacsclient frame to the
+# daemon milady drives (watch milady at :1337; M-x shell for bash inside).
+COPY emacs/emacs-gotty.sh /usr/local/bin/emacs-gotty
+RUN chown milady:milady /home/milady/.emacs && chmod +x /usr/local/bin/emacs-gotty && \
     timeout 300 gosu milady emacs --batch --eval '(load-file "/home/milady/.emacs")' \
     > /tmp/emacs-prewarm.log 2>&1 || echo "WARNING: emacs straight prewarm failed (will bootstrap at runtime)"
 
