@@ -182,7 +182,9 @@ RUN uv venv .venv && \
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # Copy Python source files
-COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_fence.py evolve_evaluators.py meta_evolve.py milady_oracle.py woodpecker_client.py /app/
+COPY main.py miladyos_mcp.py miladyos_metadata.py alpha_evolve.py evolve_fence.py evolve_evaluators.py meta_evolve.py milady_oracle.py /app/
+# CI facade + forgejo/woodpecker client now live in the woodpecker/ package.
+COPY woodpecker/__init__.py woodpecker/woodpecker_client.py woodpecker/service.py /app/woodpecker/
 
 # Copy TempleOS HolyC scripts for Milady Oracle
 COPY templeos/ /opt/templeos/scripts/

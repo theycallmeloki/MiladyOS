@@ -576,7 +576,7 @@ INI
                 else
                     echo "WARNING: server/agent did not both start — check /var/lib/woodpecker/{server,agent}.log"
                 fi
-                # API token for the MCP pipeline tools (woodpecker_client.py
+                # API token for the MCP pipeline tools (woodpecker/ package client
                 # reads it lazily from .secrets). The dance mirrors the
                 # browser: forge login -> OAuth authorize (auto-redirect once
                 # granted; the first boot submits the grant form to

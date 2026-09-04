@@ -17,6 +17,9 @@ air-gapped, on `debian:13.4`. Pipelines fire only on deliberate triggers
 | `build-bus.yml` | the deploy bus — build a sandman-mirrored repo as a KanikoBuild image; git-ops promote on PROMOTE=1 |
 | `branding.py` | Woodpecker UI branding — logo.svg header, favicon, forge avatar |
 | `milady-avatar.png` | forge avatar asset |
+| `__init__.py` | python package root — re-exports `WoodpeckerClient`, `MiladyCI` |
+| `woodpecker_client.py` | low-level forgejo/woodpecker REST client (repos, files, token, activation, trigger, status/logs) — imported as `from woodpecker import WoodpeckerClient` |
+| `service.py` | **MiladyCI** facade — gitea/woodpecker-free surface milady + MCP tools drive (see Architecture) |
 
 ## Pipeline ownership & sync (one author per artifact)
 
@@ -77,7 +80,15 @@ hole on fresh instances). Re-synced 2026-09-04.
 - Trigger API `variables` reach steps as env (`$VAR`; avoid `${VAR}` — config
   interpolation eats braced vars; `when.evaluate` on variables has a 3.18
   regression — avoid that filter form).
-- MCP pipeline tools (`create_pipeline`, `run_pipeline`, `pipeline_status`,
-  `pipeline_logs`, `list_pipelines`, `execute_command`) drive this stack via
-  `WoodpeckerClient`; AlphaEvolve evaluators run candidates on the local
+- **MiladyCI facade** (`service.py`): milady addresses *jobs* by logical name
+  + variables — never a forge repo, activation, or pipeline id. A bare name
+  auto-resolves to `milady/<name>` (cross-owner via `owner/name`). Plain steps
+  yml (image + commands) is auto-wrapped in the `when: event: manual` gate.
+  Backend is catalog-driven (never content-sniffed): the seeded *builder*
+  jobs — `kaniko-build` → `milady/kaniko`, `build-bus` → `milady/buildbus` —
+  are kaniko; any other job is a node-agent job.
+- MCP pipeline surface is `job_define(name, yml)`, `job_run(name, variables)`,
+  `job_status(name, number)`, `job_logs(name, number)`, `job_list(name)`, and
+  `execute_command(command)` (one-shot ad-hoc). These call `MiladyCI`, which
+  wraps `WoodpeckerClient`. AlphaEvolve evaluators run candidates on the local
   agent (`run_content` into `milady/evolve`).
