@@ -1102,11 +1102,46 @@ class MiladyOSToolServer:
                         streams[0], streams[1], self.server.create_initialization_options()
                     )
             
+            # POST /upload?name=<job>: receive a slurped build-context tar.gz
+            # (raw gzip body) and land it as milady/<job> via MiladyCI. Milady
+            # then drives the build through the job_* MCP tools. Content-Type
+            # is not enforced — the body is the tar.gz bytes.
+            from starlette.requests import Request
+            from starlette.responses import JSONResponse
+
+            async def handle_upload(request: Request):
+                from woodpecker import MiladyCI
+                name = (request.query_params.get("name") or "").strip()
+                if not name:
+                    return JSONResponse(
+                        {"success": False, "error": "?name=<job> is required"},
+                        status_code=400,
+                    )
+                body = await request.body()
+                if not body:
+                    return JSONResponse(
+                        {"success": False, "error": "empty body (expected tar.gz)"},
+                        status_code=400,
+                    )
+                ci = MiladyCI()
+                try:
+                    # import_context does subprocess git work; don't block the
+                    # SSE loop.
+                    result = await asyncio.to_thread(ci.import_context, name, body)
+                    return JSONResponse(result)
+                except Exception as e:  # noqa: BLE001 - surface to the caller
+                    logger.error("upload %s failed: %s", name, e)
+                    return JSONResponse(
+                        {"success": False, "error": str(e), "name": name},
+                        status_code=400,
+                    )
+
             # Create Starlette app with SSE endpoint and message handler
             starlette_app = Starlette(
                 debug=True,
                 routes=[
                     Route("/sse", endpoint=handle_sse),
+                    Route("/upload", endpoint=handle_upload, methods=["POST"]),
                     Mount("/messages/", app=sse.handle_post_message),
                 ],
             )
