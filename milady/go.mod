@@ -2,7 +2,10 @@ module github.com/theycallmeloki/MiladyOS/milady
 
 go 1.27.1
 
-require github.com/spf13/cobra v1.10.2
+require (
+	github.com/moby/patternmatcher v0.6.1
+	github.com/spf13/cobra v1.10.2
+)
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
