@@ -112,7 +112,7 @@ class WoodpeckerClient:
         with httpx.Client(timeout=self._timeout) as client:
             listed = client.get(f"{self.wp_url}/api/repos", headers=self._wp_headers())
             listed.raise_for_status()
-            for row in listed.json():
+            for row in listed.json() or []:
                 if row.get("full_name") == repo:
                     self._repo_ids[repo] = int(row["id"])
                     return int(row["id"])
@@ -150,12 +150,19 @@ class WoodpeckerClient:
         with httpx.Client(timeout=self._timeout) as client:
             listed = client.get(f"{self.wp_url}/api/repos/{rid}/secrets", headers=self._wp_headers())
             listed.raise_for_status()
-            if any((s.get("name") or "") == name for s in listed.json()):
+            if any((s.get("name") or "") == name for s in listed.json() or []):
                 return
+            # Woodpecker rejects a secret with no events (422 "invalid secret
+            # event: no event specified"); scope it so it fires for the kaniko
+            # pipeline whether pushed or run manually via job_run.
             response = client.post(
                 f"{self.wp_url}/api/repos/{rid}/secrets",
                 headers=self._wp_headers(),
-                json={"name": name, "value": value},
+                json={
+                    "name": name,
+                    "value": value,
+                    "events": ["push", "tag", "pull_request", "manual"],
+                },
             )
             if response.status_code not in (200, 201, 204):
                 raise RuntimeError(
@@ -320,7 +327,7 @@ class WoodpeckerClient:
                     "branch": p.get("branch"),
                     "created": p.get("created"),
                 }
-                for p in response.json()
+                for p in response.json() or []
             ]
 
     def _pipeline(self, repo: str, pipeline_id: int) -> Dict[str, Any]:
