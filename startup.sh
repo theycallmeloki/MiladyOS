@@ -210,7 +210,7 @@ if command -v filebrowser > /dev/null 2>&1; then
 
     # Start filebrowser instances
     filebrowser -a 0.0.0.0 -r /metrics -d /etc/filebrowser-metrics/filebrowser.db -p 7331 &
-    filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser-models/filebrowser.db -p 1337 &
+    filebrowser -a 0.0.0.0 -r /models -d /etc/filebrowser-models/filebrowser.db -p 8088 &
     
     sleep 5
     echo "Filebrowser instances started"
@@ -411,28 +411,27 @@ sleep 3
 # Start tailscaled (client)
 tailscaled --state=/var/lib/tailscale/tailscaled.state &
 
-sleep 3
-
-# Start GoTTY web terminal if available
+# Start GoTTY web terminal if available. Port 1337 = "observe milady": the
+# terminal opens straight into emacsclient -t (attached to the emacs daemon
+# milady drives over MCP), so buffers/commands appear live. Bash is one
+# M-x shell away inside emacs.
 if command -v gotty > /dev/null 2>&1; then
-    echo "Starting GoTTY web terminal on port 8088..."
+    echo "Starting GoTTY web terminal on port 1337 (emacs client)..."
     # --permit-write allows input (interactive)
     # --reconnect attempts to reconnect on disconnect
     # --title-format sets the browser tab title
-    # Original container login was milady/milady; GoTTY terminal
-    # is the operator surface now, so basic-auth it with the same defaults.
-    gotty --port 8088 \
+    gotty --port 1337 \
           --address 0.0.0.0 \
           --permit-write \
           --reconnect \
           --credential "${MILADY_ADMIN_ID:-milady}:${MILADY_ADMIN_PASSWORD:-milady}" \
-          --title-format "MiladyOS Terminal" \
-          /bin/bash &
+          --title-format "MiladyOS Emacs (observe milady)" \
+          /usr/local/bin/emacs-gotty &
     sleep 2
 
     if pgrep -x "gotty" > /dev/null; then
-        echo "✓ GoTTY web terminal started on port 8088"
-        echo "✓ Access interactive terminal at: http://localhost:8088"
+        echo "✓ GoTTY web terminal started on port 1337"
+        echo "✓ Observe milady at: http://localhost:1337"
     else
         echo "WARNING: GoTTY did not start successfully"
     fi
