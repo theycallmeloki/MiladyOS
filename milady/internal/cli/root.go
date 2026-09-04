@@ -30,8 +30,8 @@ func NewRootCmd() *cobra.Command {
 		Short: "MiladyOS host companion",
 		Long: "milady is the host-side companion for the MiladyOS container.\n\n" +
 			"It owns operations that must run on the real host (build-context slurp, " +
-			"k3s join) and talks to the MiladyOS container's MCP for everything the " +
-			"container owns (ask).",
+			"k3s join, self-update) and talks to the MiladyOS container's MCP for " +
+			"everything the container owns (ask).",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       version.Version,
@@ -41,6 +41,7 @@ func NewRootCmd() *cobra.Command {
 		newAskCmd(),
 		newSlurpCmd(),
 		newK3sCmd(),
+		newUpdateCmd(),
 		newVersionCmd(),
 	)
 
