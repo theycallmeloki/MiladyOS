@@ -307,6 +307,17 @@ else
 fi
 
 
+# Emacs daemon — the MCP emacs_eval tools drive a live in-container Emacs via
+# emacsclient on the local socket. Co-located (started here) so no external
+# reachability is needed. Launch before the MCP server so the tools are ready.
+if command -v emacs >/dev/null 2>&1; then
+    echo "Starting Emacs daemon (MCP emacs_eval target)..."
+    HOME="${MILADY_HOME:-/home/milady}" emacs --daemon >/tmp/emacs-daemon.log 2>&1 &
+else
+    echo "WARNING: emacs not installed, skipping Emacs daemon (emacs_eval tools will error)"
+fi
+
+
 # Start MCP server if main.py exists
 # NOTE: must use the /app venv python explicitly — `python` on PATH resolves to
 # the hermes venv (/opt/hermes/.venv/bin precedes /app/.venv/bin), which lacks
