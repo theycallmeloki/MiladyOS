@@ -508,25 +508,6 @@ RUN set -e; \
     rm -f /tmp/sandman-linux-amd64 /tmp/sandman.sha256 && \
     command -v sandman >/dev/null || exit 1
 
-# Bridge between the MiladyOS MCP server (SSE :6000) and any
-# OpenAI-compatible LLM. Installed from source at a pinned commit
-# (MILADY_LLM_BRIDGE_COMMIT) into its own venv, which pins mcp<2 — the
-# client-API shape the bridge uses (Tool.inputSchema, ClientSession
-# internals) — while /app/.venv runs mcp 2.x for the MiladyOS server.
-# The LLM endpoint is per-user — set LLM_BASE_URL/LLM_MODEL at runtime (see
-# milady-llm-bridge README). The bridge defaults to the local ollama
-# (http://localhost:11434/v1, model llama3.2); which model is available is a
-# runtime concern (ollama pull), not baked at build. Single MCP server by
-# default (MCP_SERVER_URL); the MCP_SERVERS env (JSON array of sse/stdio
-# servers) enables multi-server aggregation without a rebuild.
-ENV MCP_SERVER_URL=http://localhost:6000/sse
-ARG MILADY_LLM_BRIDGE_COMMIT=c6ef529263722c30d9f058e418c4a921d6d647bc
-RUN set -e; \
-    uv venv /opt/milady/.venv && \
-    uv pip install --python /opt/milady/.venv/bin/python "git+https://github.com/theycallmeloki/milady-llm-bridge@${MILADY_LLM_BRIDGE_COMMIT}" && \
-    /opt/milady/.venv/bin/milady --version >/dev/null
-ENV PATH="/opt/milady/.venv/bin:${PATH}"
-
 # ---------- CI: Woodpecker (cli-exec + forge/server/agent) ----------
 # Phase A runs pipelines on-demand via `woodpecker-cli exec` — no daemon, no
 # forge, nothing auto-runs. Binary pinned + sha256-verified by install-cli.sh
@@ -553,7 +534,7 @@ COPY Caddyfile /etc/caddy/Caddyfile
 
 # ---------- Runtime ----------
 # The MiladyOS 5-octet version (version.json + commit count), baked by CI via
-# build-arg. `milady --version` reports it (the bridge CLI reads MILADYOS_VERSION).
+# build-arg (image metadata).
 ARG MILADYOS_VERSION=dev
 ENV MILADYOS_VERSION=$MILADYOS_VERSION
 
