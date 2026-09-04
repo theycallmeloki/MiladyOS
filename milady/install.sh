@@ -4,8 +4,12 @@
 #
 #   curl -sSL https://raw.githubusercontent.com/theycallmeloki/MiladyOS/main/milady/install.sh | sh
 #
-# Downloads milady-<os>-<arch> (+ its .sha256) from the latest GitHub release,
-# verifies the checksum, and installs. milady is a CLI companion, not a
+# Resolves the latest release tag (via the /releases/latest HTTP redirect, no
+# API or jq needed), then downloads milady-<os>-<arch> (+ its .sha256) from
+# THAT pinned tag and verifies the checksum before installing. Pinning the tag
+# is important: the floating /releases/latest/download/ URL can serve the
+# binary and checksum from two different in-flight releases (they publish per
+# commit), which would fail the sha256 check. milady is a CLI companion, not a
 # daemon — no systemd unit, no service; landing the binary is the whole job.
 # Once installed, `milady update` keeps it current.
 #
@@ -29,7 +33,6 @@ esac
 INSTALL_DIR=${INSTALL_DIR:-/usr/local/bin}
 dest="$INSTALL_DIR/milady"
 asset="milady-$os-$arch"
-base="https://github.com/theycallmeloki/MiladyOS/releases/latest/download"
 
 command -v curl >/dev/null 2>&1 || { echo "install.sh: curl is required" >&2; exit 1; }
 verify() { # $1 = checksum file (run in the download dir)
@@ -41,11 +44,19 @@ verify() { # $1 = checksum file (run in the download dir)
 	fi
 }
 
-echo "install.sh: fetching $asset (latest release)"
+# Resolve the latest release tag: GitHub redirects /releases/latest to
+# .../releases/tag/<tag>; take the basename of the effective URL.
+tag="$(curl -sIL -o /dev/null -w '%{url_effective}' \
+	https://github.com/theycallmeloki/MiladyOS/releases/latest)"
+tag="${tag##*/}"
+[ -n "$tag" ] || { echo "install.sh: could not resolve the latest release tag" >&2; exit 1; }
+base="https://github.com/theycallmeloki/MiladyOS/releases/download/$tag"
+
+echo "install.sh: fetching $asset ($tag)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 curl -fsSL -o "$tmp/$asset" "$base/$asset" \
-	|| { echo "install.sh: no $asset asset on the latest release (built platforms: linux amd64/arm64)" >&2; exit 1; }
+	|| { echo "install.sh: no $asset asset on $tag (built platforms: linux amd64/arm64)" >&2; exit 1; }
 curl -fsSL -o "$tmp/$asset.sha256" "$base/$asset.sha256"
 ( cd "$tmp" && verify "$asset.sha256" )
 chmod +x "$tmp/$asset"
