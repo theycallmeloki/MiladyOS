@@ -52,4 +52,24 @@ docker run -d --name miladyos --privileged --restart=unless-stopped --net=host \
   --env MILADY_KUBECONFIG_CONTENT="$(cat "${KUBECONFIG:-$HOME/.kube/config}" 2>/dev/null || true)" \
   -v /var/run/docker.sock:/var/run/docker.sock "$IMAGE"
 docker ps --filter name=miladyos
-echo ">> bootstrapping... watch with: docker logs --follow miladyos"
+
+# Wait until the stack is genuinely usable before returning. A plain [ -s ]
+# check on .secrets is NOT enough: startup.sh writes the agent/grpc keys first
+# and appends WOODPECKER_TOKEN= last, so an early import could see a non-empty
+# file with no token yet and fail on first use (the client re-reads, but the
+# first call still errors). Block until the token line actually exists so the
+# next step (MCP import / job_run) is clean.
+echo ">> waiting for forgejo + woodpecker + MCP + kaniko token..."
+READY=0
+for i in $(seq 1 60); do
+  fg="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:3000/ 2>/dev/null || true)"
+  wp="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:8000/ 2>/dev/null || true)"
+  tok="$(docker exec miladyos sh -c "grep -q '^WOODPECKER_TOKEN=' /var/lib/woodpecker/.secrets && echo yes || echo no" 2>/dev/null || true)"
+  if [ "$fg" = "200" ] && [ "$wp" = "200" ] && [ "$tok" = "yes" ]; then READY=1; break; fi
+  sleep 3
+done
+if [ "$READY" = 1 ]; then
+  echo ">> miladyos ready (forgejo + woodpecker + MCP, kaniko token present)"
+else
+  echo ">> WARNING: not fully ready after $((i * 3))s — check: docker logs --follow miladyos"
+fi
