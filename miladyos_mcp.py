@@ -106,6 +106,29 @@ logger.handlers = []
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
+def _emacs_client_eval(code: str, timeout: float = 15.0) -> str:
+    """Evaluate CODE in the in-container emacs daemon via emacsclient.
+
+    Returns emacsclient's printed stdout. Raises RuntimeError on any failure
+    (emacsclient missing, daemon down, eval error, or timeout). Runs on the
+    local socket because the daemon is co-located (started by startup.sh).
+    """
+    import subprocess
+    try:
+        res = subprocess.run(
+            ["emacsclient", "-e", code],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except FileNotFoundError:
+        raise RuntimeError("emacsclient not found — install emacs-nox")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"emacsclient timed out after {timeout}s")
+    if res.returncode != 0:
+        raise RuntimeError((res.stderr or res.stdout or "").strip()
+                           or f"emacsclient exit {res.returncode}")
+    return res.stdout.strip()
+
+
 # ===== Configuration =====
 class Config:
     """MiladyOS configuration settings."""
@@ -128,6 +151,8 @@ class Config:
         "job_status",
         "job_logs",
         "job_list",
+        "emacs_eval",
+        "emacs_ping",
     ]
 
 
@@ -166,6 +191,29 @@ class MiladyOSToolServer:
             "hello_world": {
                 "name": "Hello World",
                 "description": "Say hello from MiladyOS!",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            "emacs_eval": {
+                "name": "Emacs Eval",
+                "description": "Evaluate Emacs Lisp in the in-container Emacs daemon. This is how you drive a live Emacs: switch/open buffers, insert text, run commands, manage windows, inspect state. Returns the evaluated result.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "Emacs Lisp expression to evaluate in the daemon"
+                        }
+                    },
+                    "required": ["code"]
+                }
+            },
+            "emacs_ping": {
+                "name": "Emacs Ping",
+                "description": "Check the in-container Emacs daemon is reachable (returns its version).",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -675,6 +723,22 @@ class MiladyOSToolServer:
                     return MiladyCI().list_runs(name, int(limit))
                 except Exception as e:
                     return {"success": False, "status": "error", "error": f"job_list failed: {e}"}
+
+            elif tool_id == "emacs_eval":
+                code = arguments.get("code")
+                if not code:
+                    return {"success": False, "status": "error", "error": "code is required"}
+                try:
+                    return {"success": True, "result": _emacs_client_eval(code)}
+                except Exception as e:
+                    logger.error(f"emacs_eval failed: {e}")
+                    return {"success": False, "status": "error", "error": str(e)}
+
+            elif tool_id == "emacs_ping":
+                try:
+                    return {"success": True, "result": _emacs_client_eval("(emacs-version)")}
+                except Exception as e:
+                    return {"success": False, "status": "error", "error": str(e)}
 
             elif tool_id == "evolve_template":
                 template_name = arguments.get("template_name")

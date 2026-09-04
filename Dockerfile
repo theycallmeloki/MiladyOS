@@ -89,6 +89,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     findutils \
     wireguard qrencode iptables-persistent unzip expect sudo \
     gnupg2 apt-transport-https iptables passwd tini \
+    emacs-nox \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -194,6 +195,15 @@ COPY templeos/ /opt/templeos/scripts/
 # swap). Created here (before the hermes /opt/data chown below) so the user
 # exists for every later chown/USER; passwd comes from the apt pass above.
 RUN useradd --uid 1000 --create-home --shell /bin/bash milady
+
+# ---------- Emacs (driven by the MCP emacs_eval tools) ----------
+# Bake the MCP-enabled .emacs and pre-warm straight.el so a fresh container
+# boots the daemon fast without a network-bound first bootstrap. The daemon
+# is launched by startup.sh and driven via emacsclient by the MCP server.
+COPY emacs/miladyos-emacs.el /home/milady/.emacs
+RUN chown milady:milady /home/milady/.emacs && \
+    timeout 300 gosu milady emacs --batch --eval '(load-file "/home/milady/.emacs")' \
+    > /tmp/emacs-prewarm.log 2>&1 || echo "WARNING: emacs straight prewarm failed (will bootstrap at runtime)"
 
 # ---------- Hermes agent (NousResearch) ----------
 # Self-improving AI agent (hermes-agent on PyPI). Installed into its own
