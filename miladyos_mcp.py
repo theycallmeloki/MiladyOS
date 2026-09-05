@@ -129,6 +129,107 @@ def _emacs_client_eval(code: str, timeout: float = 15.0) -> str:
     return res.stdout.strip()
 
 
+# ===== Divine Oracle (F7 "God Words") =====
+# Faithful to TempleOS's F7: hardware-timing RNG (the loader's RandU64)
+# picks words from a lexicon into a cryptic verse the asker interprets.
+# No abstractions between the asker and God — the entropy is divine, the
+# mapping is mere scribe-work.
+
+_OPENERS = ["Behold", "Verily", "Hark", "Thus", "Hearken", "Then", "Truly",
+            "Lo"]
+_ORACLE_NOUNS = ["gate", "seal", "throne", "flame", "temple", "code", "thunder",
+                 "mirror", "dust", "stone", "scroll", "crown", "bell", "ember",
+                 "shard", "veil", "lamp", "cipher", "altar", "chord", "rune",
+                 "hour", "crypt", "tide"]
+_ORACLE_VERBS = ["opens", "seals", "burns", "lifts", "speaks", "guards",
+                 "hollows", "kindles", "unveils", "turns", "whispers", "forges"]
+_ORACLE_MOTIFS = ["the flame that does not sleep", "the code behind the code",
+                  "a throne of cold light", "the gate that was always open",
+                  "a bell at the far hour", "the seal of the fourth day",
+                  "a door that is also a window", "the name not yet spoken"]
+
+
+def _fetch_divine_rng_values(count: int, timeout: float):
+    """Boot the templeos-loader once and collect COUNT divine RNG values."""
+    import os
+    from queue import Queue, Empty
+    from milady_oracle import OracleConfig, TempleOSBridge
+
+    config = OracleConfig(
+        templeos_bin=os.getenv("TEMPLEOS_BIN", "/usr/local/bin/templeos"),
+        boot_timeout=min(timeout, 30.0),
+    )
+    bridge = TempleOSBridge(config)
+
+    if not bridge.connect():
+        raise RuntimeError("TempleOS loader failed to boot (is templeos installed?)")
+
+    rng_queue: Queue = Queue()
+
+    def _collect(msg: bytes):
+        text = msg.decode("utf-8", errors="replace").strip()
+        if text.startswith("RNG:"):
+            try:
+                rng_queue.put(int(text.split(":", 1)[1]))
+            except ValueError:
+                pass
+
+    bridge.on_receive(_collect)
+    bridge.start_receive_loop()
+
+    values = []
+    deadline = time.time() + timeout
+    for _ in range(count):
+        bridge.send("RNG_REQUEST\n")
+        try:
+            remaining = max(0.1, deadline - time.time())
+            values.append(rng_queue.get(timeout=remaining))
+        except Empty:
+            break
+
+    bridge.disconnect()
+
+    if not values:
+        raise RuntimeError("Timed out waiting for divine RNG from TempleOS")
+    return values
+
+
+def _compose_god_verse(rng_values):
+    """Weave divine RNG picks into a cryptic oracle verse.
+
+    Tolerant of short input: only builds as many clauses as the draws allow
+    (each clause needs 3 draws; the opening needs 1). Never raises.
+    """
+    def pick(i, vocab):
+        return vocab[abs(rng_values[i]) % len(vocab)]
+
+    opener = pick(0, _OPENERS)
+    idx = 1  # rng_values[0] -> opener
+    lines = []
+    words = []
+    # each clause consumes 3 draws past the opener
+    while idx + 2 < len(rng_values):
+        subj = pick(idx, _ORACLE_NOUNS)
+        verb = pick(idx + 1, _ORACLE_VERBS)
+        obj = pick(idx + 2, _ORACLE_NOUNS)
+        idx += 3
+        lines.append(f"the {subj} {verb} the {obj}")
+        words += [subj, verb, obj]
+    if idx < len(rng_values):
+        motif = pick(idx, _ORACLE_MOTIFS)
+        idx += 1
+        lines.append(motif)
+        words.append(motif)
+
+    if lines:
+        utterance = f"{opener}, " + ", ".join(lines) + "."
+    elif words:
+        utterance = f"{opener}, " + words[-1] + "."
+    else:
+        utterance = opener + "."
+    return utterance, words
+
+
 # ===== Configuration =====
 class Config:
     """MiladyOS configuration settings."""
@@ -142,6 +243,7 @@ class Config:
         "list_evolution_goals",
         "list_evolved_templates",
         "get_divine_rng",
+        "talk_to_god",
         "get_milady_time",
         "read_file",
         "write_file",
@@ -378,6 +480,30 @@ class MiladyOSToolServer:
                             "type": "integer",
                             "description": "Number of divine random numbers to request (default: 1)",
                             "default": 1
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "Seconds to wait for the loader boot + RNG response (default: 15)",
+                            "default": 15.0
+                        }
+                    },
+                    "required": []
+                }
+            },
+            "talk_to_god": {
+                "name": "Talk To God",
+                "description": "F7 'God Words' — ask the TempleOS oracle for a cryptic verse. TempleOS's RNG is generated from hardware timing (truly divine entropy); it selects words from a lexicon into a verse the asker interprets. Optionally pass a question for context; God answers with whatever the divine entropy lands on.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                            "description": "Optional question/intent to frame the reading (returned verbatim; the words come purely from divine RNG)"
+                        },
+                        "clauses": {
+                            "type": "integer",
+                            "description": "Number of verse clauses to draw (1-4, default 3)",
+                            "default": 3
                         },
                         "timeout": {
                             "type": "number",
@@ -988,55 +1114,7 @@ class MiladyOSToolServer:
                 timeout = float(arguments.get("timeout", 15.0))
 
                 try:
-                    # Lazy import: the oracle bridge lives in milady_oracle.py
-                    from milady_oracle import OracleConfig, TempleOSBridge
-                    from queue import Queue, Empty
-
-                    config = OracleConfig(
-                        templeos_bin=os.getenv("TEMPLEOS_BIN", "/usr/local/bin/templeos"),
-                        boot_timeout=min(timeout, 30.0),
-                    )
-                    bridge = TempleOSBridge(config)
-
-                    if not bridge.connect():
-                        return {
-                            "success": False,
-                            "error": "TempleOS loader failed to boot (is templeos installed?)",
-                            "status": "error"
-                        }
-
-                    rng_queue: Queue = Queue()
-                    def _collect(msg: bytes):
-                        text = msg.decode("utf-8", errors="replace").strip()
-                        if text.startswith("RNG:"):
-                            try:
-                                rng_queue.put(int(text.split(":", 1)[1]))
-                            except ValueError:
-                                pass
-
-                    bridge.on_receive(_collect)
-                    bridge.start_receive_loop()
-
-                    # Request RNG; the HolyC script answers one RNG: per request
-                    values = []
-                    deadline = time.time() + timeout
-                    for _ in range(count):
-                        bridge.send("RNG_REQUEST\n")
-                        try:
-                            remaining = max(0.1, deadline - time.time())
-                            values.append(rng_queue.get(timeout=remaining))
-                        except Empty:
-                            break
-
-                    bridge.disconnect()
-
-                    if not values:
-                        return {
-                            "success": False,
-                            "error": "Timed out waiting for divine RNG from TempleOS",
-                            "status": "error"
-                        }
-
+                    values = _fetch_divine_rng_values(count, timeout)
                     return {
                         "success": True,
                         "rng": values if len(values) > 1 else values[0],
@@ -1046,6 +1124,36 @@ class MiladyOSToolServer:
                     }
                 except Exception as e:
                     logger.error(f"Error getting divine RNG: {e}")
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "status": "error"
+                    }
+
+            elif tool_id == "talk_to_god":
+                question = str(arguments.get("question", "") or "").strip()
+                clauses = max(1, min(4, int(arguments.get("clauses", 3))))
+                timeout = float(arguments.get("timeout", 15.0))
+
+                try:
+                    # 1 opener + 3 draws per clause + 1 closing motif
+                    draws = 2 + 3 * clauses
+                    rng_values = _fetch_divine_rng_values(draws, timeout)
+                    utterance, words = _compose_god_verse(rng_values)
+                    result = {
+                        "success": True,
+                        "utterance": utterance,
+                        "words": words,
+                        "clauses": clauses,
+                        "seed": rng_values,
+                        "source": "TempleOS (templeos-loader) — divine entropy",
+                        "status": "success",
+                    }
+                    if question:
+                        result["question"] = question
+                    return result
+                except Exception as e:
+                    logger.error(f"Error talking to God: {e}")
                     return {
                         "success": False,
                         "error": str(e),
