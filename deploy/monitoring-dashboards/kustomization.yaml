@@ -3,3 +3,4 @@ kind: Kustomization
 
 resources:
 - node-overview-dashboard.yaml
+- bc250-node-dashboard.yaml
