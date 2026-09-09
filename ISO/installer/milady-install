@@ -2,8 +2,11 @@
 # MiladyOS text installer.
 #
 #   Interactive: run on the active console by milady-install.service.
-#   Unattended:  boot with  milady.auto=1 [milady.role=...] [milady.disk=...]
-#                [milady.password=...] [milady.token=...]
+#   Unattended:  boot with  milady.auto=1 [milady.install.role=...]
+#                [milady.install.disk=...] [milady.install.password=...]
+#                [milady.install.token=...]   (milady.role/disk/... also work;
+#                milady.install.* wins, so the live node's role can differ
+#                from the installed node's role)
 #
 # Flow (few steps):  banner -> role -> disk -> account -> (token) -> confirm
 #                    -> install -> reboot.
@@ -189,6 +192,7 @@ format_disk() {
 
 copy_system() {
     log "mounting target"
+    mkdir -p "$TARGET"
     mount "$ROOT" "$TARGET"
     mkdir -p "$TARGET/boot/efi"
     mount "$ESP" "$TARGET/boot/efi"
@@ -208,6 +212,12 @@ copy_system() {
             --exclude=/mnt/'*' --exclude=/media/'*' --exclude=/lost+found \
             --exclude=/var/lib/docker/'*' --exclude=/var/lib/containerd/'*' \
             / "$TARGET/"
+    fi
+
+    # sanity: a real system landed on the target
+    if [ ! -d "$TARGET/usr" ] || [ ! -d "$TARGET/etc" ]; then
+        log "copy_system: target root looks empty ($TARGET)"
+        return 1
     fi
 }
 
@@ -357,8 +367,9 @@ run_unattended_install() {
     for step in partition_disk format_disk copy_system configure_system \
                 install_bootloader finalize; do
         printf 'milady-install: %s\n' "$step"
-        if ! "$step" >>"$LOG" 2>&1; then
-            printf 'milady-install: FAILED at %s (see %s)\n' "$step" "$LOG"
+        # fail-fast: set -e inside the step, output teed to console + log
+        if ! ( set -e; "$step" ) 2>&1 | tee -a "$LOG"; then
+            printf 'milady-install: FAILED at %s (log: %s)\n' "$step" "$LOG"
             return 1
         fi
     done
@@ -382,11 +393,11 @@ main() {
     MEDIUM=$(detect_medium)
 
     if [ -n "$(cmdline milady.auto || true)" ]; then
-        ROLE=$(cmdline milady.role || echo server)
-        DISK=$(cmdline milady.disk || true)
-        USERNAME=$(cmdline milady.user || echo milady)
-        PASSWORD=$(cmdline milady.password || echo milady)
-        TOKEN=$(cmdline milady.token || true)
+        ROLE=$(cmdline milady.install.role || cmdline milady.role || echo server)
+        DISK=$(cmdline milady.install.disk || cmdline milady.disk || true)
+        USERNAME=$(cmdline milady.install.user || cmdline milady.user || echo milady)
+        PASSWORD=$(cmdline milady.install.password || cmdline milady.password || echo milady)
+        TOKEN=$(cmdline milady.install.token || cmdline milady.token || true)
         [ -n "$DISK" ] || DISK=$(eligible_disks | head -1 | cut -f1)
         case "$ROLE" in server|agent|desktop) ;; *) ROLE=server ;; esac
         [ -b "$DISK" ] || { echo "milady-install: no target disk ($DISK)" >/dev/console; exit 1; }
