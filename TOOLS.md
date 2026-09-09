@@ -123,3 +123,19 @@ Add whatever helps you do your job. This is your cheat sheet. Update it as you d
   Redis container `milady-redis` (redis:7-alpine, port 6379, restart
   unless-stopped) provides it. `REDIS_HOST`/`REDIS_PORT` default to localhost:6379.
 - Smoke test over stdio passed: `symphony_state` + `autoresearch_best` returned live data.
+
+## A-path test state (2026-09-09/10)
+
+- `qwen-shim` user service: `~/.local/bin/qwen-shim.py` on `:18020` maps
+  `qwen3.8-27b` -> ollama `llama3.1:8b` (the real vLLM image/weights are gone
+  from this box). Test harness only; `systemctl --user stop qwen-shim` to remove.
+- ufw now allows `18020/tcp` from `192.168.1.0/24` and `10.244.0.0/16` (Symphony
+  pi config expects `http://192.168.1.147:18020/v1`).
+- A-path verified so far: enqueue (HTTP 201, bound to fork URL) -> Symphony
+  dispatch -> **RepoDelta bootstrap works** (workspace `/data/workspaces/<id>`
+  had the mirror tree + `.sandman-src` pinned to `351b134be5860106` / fork URL)
+  -> parks `awaiting` -> `settle` returns `needs_result` safely.
+- Probe intent `int-1788957069737572-UBHW2w` is parked `awaiting`, ready to
+  re-activate. Blocker: all 4 Talos workers `NotReady` (kubelet stopped posting),
+  Symphony pinned to `talos-ms4-c7v` -> service has no endpoints -> ingress /
+  port-forward / kubectl-proxy all fail. Fix the workers and A can finish.
