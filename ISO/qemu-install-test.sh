@@ -32,6 +32,7 @@ QEMU_IMG="milady-qemu:13.4"
 TAP=tap2
 MON=/tmp/milady-install-mon.sock
 SER=/tmp/milady-install-serial.sock
+SERLOG=/tmp/milady-install-serial.log
 NAME=milady-install-vm
 
 docker stop "$NAME" >/dev/null 2>&1 || true
@@ -67,7 +68,7 @@ if [ ! -f "$ISO_DIR/out/$SCRATCH_NAME" ]; then
     echo "created live scratch disk: $SCRATCH_NAME"
 fi
 
-rm -f "$MON" "$SER"
+rm -f "$MON" "$SER" "$SERLOG"
 
 if [ "$MODE" = "install" ]; then
     docker run -d --rm --name "$NAME" \
@@ -81,14 +82,15 @@ if [ "$MODE" = "install" ]; then
             -drive file=/boot.iso,media=cdrom,readonly=on \
             -drive file="$SCRATCH",if=virtio,format=qcow2 \
             -drive file="$DISK",if=virtio,format=qcow2 \
+            -chardev socket,id=ser,path="$SER",server=on,wait=off,logfile="$SERLOG",logappend=off \
+            -serial chardev:ser \
             -boot d -no-reboot \
-            -serial unix:"$SER",server=on,wait=off \
             -monitor unix:"$MON",server=on,wait=off \
             -vnc :5 \
             "${NET_ARGS[@]}" \
             -device virtio-net-pci,netdev=n0,mac=02:00:00:00:00:03 \
     >/dev/null 2>&1
-    echo "install VM up: serial=$SER (text installer) vnc=:5 monitor=$MON"
+    echo "install VM up: serial=$SER (text installer) log=$SERLOG vnc=:5 monitor=$MON"
     echo "  installer target: the SECOND virtio disk (vdb, $DISK_NAME)"
 else
     docker run -d --rm --name "$NAME" \
@@ -99,8 +101,9 @@ else
         "$QEMU_IMG" \
         qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 8192 \
             -drive file="$DISK",if=virtio,format=qcow2 \
+            -chardev socket,id=ser,path="$SER",server=on,wait=off,logfile="$SERLOG",logappend=off \
+            -serial chardev:ser \
             -boot c -no-reboot \
-            -serial unix:"$SER",server=on,wait=off \
             -monitor unix:"$MON",server=on,wait=off \
             -vnc :5 \
             "${NET_ARGS[@]}" \
