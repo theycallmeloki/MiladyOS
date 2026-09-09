@@ -135,7 +135,26 @@ Add whatever helps you do your job. This is your cheat sheet. Update it as you d
   dispatch -> **RepoDelta bootstrap works** (workspace `/data/workspaces/<id>`
   had the mirror tree + `.sandman-src` pinned to `351b134be5860106` / fork URL)
   -> parks `awaiting` -> `settle` returns `needs_result` safely.
-- Probe intent `int-1788957069737572-UBHW2w` is parked `awaiting`, ready to
-  re-activate. Blocker: all 4 Talos workers `NotReady` (kubelet stopped posting),
-  Symphony pinned to `talos-ms4-c7v` -> service has no endpoints -> ingress /
-  port-forward / kubectl-proxy all fail. Fix the workers and A can finish.
+- Probe intent `int-1788991308569846-UDqxjA` **completed the full A path**: MCP
+  `autoresearch_enqueue` -> dispatch -> RepoDelta bootstrap -> agent run ->
+  park `awaiting` -> transcript carried `RESULT: {"val_bpb":9.99}` -> MCP
+  `autoresearch_settle` decided `discard` (vs best 1.327183) and called `close`
+  -> intent `done`, row appended to `results.tsv`.
+
+## Cluster outage fix (2026-09-10)
+
+- Root cause: DHCP handed out a dead NTP server (`68.197.222.112`); Talos nodes
+  waited on time sync, so etcd/kubelet never started, apiserver was down, all
+  workers NotReady.
+- Fixed with `talosctl` (binary copied from the 500G backup drive to
+  `~/.local/bin/talosctl`; talosconfig at `~/.talos/config`, copied from
+  `.../home/laneone/talosconfig`). Strategic merge patch on all 7 nodes:
+  `machine.time.servers = [time.cloudflare.com, pool.ntp.org]` (JSON6902 is
+  rejected on multi-doc configs). Applied without reboot; all nodes synced and
+  came Ready.
+- Symphony pod had died with the kubelet; deleted it, then Longhorn CSI had to
+  recover (deleted Unknown `longhorn-manager`/`csi-plugin` pods). The pod landed
+  on a node without the cached image and the pull stalled, so the Deployment was
+  pinned: `spec.template.spec.nodeSelector.kubernetes.io/hostname=talos-ms4-c7v`
+  (the node that has `symphony:ee87142780f1` cached). **Temporary** — revert when
+  the image is everywhere / registry pull is healthy.

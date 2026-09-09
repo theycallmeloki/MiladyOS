@@ -115,12 +115,15 @@ screen_role() {
 # Excludes the live medium, the live docker scratch disk (MILADY_DOCKER),
 # mounted disks, and pseudo disks (zram/loop/ram/dm).
 eligible_disks() {
-    local name size type model
+    local name size type model bytes
     while read -r name size type model; do
         [ "$type" = "disk" ] || continue
-        case "$name" in */zram*|*/loop*|*/ram*|*/dm-*) continue ;; esac
+        case "$name" in */zram*|*/loop*|*/ram*|*/dm-*|*/fd*) continue ;; esac
         [ -n "$LIVE_DISK" ] && [ "$name" = "$LIVE_DISK" ] && continue
-        case "$size" in 0B|"") continue ;; esac
+        # drop anything below the install minimum (also catches the QEMU
+        # floppy /dev/fd0, which is a 'disk' of 4K)
+        bytes=$(lsblk -bdno SIZE "$name" 2>/dev/null | head -1)
+        [ -n "$bytes" ] && [ "$bytes" -ge "$MIN_BYTES" ] || continue
         lsblk -no LABEL "$name" 2>/dev/null | grep -qx 'MILADY_DOCKER' && continue
         lsblk -no MOUNTPOINT "$name" 2>/dev/null | grep -q '[^[:space:]]' && continue
         printf '%s\t%s\t%s\n' "$name" "$size" "${model:-disk}"
