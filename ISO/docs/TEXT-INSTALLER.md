@@ -39,16 +39,25 @@ Unattended/CI mode (no TUI): boot with
 Calamares was removed from the build (package list + hook + live session); its
 module/branding files remain parked under `ISO/calamares/` for reference.
 
-### Verified (QEMU, 0.0.0.0.694)
+### Verified (QEMU, 0.0.0.0.694 unattended / 0.0.0.0.698 interactive)
 
 Payload-less test ISO + `qemu-install-test.sh … install` then `… boot`,
 observed over serial: install completes, the installed node boots (BIOS GRUB,
 serial console), assigns a random `milady-<id>` hostname, DHCPs `eth0`, applies
 `role=server`, and brings up a k3s control plane (`Ready control-plane
 v1.36.4+k3s1`, token printed, 0 failed units). Nine installer/ISO bugs found and
-fixed in the process — see `memory/2026-09-09.md`. Not yet exercised: the
-interactive dialog screens (unattended path was tested) and the embedded
-container payload (test built with `--no-payload`).
+fixed in the process — see `memory/2026-09-09.md`.
+
+The **interactive dialog TUI** was then driven over the serial socket (a stdlib
+Python driver; dialog embeds attribute escapes inside strings, so match on
+de-escaped output). Server run exercised every screen — banner/ASCII art, role
+menu, disk menu, username/password/confirm, summary, gauge steps, completion,
+reboot — and produced a working node; an agent run exercised the join-token
+screen (`ROLE=agent`, no token → join later). That run also found the floppy
+`/dev/fd0` being offered as an install target, now fixed.
+
+Still not exercised: the embedded container payload (tests used
+`--no-payload`, so the container pulls from the registry).
 
 ---
 
