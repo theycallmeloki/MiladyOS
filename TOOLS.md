@@ -71,3 +71,26 @@ council: milady
 ---
 
 Add whatever helps you do your job. This is your cheat sheet. Update it as you discover more about your environment and the MiladyOS mesh.
+
+---
+
+## sandman (peer-to-peer docker fabric)
+
+- **Daemon (control plane):** `192.168.1.15:4242`, v0.2.50 — 8 hosts, 15 pipelines, 112 jobs.
+- **CLI:** `~/.local/bin/sandman` (v0.2.50, GitHub release, checksum-verified).
+  `SANDMAN_ADDR=192.168.1.15:4242` exported in `~/.bashrc`.
+- **Worker on this box:** `miladyos-42` @ `192.168.1.147:4343`, labels `exec,delta`,
+  advertises RTX 3090 + A4000.
+  - User unit: `~/.config/systemd/user/sandman-worker.service` (enabled, `Linger=yes`).
+  - Launcher: `~/.local/bin/sandman-worker-up` — uses `newgrp docker` because the
+    login session predates `laneone`'s docker-group membership (socket root:docker 0660).
+  - Logs: `journalctl --user -u sandman-worker`.
+- Worker exec endpoint is HTTP `POST /exec`, **not** the daemon's `HELLO/RUN` text
+  protocol — `sandman run <worker>` only works against daemon nodes.
+- **GPU-in-container: WORKING** (fixed 2026-09-09). `nvidia-container-toolkit`
+  1.20.0-1 installed; docker runtimes now `runc io.containerd.runc.v2 nvidia`;
+  CDI spec at `/etc/cdi/nvidia.yaml`; verified via worker `/exec` with `gpus:[0]`
+  running `nvidia-smi -L` → RTX 3090. The worker schedules GPU containers now.
+  (Direct `docker run --gpus 0` is the wrong syntax — use `--gpus 'device=0'`.)
+- Mirrored repos include `symphony` (its `symphony-watch` pipeline is in `failure`);
+  **autoresearch is not mirrored yet**.

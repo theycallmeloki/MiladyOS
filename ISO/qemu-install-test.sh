@@ -16,7 +16,8 @@
 #   socat - UNIX-CONNECT:/tmp/milady-install-serial.sock
 # VNC on :5 (5905) is kept for the desktop role.
 #
-# Requires: br-milady (created by qemu-dev-2vm.sh), docker.
+# Requires: docker (+ /dev/kvm). br-milady is optional — without it the VM
+# uses user-mode networking.
 set -euo pipefail
 
 ISO="${1:?iso path}"
@@ -29,6 +30,12 @@ DISK="/work/$DISK_NAME"
 
 BR=br-milady
 QEMU_IMG="milady-qemu:13.4"
+if ! docker image inspect "$QEMU_IMG" >/dev/null 2>&1; then
+    docker build -q -t "$QEMU_IMG" - <<'EOF'
+FROM debian:13.4
+RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf && rm -rf /var/lib/apt/lists/*
+EOF
+fi
 TAP=tap2
 MON=/tmp/milady-install-mon.sock
 SER=/tmp/milady-install-serial.sock
