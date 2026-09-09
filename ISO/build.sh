@@ -8,7 +8,8 @@
 #   2. build builder image (debian:13.4 + live-build)
 #   3. run lb config + lb build in container -> out/miladyos-<version>.iso
 #
-# Env overrides: MILADYOS_IMAGE, VERSION, OUT_DIR, LB_* (extra lb args)
+# Env overrides: MILADYOS_IMAGE, VERSION, OUT_DIR, MILADY_BOOTAPPEND_LIVE
+# (extra live kernel cmdline, e.g. "milady.auto=1" for unattended install tests).
 set -euo pipefail
 
 ISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,6 +56,7 @@ docker run --rm --privileged \
     -e MILADYOS_IMAGE="$MILADYOS_IMAGE" \
     -e NO_PAYLOAD="$NO_PAYLOAD" \
     -e MILADYOS_ROLE="$MILADYOS_ROLE" \
+    -e MILADY_BOOTAPPEND_LIVE="${MILADY_BOOTAPPEND_LIVE:-}" \
     "$BUILDER_TAG"
 
 echo "done: $(ls -lh "$OUT_DIR"/*.iso 2>/dev/null | awk '{print $9, $5}')"

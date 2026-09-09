@@ -36,10 +36,21 @@ NAME=milady-install-vm
 
 docker stop "$NAME" >/dev/null 2>&1 || true
 
-# --- bridge/tap (idempotent; bridge itself comes from qemu-dev-2vm.sh) ----
-sudo ip link show "$BR" >/dev/null 2>&1 || { echo "ERROR: $BR missing — run qemu-dev-2vm.sh once"; exit 1; }
-sudo ip tuntap add dev "$TAP" mode tap 2>/dev/null || true
-sudo ip link set dev "$TAP" master "$BR" up 2>/dev/null || true
+# --- networking ------------------------------------------------------------
+# Prefer the dev bridge (br-milady, created by qemu-dev-2vm.sh) for cluster
+# tests; fall back to user-mode networking so a plain install test needs
+# neither the bridge nor sudo for a tap.
+NET_ARGS=(-netdev user,id=n0)
+if ip link show "$BR" >/dev/null 2>&1; then
+    sudo -n ip tuntap add dev "$TAP" mode tap 2>/dev/null || true
+    sudo -n ip link set dev "$TAP" master "$BR" up 2>/dev/null || true
+    if ip link show "$TAP" >/dev/null 2>&1; then
+        NET_ARGS=(-netdev tap,id=n0,ifname="$TAP",script=no,downscript=no)
+        echo "network: tap $TAP on $BR"
+    fi
+fi
+[ "${NET_ARGS[0]}" = "-netdev" ] && [ "${NET_ARGS[1]}" = "user,id=n0" ] \
+    && echo "network: user-mode (slirp) — $BR absent or tap unavailable"
 
 # --- target disk + live scratch ------------------------------------------
 if [ ! -f "$ISO_DIR/out/$DISK_NAME" ]; then
@@ -74,7 +85,7 @@ if [ "$MODE" = "install" ]; then
             -serial unix:"$SER",server=on,wait=off \
             -monitor unix:"$MON",server=on,wait=off \
             -vnc :5 \
-            -netdev tap,id=n0,ifname="$TAP",script=no,downscript=no \
+            "${NET_ARGS[@]}" \
             -device virtio-net-pci,netdev=n0,mac=02:00:00:00:00:03 \
     >/dev/null 2>&1
     echo "install VM up: serial=$SER (text installer) vnc=:5 monitor=$MON"
@@ -92,7 +103,7 @@ else
             -serial unix:"$SER",server=on,wait=off \
             -monitor unix:"$MON",server=on,wait=off \
             -vnc :5 \
-            -netdev tap,id=n0,ifname="$TAP",script=no,downscript=no \
+            "${NET_ARGS[@]}" \
             -device virtio-net-pci,netdev=n0,mac=02:00:00:00:00:03 \
     >/dev/null 2>&1
     echo "boot VM up: monitor=$MON serial=$SER"
