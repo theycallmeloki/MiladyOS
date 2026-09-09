@@ -39,6 +39,17 @@ Unattended/CI mode (no TUI): boot with
 Calamares was removed from the build (package list + hook + live session); its
 module/branding files remain parked under `ISO/calamares/` for reference.
 
+### Verified (QEMU, 0.0.0.0.694)
+
+Payload-less test ISO + `qemu-install-test.sh … install` then `… boot`,
+observed over serial: install completes, the installed node boots (BIOS GRUB,
+serial console), assigns a random `milady-<id>` hostname, DHCPs `eth0`, applies
+`role=server`, and brings up a k3s control plane (`Ready control-plane
+v1.36.4+k3s1`, token printed, 0 failed units). Nine installer/ISO bugs found and
+fixed in the process — see `memory/2026-09-09.md`. Not yet exercised: the
+interactive dialog screens (unattended path was tested) and the embedded
+container payload (test built with `--no-payload`).
+
 ---
 
 ## 1. Direct answer: Calamares has no text/headless mode
