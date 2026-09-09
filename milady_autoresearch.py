@@ -393,9 +393,17 @@ def symphony_runs(intent_id: str) -> dict:
     return {"status": status, "runs": payload}
 
 
-def symphony_transcript(intent_id: str, run_index: int = 0) -> dict:
+def symphony_transcript(intent_id: str, run_index: int = 1) -> dict:
     status, payload = symphony_get(f"/api/v1/issues/{intent_id}/runs/{run_index}/transcript")
     return {"status": status, "transcript": payload}
+
+
+def symphony_latest_run_index(intent_id: str) -> int:
+    """Highest run_index in the issue's run journal (1-based), or 1."""
+    payload = symphony_runs(intent_id).get("runs")
+    events = payload.get("events", []) if isinstance(payload, dict) else []
+    indexes = [int(e.get("run_index", 0)) for e in events if isinstance(e, dict) and e.get("run_index")]
+    return max(indexes) if indexes else 1
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +457,17 @@ def _transcript_text(payload) -> str:
     if isinstance(payload, str):
         return payload
     if isinstance(payload, dict):
+        events = payload.get("events")
+        if isinstance(events, list):
+            parts = []
+            for event in events:
+                message = event.get("message") if isinstance(event, dict) else None
+                if isinstance(message, dict) and isinstance(message.get("text"), str):
+                    parts.append(message["text"])
+                elif isinstance(message, str):
+                    parts.append(message)
+            if parts:
+                return "\n".join(parts)
         for key in ("transcript", "text", "content", "messages"):
             value = payload.get(key)
             if isinstance(value, str):
@@ -475,7 +494,7 @@ def settle_intent(intent_id: str, decide: str = "auto", threshold: float = 0.0) 
     result = recorded_result(intent_id)
     source = "store"
     if result is None:
-        transcript = symphony_transcript(intent_id)
+        transcript = symphony_transcript(intent_id, symphony_latest_run_index(intent_id))
         result = extract_result(_transcript_text(transcript.get("transcript")))
         source = "transcript"
 
