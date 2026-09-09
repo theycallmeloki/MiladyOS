@@ -61,17 +61,12 @@ EOF
 # nodes report it on the banner and it traces the ISO to an exact commit
 printf '%s\n' "${VERSION:-dev}" > "$INC/etc/milady/version"
 
-# Calamares installer tree (D2): settings + module configs + branding are
-# staged inert and overlaid on /etc/calamares by the 1400 hook (after the
-# calamares-settings-debian package lands). Live-session scripts go to
-# /usr/share/milady/ directly.
-mkdir -p "$INC/usr/share/milady/calamares"
-cp -a /iso/calamares/settings.conf "$INC/usr/share/milady/calamares/"
-cp -a /iso/calamares/modules "$INC/usr/share/milady/calamares/"
-cp -a /iso/calamares/branding "$INC/usr/share/milady/calamares/"
-install -m 0755 /iso/calamares/live-installer-session \
-    /iso/calamares/live-installer-xinitrc \
-    "$INC/usr/share/milady/"
+# Text installer (D2): milady-install runs on the active console in the live
+# session (milady-install.service, copied by the systemd/*.service sweep
+# above). The ASCII banner is swappable branding — edit
+# ISO/installer/ascii-logo.txt.
+install -m 0755 /iso/installer/milady-install "$INC/usr/local/sbin/milady-install"
+install -m 0644 /iso/installer/ascii-logo.txt "$INC/usr/share/milady/ascii-logo.txt"
 
 # --- stage payload into the binary includes (ISO filesystem) ---------------
 if [ "${NO_PAYLOAD:-0}" -ne 1 ]; then
