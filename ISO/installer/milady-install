@@ -53,6 +53,17 @@ log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >>"$LOG"; }
 # dialog wrapper: always emit the user's answer on stdout.
 ui() { "$DIALOG" --stdout "$@"; }
 
+# mount with retries: systemd starts the installer early and udev can still
+# be re-creating partition nodes (transient "Can't lookup blockdev").
+mount_retry() {  # <dev> <target>
+    local dev=$1 target=$2 i
+    for i in $(seq 1 10); do
+        mount "$dev" "$target" 2>>"$LOG" && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # The /dev/...N or /dev/...pN partition name for a disk + index.
 part_name() {
     case "$DISK" in
@@ -193,9 +204,9 @@ format_disk() {
 copy_system() {
     log "mounting target"
     mkdir -p "$TARGET"
-    mount "$ROOT" "$TARGET"
+    mount_retry "$ROOT" "$TARGET"
     mkdir -p "$TARGET/boot/efi"
-    mount "$ESP" "$TARGET/boot/efi"
+    mount_retry "$ESP" "$TARGET/boot/efi"
 
     local src="$MEDIUM/live/filesystem.squashfs"
     if [ -f "$src" ]; then
@@ -219,6 +230,28 @@ copy_system() {
         log "copy_system: target root looks empty ($TARGET)"
         return 1
     fi
+}
+
+# The copied rootfs is still a live system: live-tools replaces
+# update-initramfs with a wrapper that refuses to run, live-boot's initramfs
+# hook/script would make the installed initramfs hunt for a live medium, and
+# live-config would reconfigure the booted system. Strip all of it so the
+# installed node boots normally from disk.
+de_live() {
+    log "de-live: restoring initramfs + dropping live boot components"
+    if [ -e "$TARGET/usr/sbin/update-initramfs.orig.initramfs-tools" ]; then
+        rm -f "$TARGET/usr/sbin/update-initramfs"
+        cp -a "$TARGET/usr/sbin/update-initramfs.orig.initramfs-tools" \
+              "$TARGET/usr/sbin/update-initramfs"
+    fi
+    rm -f "$TARGET/usr/share/initramfs-tools/hooks/live" \
+          "$TARGET/usr/share/initramfs-tools/scripts/live" \
+          "$TARGET/usr/bin/live-update-initramfs"
+    rm -f "$TARGET/etc/systemd/system/multi-user.target.wants/live-config.service" \
+          "$TARGET/etc/systemd/system/sysinit.target.wants/live-config.service" \
+          "$TARGET/etc/systemd/system/multi-user.target.wants/live-tools.service" \
+          "$TARGET/lib/systemd/system/live-config.service" \
+          "$TARGET/lib/systemd/system/live-tools.service"
 }
 
 configure_system() {
@@ -258,6 +291,8 @@ EOF
         mkdir -p "$TARGET/opt/milady/payload"
         cp "$MEDIUM/payload/$PAYLOAD_NAME" "$TARGET/opt/milady/payload/"
     fi
+
+    de_live
 
     # serial console on headless fleet nodes (kernel + GRUB menu)
     if [ -f "$TARGET/etc/default/grub" ]; then
@@ -360,16 +395,23 @@ run_interactive_install() {
 }
 
 run_unattended_install() {
-    local step
+    local step rc out
     exec >>/dev/console 2>&1
     printf 'milady-install: unattended install  role=%s disk=%s user=%s\n' \
         "$ROLE" "$DISK" "$USERNAME"
     for step in partition_disk format_disk copy_system configure_system \
                 install_bootloader finalize; do
         printf 'milady-install: %s\n' "$step"
-        # fail-fast: set -e inside the step, output teed to console + log
-        if ! ( set -e; "$step" ) 2>&1 | tee -a "$LOG"; then
-            printf 'milady-install: FAILED at %s (log: %s)\n' "$step" "$LOG"
+        # NOTE: run the step under set -e in a plain (non-inverted, non-pipeline)
+        # command; `if ! ( set -e; ... )` would disable set -e entirely.
+        out=$(mktemp)
+        ( set -e; "$step" ) >"$out" 2>&1
+        rc=$?
+        cat "$out" >>"$LOG"
+        cat "$out"
+        rm -f "$out"
+        if [ "$rc" -ne 0 ]; then
+            printf 'milady-install: FAILED at %s (rc=%s, log: %s)\n' "$step" "$rc" "$LOG"
             return 1
         fi
     done

@@ -75,7 +75,7 @@ if [ ! -f "$ISO_DIR/out/$SCRATCH_NAME" ]; then
     echo "created live scratch disk: $SCRATCH_NAME"
 fi
 
-rm -f "$MON" "$SER" "$SERLOG"
+rm -f "$MON" "$SER" "$SERLOG" 2>/dev/null || true
 
 if [ "$MODE" = "install" ]; then
     docker run -d --rm --name "$NAME" \

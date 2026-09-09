@@ -93,4 +93,12 @@ Add whatever helps you do your job. This is your cheat sheet. Update it as you d
   running `nvidia-smi -L` → RTX 3090. The worker schedules GPU containers now.
   (Direct `docker run --gpus 0` is the wrong syntax — use `--gpus 'device=0'`.)
 - Mirrored repos include `symphony` (its `symphony-watch` pipeline is in `failure`);
-  **autoresearch is not mirrored yet**.
+  **autoresearch is mirrored** as repo `autoresearch` (branch `master`, head
+  `351b134be5860106`, 10 files) with binding pipeline `autoresearch-watch`
+  (git input `https://github.com/karpathy/autoresearch.git`, no-op transform).
+  Delta/deploy seam verified: `sandman patch` fired `autoresearch-watch`.
+- **autoresearch runs locally:** `uv` 0.12.11 at `~/.local/bin/uv`; data +
+  tokenizer in `~/.cache/autoresearch` (11 shards, vocab 8192). Baseline on the
+  3090: `val_bpb 1.327183`, 302.9s train, 11.7 GB peak, depth 8, 50.3M params,
+  120 steps — with `DEVICE_BATCH_SIZE=32` (128/64 OOM the 24 GB card; effective
+  batch unchanged). Repo branch `autoresearch/sep9`, `results.tsv` untracked.
