@@ -1,0 +1,423 @@
+#!/bin/bash
+# MiladyOS text installer.
+#
+#   Interactive: run on the active console by milady-install.service.
+#   Unattended:  boot with  milady.auto=1 [milady.role=...] [milady.disk=...]
+#                [milady.password=...] [milady.token=...]
+#
+# Flow (few steps):  banner -> role -> disk -> account -> (token) -> confirm
+#                    -> install -> reboot.
+#
+# What it does: partitions the target GPT (bios_grub + ESP + root), formats,
+# copies the live rootfs to disk, writes fstab/node.conf/payload, creates the
+# operator account, installs GRUB for UEFI and BIOS, and reboots. Hostname is
+# left to first boot (milady-set-hostname: random milady-<10001..99999>).
+set -uo pipefail
+
+DIALOG=${DIALOG:-dialog}
+LOG=${MILADY_INSTALL_LOG:-/var/log/milady-install.log}
+TARGET=/target
+MEDIUM=${MILADY_MEDIUM:-/run/live/medium}
+PAYLOAD_NAME=miladyos-image.tar.zst
+ASCII=${MILADY_ASCII:-/usr/share/milady/ascii-logo.txt}
+MIN_BYTES=$((8 * 1024 * 1024 * 1024))   # 8 GiB minimum target
+
+# Filled by the screens / cmdline.
+ROLE=""
+DISK=""
+USERNAME="milady"
+PASSWORD="milady"
+TOKEN=""
+ESP=""
+ROOT=""
+LIVE_DISK=""
+
+# --- helpers ---------------------------------------------------------------
+
+# Read a milady.* value from the kernel cmdline.
+cmdline() {
+    local key=$1 arg
+    for arg in $(cat /proc/cmdline); do
+        case "$arg" in
+            "$key"=*) printf '%s\n' "${arg#*=}"; return 0 ;;
+        esac
+    done
+    return 1
+}
+
+log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >>"$LOG"; }
+
+# dialog wrapper: always emit the user's answer on stdout.
+ui() { "$DIALOG" --stdout "$@"; }
+
+# The /dev/...N or /dev/...pN partition name for a disk + index.
+part_name() {
+    case "$DISK" in
+        *[0-9]) printf '%s\n' "${DISK}p$1" ;;
+        *)      printf '%s\n' "${DISK}$1" ;;
+    esac
+}
+
+# Locate the live medium (payload + squashfs live here).
+detect_medium() {
+    local d
+    for d in /run/live/medium /lib/live/mount/medium /cdrom; do
+        [ -d "$d" ] && { printf '%s\n' "$d"; return 0; }
+    done
+    printf '%s\n' "$MEDIUM"
+}
+
+# Disk backing the live medium, so we never offer to erase the install USB.
+detect_live_disk() {
+    local src pk
+    src=$(findmnt -no SOURCE "$MEDIUM" 2>/dev/null || true)
+    [ -n "$src" ] || return 0
+    pk=$(lsblk -no PKNAME "$src" 2>/dev/null | head -1)
+    [ -n "$pk" ] && printf '/dev/%s\n' "$pk"
+}
+
+# --- screens ---------------------------------------------------------------
+
+banner_text() {
+    local art=""
+    [ -f "$ASCII" ] && art=$(cat "$ASCII")
+    printf '\n%s\n\n  MiladyOS installer\n\n  Three choices, then it installs.\n  ENTER or SPACE to begin.\n' "$art"
+}
+
+screen_welcome() {
+    ui --title "MiladyOS" --msgbox "$(banner_text)" 0 0
+}
+
+screen_role() {
+    ui --title "Node role" --menu \
+        "What is this machine for?\n\n  server   cluster master (k3s server, control plane)\n  agent    worker (joins an existing master)\n  desktop  standalone, no cluster" \
+        0 0 3 \
+        server  "Cluster master (k3s server + control plane)" \
+        agent   "Worker (joins an existing master)" \
+        desktop "Standalone (no cluster)"
+}
+
+# Eligible install targets, one per line: name<TAB>size<TAB>model.
+# Excludes the live medium, the live docker scratch disk (MILADY_DOCKER),
+# mounted disks, and pseudo disks (zram/loop/ram/dm).
+eligible_disks() {
+    local name size type model
+    while read -r name size type model; do
+        [ "$type" = "disk" ] || continue
+        case "$name" in */zram*|*/loop*|*/ram*|*/dm-*) continue ;; esac
+        [ -n "$LIVE_DISK" ] && [ "$name" = "$LIVE_DISK" ] && continue
+        case "$size" in 0B|"") continue ;; esac
+        lsblk -no LABEL "$name" 2>/dev/null | grep -qx 'MILADY_DOCKER' && continue
+        lsblk -no MOUNTPOINT "$name" 2>/dev/null | grep -q '[^[:space:]]' && continue
+        printf '%s\t%s\t%s\n' "$name" "$size" "${model:-disk}"
+    done < <(lsblk -dpno NAME,SIZE,TYPE,MODEL 2>/dev/null)
+}
+
+screen_disk() {
+    local -a items=()
+    local name size model
+    while IFS=$'\t' read -r name size model; do
+        items+=("$name" "$size  $model")
+    done < <(eligible_disks)
+
+    if [ "${#items[@]}" -eq 0 ]; then
+        ui --title "No disks" --msgbox \
+            "No installable disks were found.\n\nAttach a target disk and start the installer again." 0 0
+        return 1
+    fi
+
+    ui --title "Target disk" --menu \
+        "Choose the disk to install MiladyOS on.\n\nALL DATA ON THAT DISK WILL BE ERASED." \
+        0 0 0 "${items[@]}"
+}
+
+screen_account() {
+    USERNAME=$(ui --title "Account" --inputbox "Username:" 0 0 "milady") || return 1
+    [ -n "$USERNAME" ] || USERNAME=milady
+
+    local p1 p2
+    while :; do
+        p1=$(ui --title "Account" --passwordbox "Password for $USERNAME:" 0 0) || return 1
+        p2=$(ui --title "Account" --passwordbox "Confirm password:" 0 0) || return 1
+        [ "$p1" = "$p2" ] && break
+        ui --title "Passwords differ" --msgbox "The passwords do not match. Try again." 0 0
+    done
+    PASSWORD=${p1:-milady}
+}
+
+screen_token() {
+    TOKEN=$(ui --title "Join token" --inputbox \
+        "Paste the master's join token (optional).\n\nLeave blank to join later once the token is available." \
+        0 0 "") || TOKEN=""
+}
+
+screen_confirm() {
+    local extra=""
+    [ "$ROLE" = "agent" ] && extra="\n  Token:     ${TOKEN:-(none - join later)}"
+    ui --yesno \
+        "\n  Role:      $ROLE\n  Disk:      $DISK   (WILL BE ERASED)\n  Username:  $USERNAME\n  Payload:   embedded container image\n  Hostname:  random milady-<id> at first boot$extra\n\n  Install MiladyOS now?" \
+        0 0
+}
+
+screen_done() {
+    ui --title "MiladyOS" --msgbox \
+        "\n  Installation complete.\n\n  Remove the install medium and reboot to start MiladyOS." 0 0
+}
+
+# --- install engine (all output goes to $LOG) ------------------------------
+
+partition_disk() {
+    log "partitioning $DISK"
+    wipefs -a "$DISK"
+    parted -s "$DISK" mklabel gpt
+    parted -s "$DISK" mkpart primary 1MiB 2MiB
+    parted -s "$DISK" set 1 bios_grub on
+    parted -s "$DISK" mkpart ESP fat32 2MiB 514MiB
+    parted -s "$DISK" set 2 esp on
+    parted -s "$DISK" mkpart primary ext4 514MiB 100%
+    partprobe "$DISK" || true
+    udevadm settle || true
+}
+
+format_disk() {
+    ESP=$(part_name 2)
+    ROOT=$(part_name 3)
+    log "formatting $ESP (vfat) and $ROOT (ext4)"
+    mkfs.vfat -F32 -n MILADY_EFI "$ESP"
+    mkfs.ext4 -F -L MILADY_ROOT "$ROOT"
+}
+
+copy_system() {
+    log "mounting target"
+    mount "$ROOT" "$TARGET"
+    mkdir -p "$TARGET/boot/efi"
+    mount "$ESP" "$TARGET/boot/efi"
+
+    local src="$MEDIUM/live/filesystem.squashfs"
+    if [ -f "$src" ]; then
+        log "copying live rootfs from $src"
+        mkdir -p /run/milady-install/src
+        mount -o loop,ro "$src" /run/milady-install/src
+        rsync -aHAX --numeric-ids /run/milady-install/src/ "$TARGET/"
+        umount /run/milady-install/src
+    else
+        log "squashfs not found - copying running live rootfs"
+        rsync -aHAX --numeric-ids \
+            --exclude=/proc/'*' --exclude=/sys/'*' --exclude=/dev/'*' \
+            --exclude=/run/'*' --exclude=/tmp/'*' --exclude=/target \
+            --exclude=/mnt/'*' --exclude=/media/'*' --exclude=/lost+found \
+            --exclude=/var/lib/docker/'*' --exclude=/var/lib/containerd/'*' \
+            / "$TARGET/"
+    fi
+}
+
+configure_system() {
+    local root_uuid esp_uuid group groups=""
+    root_uuid=$(blkid -s UUID -o value "$ROOT")
+    esp_uuid=$(blkid -s UUID -o value "$ESP")
+
+    log "writing fstab (root=$root_uuid esp=$esp_uuid)"
+    cat >"$TARGET/etc/fstab" <<EOF
+# MiladyOS - generated by milady-install
+UUID=$root_uuid  /          ext4  errors=remount-ro  0 1
+UUID=$esp_uuid   /boot/efi  vfat  umask=0077         0 1
+EOF
+
+    # fresh identity every install
+    : >"$TARGET/etc/machine-id"
+    rm -f "$TARGET/var/lib/dbus/machine-id"
+    printf 'debian\n' >"$TARGET/etc/hostname"
+    cat >"$TARGET/etc/hosts" <<EOF
+127.0.0.1   localhost
+127.0.1.1   debian
+EOF
+    rm -f "$TARGET"/etc/ssh/ssh_host_*
+
+    # node role + optional join token
+    mkdir -p "$TARGET/etc/milady"
+    printf 'ROLE=%s\n' "$ROLE" >"$TARGET/etc/milady/node.conf"
+    rm -f "$TARGET/etc/milady/role-applied"
+    if [ -n "$TOKEN" ]; then
+        printf '%s\n' "$TOKEN" >"$TARGET/etc/milady/join-token"
+        chmod 600 "$TARGET/etc/milady/join-token"
+    fi
+
+    # embedded container image (air-gapped default)
+    if [ -f "$MEDIUM/payload/$PAYLOAD_NAME" ]; then
+        log "copying payload $PAYLOAD_NAME"
+        mkdir -p "$TARGET/opt/milady/payload"
+        cp "$MEDIUM/payload/$PAYLOAD_NAME" "$TARGET/opt/milady/payload/"
+    fi
+
+    # serial console on headless fleet nodes (kernel + GRUB menu)
+    if [ -f "$TARGET/etc/default/grub" ]; then
+        sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet console=ttyS0,115200n8"/' \
+            "$TARGET/etc/default/grub" || true
+        grep -q '^GRUB_DISABLE_OS_PROBER=' "$TARGET/etc/default/grub" \
+            || printf 'GRUB_DISABLE_OS_PROBER=true\n' >>"$TARGET/etc/default/grub"
+        grep -q '^GRUB_TERMINAL=' "$TARGET/etc/default/grub" \
+            || printf 'GRUB_TERMINAL="console serial"\n' >>"$TARGET/etc/default/grub"
+        grep -q '^GRUB_SERIAL_COMMAND=' "$TARGET/etc/default/grub" \
+            || printf 'GRUB_SERIAL_COMMAND="serial --speed=115200"\n' >>"$TARGET/etc/default/grub"
+    fi
+
+    log "entering target (bind mounts)"
+    mount --rbind /dev "$TARGET/dev"
+    mount --rbind /proc "$TARGET/proc"
+    mount --rbind /sys "$TARGET/sys"
+    mount --rbind /run "$TARGET/run"
+    mount --make-rslave "$TARGET/dev" 2>/dev/null || true
+    mount --make-rslave "$TARGET/run" 2>/dev/null || true
+
+    for group in sudo audio video plugdev netdev cdrom; do
+        getent group "$group" >/dev/null 2>&1 && groups="${groups:+$groups,}$group"
+    done
+
+    log "creating account $USERNAME"
+    if ! chroot "$TARGET" id "$USERNAME" >/dev/null 2>&1; then
+        chroot "$TARGET" useradd -m -s /bin/bash ${groups:+-G "$groups"} "$USERNAME"
+    fi
+    printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$TARGET" chpasswd
+    printf 'root:%s\n' "$PASSWORD" | chroot "$TARGET" chpasswd
+}
+
+install_bootloader() {
+    log "update-initramfs"
+    chroot "$TARGET" update-initramfs -u -k all
+    if [ -d /sys/firmware/efi ]; then
+        log "grub-install (UEFI)"
+        chroot "$TARGET" grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+            --bootloader-id=MiladyOS --recheck \
+        || chroot "$TARGET" grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+            --removable --recheck
+    else
+        log "grub-install (BIOS)"
+        chroot "$TARGET" grub-install --target=i386-pc --recheck "$DISK"
+    fi
+    chroot "$TARGET" update-grub
+}
+
+finalize() {
+    log "syncing and unmounting"
+    sync
+    umount -R "$TARGET/run" 2>/dev/null || true
+    umount -R "$TARGET/sys" 2>/dev/null || true
+    umount -R "$TARGET/proc" 2>/dev/null || true
+    umount -R "$TARGET/dev" 2>/dev/null || true
+    umount -R "$TARGET" 2>/dev/null || true
+}
+
+# --- runners ---------------------------------------------------------------
+
+run_interactive_install() {
+    local fifo rc
+    fifo=$(mktemp -u /run/milady-install.fifo.XXXXXX)
+    mkfifo "$fifo"
+
+    # Install in a child; its exit status is the install result. Progress is
+    # written to the FIFO that dialog reads; when the child exits the FIFO
+    # closes and the gauge ends. --nocancel: a disk wipe is not interruptible.
+    (
+        exec 9>"$fifo"
+        step() { printf '%s\nXXX\n%s\nXXX\n' "$1" "$2" >&9; }
+        set -e
+        step 3   "Partitioning $DISK"
+        partition_disk
+        step 12  "Formatting filesystems"
+        format_disk
+        step 20  "Copying MiladyOS to disk"
+        copy_system
+        step 65  "Configuring system"
+        configure_system
+        step 85  "Installing bootloader"
+        install_bootloader
+        step 96  "Finishing up"
+        finalize
+        step 100 "Done"
+    ) >>"$LOG" 2>&1 &
+    local pid=$!
+
+    ui --title "Installing MiladyOS" --nocancel --gauge "Starting..." 14 72 0 <"$fifo"
+    wait "$pid"
+    rc=$?
+    rm -f "$fifo"
+
+    if [ "$rc" -ne 0 ]; then
+        ui --title "Install failed" --msgbox \
+            "The installation failed (exit $rc).\n\nLast log lines:\n\n$(tail -n 12 "$LOG" 2>/dev/null)" 0 0
+        return 1
+    fi
+}
+
+run_unattended_install() {
+    local step
+    exec >>/dev/console 2>&1
+    printf 'milady-install: unattended install  role=%s disk=%s user=%s\n' \
+        "$ROLE" "$DISK" "$USERNAME"
+    for step in partition_disk format_disk copy_system configure_system \
+                install_bootloader finalize; do
+        printf 'milady-install: %s\n' "$step"
+        if ! "$step" >>"$LOG" 2>&1; then
+            printf 'milady-install: FAILED at %s (see %s)\n' "$step" "$LOG"
+            return 1
+        fi
+    done
+    printf 'milady-install: complete\n'
+}
+
+# --- main ------------------------------------------------------------------
+
+main() {
+    [ "$(id -u)" -eq 0 ] || { echo "milady-install: must run as root" >&2; exit 1; }
+    mkdir -p /run/milady-install
+    : >"$LOG"
+    # Follow the active console: vt220 for serial (fleet/CI), linux for VGA.
+    local active_console
+    active_console=$(awk '{print $NF}' /sys/class/tty/console/active 2>/dev/null)
+    case "$active_console" in
+        ttyS*|hvc*|ttyAMA*) export TERM=vt220 ;;
+        *)                  export TERM=linux ;;
+    esac
+    LIVE_DISK=$(detect_live_disk || true)
+    MEDIUM=$(detect_medium)
+
+    if [ -n "$(cmdline milady.auto || true)" ]; then
+        ROLE=$(cmdline milady.role || echo server)
+        DISK=$(cmdline milady.disk || true)
+        USERNAME=$(cmdline milady.user || echo milady)
+        PASSWORD=$(cmdline milady.password || echo milady)
+        TOKEN=$(cmdline milady.token || true)
+        [ -n "$DISK" ] || DISK=$(eligible_disks | head -1 | cut -f1)
+        case "$ROLE" in server|agent|desktop) ;; *) ROLE=server ;; esac
+        [ -b "$DISK" ] || { echo "milady-install: no target disk ($DISK)" >/dev/console; exit 1; }
+        run_unattended_install || exit 1
+        sync
+        reboot
+        exit 0
+    fi
+
+    screen_welcome
+    ROLE=$(screen_role) || exit 0
+    DISK=$(screen_disk) || exit 0
+
+    local bytes
+    bytes=$(lsblk -bno SIZE "$DISK" 2>/dev/null | head -1)
+    if [ "${bytes:-0}" -lt "$MIN_BYTES" ]; then
+        ui --title "Disk too small" --msgbox \
+            "$DISK is smaller than the 8 GiB minimum.\n\nChoose a larger disk." 0 0
+        exit 1
+    fi
+
+    screen_account || exit 0
+    [ "$ROLE" = "agent" ] && screen_token
+    screen_confirm || exit 0
+
+    run_interactive_install || exit 1
+    screen_done
+    if ui --yesno "Reboot now?" 0 0; then
+        sync
+        reboot
+    fi
+}
+
+main "$@"

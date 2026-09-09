@@ -1,0 +1,11 @@
+#!/bin/sh
+# MiladyOS ISO — enable the text installer session on VT1.
+# The installer itself (milady-install) and its ASCII banner are staged into
+# the rootfs by build-in-container.sh; this hook only enables the unit.
+# Live-only by ConditionPathExists=/run/live/medium, so installed systems
+# keep a normal getty on tty1.
+set -e
+
+systemctl enable milady-install.service >/dev/null 2>&1 || true
+
+echo "milady: text installer enabled (VT1)"

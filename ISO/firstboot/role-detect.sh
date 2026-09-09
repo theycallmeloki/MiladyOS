@@ -36,17 +36,20 @@ if [ -z "$ROLE" ] && [ -f "$CONF" ]; then
     ROLE="${ROLE:-}"
 fi
 
-# --- 3. interactive fallback (only on a real console TTY; systemd oneshots
-#       run with stdin=/dev/null so they must NOT block) ----------------------
-if [ -z "$ROLE" ]; then
-    if [ -t 0 ] && [ -c /dev/console ]; then
-        printf 'MiladyOS role (server|agent|desktop) [agent]: '
-        read -r REPLY || REPLY=agent
-        ROLE="${REPLY:-agent}"
-    else
-        ROLE="agent"
-    fi
+# --- 3. interactive fallback -------------------------------------------------
+# systemd oneshots run with stdin=/dev/null, so the old `[ -t 0 ]` check was
+# always false and every unconfigured node silently became an agent. Prompt on
+# /dev/console directly (serial console on headless fleet nodes) with a timeout
+# so an unattended boot still proceeds. Live boots never prompt — the installer
+# session owns the console and the live node keeps the historical agent default.
+if [ -z "$ROLE" ] && [ -c /dev/console ] && [ ! -d /run/live/medium ]; then
+    printf 'MiladyOS role (server|agent|desktop) [agent]: ' > /dev/console
+    rm -f /run/milady-role-reply
+    ( timeout 30 sh -c 'read -r r < /dev/console && printf "%s" "$r" > /run/milady-role-reply' ) 2>/dev/null || true
+    [ -s /run/milady-role-reply ] && ROLE="$(cat /run/milady-role-reply)"
+    printf '\n' > /dev/console 2>/dev/null || true
 fi
+[ -n "$ROLE" ] || ROLE="agent"
 
 case "$ROLE" in
     server|agent|desktop) ;;

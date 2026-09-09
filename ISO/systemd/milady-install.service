@@ -1,0 +1,22 @@
+[Unit]
+Description=MiladyOS text installer (console)
+# Live-only: /run/live/medium exists only when booted from the ISO.
+# On installed systems this unit is inert and the gettys keep the console.
+ConditionPathExists=/run/live/medium
+# Claim the active console (/dev/console follows the last kernel `console=`,
+# i.e. ttyS0 on the fleet/CI serial boots; tty0 if booted with console=tty0).
+Conflicts=getty@tty1.service serial-getty@ttyS0.service
+After=getty@tty1.service serial-getty@ttyS0.service
+
+[Service]
+Type=idle
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+ExecStart=/usr/local/sbin/milady-install
+TimeoutStartSec=0
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

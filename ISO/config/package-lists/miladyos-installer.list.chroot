@@ -1,0 +1,24 @@
+# MiladyOS ISO — text installer (replaces the Calamares GUI session).
+# The installer copies the live rootfs to disk itself; these are the tools
+# it needs in the live environment.
+
+# --- TUI ---
+dialog
+
+# --- disk + filesystems ---
+parted
+gdisk
+dosfstools
+e2fsprogs
+util-linux
+
+# --- copy ---
+rsync
+
+# --- bootloader (UEFI + BIOS) ---
+grub-common
+grub-pc-bin
+grub-efi-amd64-bin
+efibootmgr
+initramfs-tools
+kmod

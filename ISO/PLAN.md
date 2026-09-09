@@ -5,7 +5,7 @@
 > First node acquires the server role; the rest join it as agents. Fleet nodes
 > replace the current Talos fleet once proven.
 
-Status: **D1–D4 RULED** (operator): Debian 13 live-build + Calamares installer (live + install both), k3s `--docker`, manual role selection (**master | worker | desktop**) with clean lifecycle switching + LAN master discovery. Foundation unblocked; D5–D12 defaults in §3.
+Status: **D1–D4 RULED** (operator): Debian 13 live-build + **text installer** (live + install both), k3s `--docker`, manual role selection (**master | worker | desktop**) with clean lifecycle switching + LAN master discovery. Foundation unblocked; D5–D12 defaults in §3.
 
 ---
 
@@ -68,10 +68,12 @@ cluster as the target; Jenkins-in-container drives the same KanikoBuild CRs
   UEFI+BIOS via GRUB/ISOLINUX). Build must run on trixie → dockerized build
   (`debian:13.4` builder image, same pattern as the sqlite_build stage).
   [RULED D1 — Debian upstream preferred; Arch route rejected.]
-- **Installer:** **Calamares** — ships in official Debian live images, the
-  end-user installer framework (Omarchy's configurator analog). Live boot for
-  "normal ISO" feel + Calamares install-to-disk for fleet persistence.
-  [RULED D2 — both.]
+- **Installer:** **text installer** (`ISO/installer/milady-install`) — a
+  `dialog` TUI that runs on the live console: banner → role → disk → account →
+  confirm → install → reboot. Copies the live rootfs to disk and installs GRUB
+  (UEFI + BIOS). Live boot for "normal ISO" feel; install-to-disk for fleet
+  persistence. Unattended via `milady.auto=1 …` kernel params.
+  [RULED D2 — both. Calamares (Qt GUI) retired: no text mode, 3D-dependent.]
 - GRUB with UEFI + BIOS boot; squashfs rootfs; persistence optional.
 - Hostname scheme `milady-<10001..99999>` (public range; 1..10000
   RESERVED for a future milady maker NFT identity mapping); autologin
@@ -88,7 +90,7 @@ ISO/
 ├── hooks/                     # lb hooks: embed payload, systemd units, kernel cmdline
 ├── includes.chroot/           # files staged into the live rootfs
 ├── includes.binary/           # files on the ISO filesystem itself
-├── calamares/                 # installer modules + branding (install-to-disk)
+├── installer/                 # text installer (dialog TUI) + ASCII banner
 ├── payload/                   # build-time staging
 │   └── miladyos-image.tar.zst # docker save ogmiladyloki/miladyos → zstd
 ├── systemd/                   # first-boot units (installed into rootfs)
@@ -155,12 +157,12 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
 
 - **Role selection (RULED D4 — manual, operator-decided per node):**
   - Kernel cmdline `milady.role=server|agent|desktop` (deterministic fleet
-    ops) or `/etc/milady/node.conf`, or the Calamares install question. The
+    ops) or `/etc/milady/node.conf`, or the installer's role screen. The
     operator decides the node's role — no auto-election.
   - **Desktop mode (RULED):** `role=desktop` — no k3s, no control-plane
     container. Boots to a super-thin default environment (no WM preinstalled);
     the user installs what they need (WM/compositor/apps) from there. The
-    Calamares role page offers master | worker | desktop; desktop answers
+    installer's role screen offers master | worker | desktop; desktop answers
     seed nothing k3s-related.
   - **Role switching is explicit and clean:** `role-switch.sh` tears down the
     current lifecycle before starting the new one — stop k3s + the milady
@@ -250,7 +252,7 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
 ## 3. Decision points (need operator ruling)
 
 | D1 | ISO base | Debian 13 live-build / Arch mkarchiso (Omarchy-literal) / Ubuntu | **RULED: Debian 13 live-build** — upstream Debian, mkarchiso-class toolchain confirmed |
-| D2 | Delivery | live-only / install-to-disk only / both | **RULED: Both** — live + Calamares installer |
+| D2 | Delivery | live-only / install-to-disk only / both | **RULED: Both** — live + text installer (`milady-install`) |
 | D3 | k3s runtime | `--docker` / default containerd | **RULED: `--docker`** — one runtime, docker.sock coherence |
 | D4 | Role election | kernel cmdline / config file / interactive TUI / auto-first-boot | **RULED: manual selection (master|worker|desktop) + clean role-switch; workers Avahi-discover an existing master and insist on joining it; small master group behind keepalived VIP** |
 | D5 | k3s version | latest stable at build / pinned | **Latest stable** — get.k3s.io default; `K3S_VERSION` honored if an operator exports it (no repo-level pin) |
@@ -269,7 +271,7 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
 ## 4. Immediate next steps (after D1–D4)
 
 1. Scaffold `ISO/` for Debian 13 live-build: `auto/` presets, `config/` tree,
-   `includes.chroot/`, Calamares modules, firstboot units + role-switch.
+   `includes.chroot/`, installer TUI, firstboot units + role-switch.
 2. Payload staging script (`docker save | zstd`) — works regardless of base.
 3. Minimal QEMU-bootable ISO with: Docker up, image loaded, container up,
    k3s server ready. **DONE (0.0.0.593)** — see Dev loop tooling below;
