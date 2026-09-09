@@ -13,7 +13,7 @@ lb config noauto \
     --architectures amd64 \
     --archive-areas "main contrib non-free non-free-firmware" \
     --binary-images iso-hybrid \
-    --bootappend-live "boot=live components net.ifnames=0 console=ttyS0,115200n8" \
+    --bootappend-live "boot=live components net.ifnames=0 console=ttyS0,115200n8 ${MILADY_BOOTAPPEND_LIVE:-}" \
     --iso-volume "MiladyOS" \
     --iso-publisher "MiladyOS" \
     --iso-application "MiladyOS milady" \
