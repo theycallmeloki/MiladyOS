@@ -305,17 +305,21 @@ EOF
 
     de_live
 
-    # serial console on headless fleet nodes (kernel + GRUB menu)
-    if [ -f "$TARGET/etc/default/grub" ]; then
-        sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet console=ttyS0,115200n8"/' \
-            "$TARGET/etc/default/grub" || true
-        grep -q '^GRUB_DISABLE_OS_PROBER=' "$TARGET/etc/default/grub" \
-            || printf 'GRUB_DISABLE_OS_PROBER=true\n' >>"$TARGET/etc/default/grub"
-        grep -q '^GRUB_TERMINAL=' "$TARGET/etc/default/grub" \
-            || printf 'GRUB_TERMINAL="console serial"\n' >>"$TARGET/etc/default/grub"
-        grep -q '^GRUB_SERIAL_COMMAND=' "$TARGET/etc/default/grub" \
-            || printf 'GRUB_SERIAL_COMMAND="serial --speed=115200"\n' >>"$TARGET/etc/default/grub"
-    fi
+    # GRUB: serial console on headless fleet nodes. trixie's grub-common
+    # ships /etc/default/grub.d but NOT /etc/default/grub, so create it.
+    local grubd="$TARGET/etc/default/grub"
+    mkdir -p "$TARGET/etc/default"
+    [ -f "$grubd" ] || printf 'GRUB_DEFAULT=0\nGRUB_TIMEOUT=5\n' >"$grubd"
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet console=ttyS0,115200n8"/' \
+        "$grubd" || true
+    grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grubd" \
+        || printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet console=ttyS0,115200n8"\n' >>"$grubd"
+    grep -q '^GRUB_TERMINAL=' "$grubd" \
+        || printf 'GRUB_TERMINAL="console serial"\n' >>"$grubd"
+    grep -q '^GRUB_SERIAL_COMMAND=' "$grubd" \
+        || printf 'GRUB_SERIAL_COMMAND="serial --speed=115200"\n' >>"$grubd"
+    grep -q '^GRUB_DISABLE_OS_PROBER=' "$grubd" \
+        || printf 'GRUB_DISABLE_OS_PROBER=true\n' >>"$grubd"
 
     log "entering target (bind mounts)"
     mount --rbind /dev "$TARGET/dev"
@@ -356,11 +360,12 @@ install_bootloader() {
 finalize() {
     log "syncing and unmounting"
     sync
-    umount -R "$TARGET/run" 2>/dev/null || true
-    umount -R "$TARGET/sys" 2>/dev/null || true
-    umount -R "$TARGET/proc" 2>/dev/null || true
-    umount -R "$TARGET/dev" 2>/dev/null || true
-    umount -R "$TARGET" 2>/dev/null || true
+    # lazy unmounts: /target/sys/fs/cgroup and friends are busy under systemd
+    umount -R -l "$TARGET/run" 2>/dev/null || true
+    umount -R -l "$TARGET/sys" 2>/dev/null || true
+    umount -R -l "$TARGET/proc" 2>/dev/null || true
+    umount -R -l "$TARGET/dev" 2>/dev/null || true
+    umount -R -l "$TARGET" 2>/dev/null || true
 }
 
 # --- runners ---------------------------------------------------------------
