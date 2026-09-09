@@ -255,6 +255,14 @@ class Config:
         "job_list",
         "emacs_eval",
         "emacs_ping",
+        "autoresearch_status",
+        "autoresearch_best",
+        "autoresearch_run",
+        "autoresearch_enqueue",
+        "autoresearch_record",
+        "autoresearch_settle",
+        "symphony_state",
+        "symphony_intents",
     ]
 
 
@@ -631,6 +639,88 @@ class MiladyOSToolServer:
                     "required": ["name"]
                 }
             },
+            "autoresearch_status": {
+                "name": "Autoresearch Status",
+                "description": "MiladyOS autoresearch control plane: local checkout state, best val_bpb, results log, sandman mirror, and Symphony state.",
+                "parameters": {"type": "object", "properties": {}, "required": []}
+            },
+            "autoresearch_best": {
+                "name": "Autoresearch Best",
+                "description": "Best (lowest) val_bpb recorded in results.tsv.",
+                "parameters": {"type": "object", "properties": {}, "required": []}
+            },
+            "autoresearch_run": {
+                "name": "Autoresearch Run",
+                "description": "Option C: run one autoresearch training experiment on the local GPU (uv run train.py), parse val_bpb, append to results.tsv, return keep/discard vs current best.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description": {"type": "string", "description": "What this experiment tries"},
+                        "timeout": {"type": "integer", "description": "Seconds before killing the run (default 900)", "default": 900},
+                        "gpu": {"type": "integer", "description": "CUDA_VISIBLE_DEVICES index (default 0)", "default": 0}
+                    },
+                    "required": []
+                }
+            },
+            "autoresearch_enqueue": {
+                "name": "Autoresearch Enqueue",
+                "description": "Option A: enqueue one autoresearch experiment as a Symphony intent bound to the sandman mirror. Symphony runs it in an isolated workspace; settle it with autoresearch_settle.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Short experiment title"},
+                        "description": {"type": "string", "description": "Full job spec for the pi agent (edit train.py, run, record RESULT)"},
+                        "repo": {"type": "string", "description": "Mirror clone URL (default karpathy/autoresearch.git)"},
+                        "labels": {"type": "array", "items": {"type": "string"}, "description": "Intent labels (default ['autoresearch'])"}
+                    },
+                    "required": ["title"]
+                }
+            },
+            "autoresearch_record": {
+                "name": "Autoresearch Record",
+                "description": "Record an experiment result for a Symphony intent (agent or operator). settle_intent prefers this over transcript parsing.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "intent_id": {"type": "string"},
+                        "val_bpb": {"type": "number"},
+                        "memory_gb": {"type": "number"},
+                        "commit": {"type": "string"},
+                        "description": {"type": "string"}
+                    },
+                    "required": ["intent_id", "val_bpb"]
+                }
+            },
+            "autoresearch_settle": {
+                "name": "Autoresearch Settle",
+                "description": "MiladyOS decides keep/discard for a parked (awaiting) experiment: deploy emits the delta to sandman (keep), close discards. Auto mode compares val_bpb to the best.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "intent_id": {"type": "string"},
+                        "decide": {"type": "string", "enum": ["auto", "keep", "discard"], "default": "auto"},
+                        "threshold": {"type": "number", "description": "Required improvement to keep (default 0)", "default": 0}
+                    },
+                    "required": ["intent_id"]
+                }
+            },
+            "symphony_state": {
+                "name": "Symphony State",
+                "description": "Symphony orchestrator runtime state (running/retrying/blocked counts).",
+                "parameters": {"type": "object", "properties": {}, "required": []}
+            },
+            "symphony_intents": {
+                "name": "Symphony Intents",
+                "description": "List Symphony intents as a bounded summary (count, by_state, latest N). Set full=true for the raw payload.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Max intents to return (default 20)", "default": 20},
+                        "full": {"type": "boolean", "description": "Return the full raw intent objects (large)", "default": False}
+                    },
+                    "required": []
+                }
+            },
         }
 
 
@@ -849,6 +939,69 @@ class MiladyOSToolServer:
                     return MiladyCI().list_runs(name, int(limit))
                 except Exception as e:
                     return {"success": False, "status": "error", "error": f"job_list failed: {e}"}
+
+            elif tool_id == "autoresearch_status":
+                from milady_autoresearch import mcp_status
+                return await asyncio.to_thread(mcp_status)
+
+            elif tool_id == "autoresearch_best":
+                from milady_autoresearch import mcp_best
+                return await asyncio.to_thread(mcp_best)
+
+            elif tool_id == "autoresearch_run":
+                from milady_autoresearch import mcp_run
+                return await asyncio.to_thread(
+                    mcp_run,
+                    arguments.get("description", ""),
+                    int(arguments.get("timeout", 900)),
+                    int(arguments.get("gpu", 0)),
+                )
+
+            elif tool_id == "autoresearch_enqueue":
+                from milady_autoresearch import mcp_enqueue
+                title = arguments.get("title")
+                if not title:
+                    return {"success": False, "status": "error", "error": "title is required"}
+                return await asyncio.to_thread(
+                    mcp_enqueue, title, arguments.get("description", ""),
+                    arguments.get("repo"), arguments.get("labels"),
+                )
+
+            elif tool_id == "autoresearch_record":
+                from milady_autoresearch import mcp_record
+                intent_id = arguments.get("intent_id")
+                val_bpb = arguments.get("val_bpb")
+                if not intent_id or val_bpb is None:
+                    return {"success": False, "status": "error",
+                            "error": "intent_id and val_bpb are required"}
+                return await asyncio.to_thread(
+                    mcp_record, intent_id, float(val_bpb),
+                    arguments.get("memory_gb"), arguments.get("commit"),
+                    arguments.get("description"),
+                )
+
+            elif tool_id == "autoresearch_settle":
+                from milady_autoresearch import mcp_settle
+                intent_id = arguments.get("intent_id")
+                if not intent_id:
+                    return {"success": False, "status": "error", "error": "intent_id is required"}
+                return await asyncio.to_thread(
+                    mcp_settle, intent_id,
+                    arguments.get("decide", "auto"),
+                    float(arguments.get("threshold", 0)),
+                )
+
+            elif tool_id == "symphony_state":
+                from milady_autoresearch import mcp_symphony_state
+                return await asyncio.to_thread(mcp_symphony_state)
+
+            elif tool_id == "symphony_intents":
+                from milady_autoresearch import mcp_symphony_intents
+                return await asyncio.to_thread(
+                    mcp_symphony_intents,
+                    int(arguments.get("limit", 20)),
+                    bool(arguments.get("full", False)),
+                )
 
             elif tool_id == "emacs_eval":
                 code = arguments.get("code")

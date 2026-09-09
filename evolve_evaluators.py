@@ -451,6 +451,71 @@ class ExecutionEvaluator(BaseEvaluator):
 
 
 # ============================================================================
+# Autoresearch Evaluator (option C: evolve train.py, fitness = val_bpb)
+# ============================================================================
+
+class AutoresearchEvaluator(BaseEvaluator):
+    """Fitness evaluator for a candidate `train.py`.
+
+    Runs one real autoresearch training experiment on a local GPU and turns
+    val_bpb into a 0-1 score (lower val_bpb => higher score). This is the
+    fitness function that lets AlphaEvolve-style search drive `train.py`
+    directly, with no Symphony in the loop.
+
+    context keys: repo_dir, gpu, timeout, description.
+    """
+
+    async def evaluate(self, content: str, context: Dict[str, Any]) -> EvaluationResult:
+        start = time.time()
+        try:
+            from milady_autoresearch import run_candidate
+        except Exception as e:  # pragma: no cover - import guard
+            return EvaluationResult(
+                passed=False, score=0.0,
+                metrics={"autoresearch_import_error": 1.0},
+                errors=[f"milady_autoresearch unavailable: {e}"],
+                warnings=[], duration_ms=(time.time() - start) * 1000,
+            )
+
+        result = await asyncio.to_thread(
+            run_candidate,
+            content,
+            context.get("description", "alphaevolve candidate"),
+            int(context.get("timeout", 900)),
+            int(context.get("gpu", 0)),
+            context.get("repo_dir"),
+        )
+
+        duration_ms = (time.time() - start) * 1000
+        if not result.get("success"):
+            return EvaluationResult(
+                passed=False, score=0.0,
+                metrics={
+                    "val_bpb": 0.0,
+                    "crashed": 1.0,
+                    "duration_seconds": float(result.get("duration_seconds", 0.0)),
+                },
+                errors=[(result.get("log_tail") or "experiment crashed")[-2000:]],
+                warnings=[], duration_ms=duration_ms,
+            )
+
+        val_bpb = float(result["val_bpb"])
+        score = 1.0 / (1.0 + max(0.0, val_bpb))  # monotonic, 0..1
+        return EvaluationResult(
+            passed=True,
+            score=score,
+            metrics={
+                "val_bpb": val_bpb,
+                "val_bpb_score": score,
+                "memory_gb": float(result.get("memory_gb", 0.0)),
+                "improved": 1.0 if result.get("improved") else 0.0,
+                "duration_seconds": float(result.get("duration_seconds", 0.0)),
+            },
+            errors=[], warnings=[], duration_ms=duration_ms,
+        )
+
+
+# ============================================================================
 # Cascade Evaluator (Orchestrator)
 # ============================================================================
 

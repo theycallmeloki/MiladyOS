@@ -23,7 +23,7 @@ server, a container, or a CLI without new dependencies.
 
 Environment overrides:
   AUTORESEARCH_DIR       checkout to run (default ~/Documents/autoresearch)
-  AUTORESEARCH_REPO_URL  mirror binding (default karpathy/autoresearch.git)
+  AUTORESEARCH_REPO_URL  mirror binding (default theycallmeloki/autoresearch.git)
   AUTORESEARCH_BRANCH    mirror branch (default master)
   AUTORESEARCH_STORE     JSONL result store for Symphony intents
   SANDMAN_ADDR           sandman control plane (default 192.168.1.15:4242)
@@ -56,7 +56,7 @@ def repo_dir() -> str:
 
 
 def repo_url() -> str:
-    return _env("AUTORESEARCH_REPO_URL", "https://github.com/karpathy/autoresearch.git")
+    return _env("AUTORESEARCH_REPO_URL", "https://github.com/theycallmeloki/autoresearch.git")
 
 
 def repo_branch() -> str:
@@ -346,9 +346,24 @@ def symphony_state() -> dict:
     return {"status": status, "state": payload}
 
 
-def symphony_intents() -> dict:
+def symphony_intents(limit: int = 20, full: bool = False) -> dict:
     status, payload = symphony_get("/api/v1/intents")
-    return {"status": status, "intents": (payload or {}).get("intents", []) if isinstance(payload, dict) else payload}
+    raw = (payload or {}).get("intents", []) if isinstance(payload, dict) else []
+    intents = list(raw or [])
+    by_state: dict = {}
+    for item in intents:
+        state = item.get("state", "?")
+        by_state[state] = by_state.get(state, 0) + 1
+    if full:
+        return {"status": status, "count": len(intents), "by_state": by_state, "intents": intents}
+    trimmed = [{
+        "id": item.get("id"),
+        "state": item.get("state"),
+        "title": (item.get("title") or "")[:120],
+        "repo": item.get("repo"),
+        "updated_at": item.get("updated_at"),
+    } for item in intents[: max(1, int(limit))]]
+    return {"status": status, "count": len(intents), "by_state": by_state, "intents": trimmed}
 
 
 def symphony_intent(intent_id: str) -> dict:
@@ -551,5 +566,5 @@ def mcp_symphony_state() -> dict:
     return symphony_state()
 
 
-def mcp_symphony_intents() -> dict:
-    return symphony_intents()
+def mcp_symphony_intents(limit: int = 20, full: bool = False) -> dict:
+    return symphony_intents(limit=limit, full=full)

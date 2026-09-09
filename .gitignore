@@ -140,3 +140,8 @@ dist
 .yarn/install-state.gz
 .pnp.*
 .aider*
+
+# local dev
+.venv/
+.pi/
+data/autoresearch/

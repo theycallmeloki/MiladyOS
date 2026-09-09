@@ -194,8 +194,7 @@ partition_disk() {
 }
 
 format_disk() {
-    ESP=$(part_name 2)
-    ROOT=$(part_name 3)
+    [ -n "$ESP" ] && [ -n "$ROOT" ] || { log "format_disk: ESP/ROOT unset"; return 1; }
     log "formatting $ESP (vfat) and $ROOT (ext4)"
     mkfs.vfat -F32 -n MILADY_EFI "$ESP"
     mkfs.ext4 -F -L MILADY_ROOT "$ROOT"
@@ -203,8 +202,18 @@ format_disk() {
 
 copy_system() {
     log "mounting target"
+    [ -n "$ROOT" ] || { log "copy_system: ROOT unset"; return 1; }
     mkdir -p "$TARGET"
     mount_retry "$ROOT" "$TARGET"
+
+    # the mount must have landed on the intended device, not a leftover dir
+    local mounted
+    mounted=$(findmnt -no SOURCE "$TARGET" 2>/dev/null || true)
+    if [ "$mounted" != "$ROOT" ]; then
+        log "copy_system: $TARGET is on '$mounted', expected $ROOT"
+        return 1
+    fi
+
     mkdir -p "$TARGET/boot/efi"
     mount_retry "$ESP" "$TARGET/boot/efi"
 
@@ -258,6 +267,8 @@ configure_system() {
     local root_uuid esp_uuid group groups=""
     root_uuid=$(blkid -s UUID -o value "$ROOT")
     esp_uuid=$(blkid -s UUID -o value "$ESP")
+    [ -n "$root_uuid" ] || { log "configure_system: no UUID for $ROOT"; return 1; }
+    [ -n "$esp_uuid" ] || { log "configure_system: no UUID for $ESP"; return 1; }
 
     log "writing fstab (root=$root_uuid esp=$esp_uuid)"
     cat >"$TARGET/etc/fstab" <<EOF
@@ -443,6 +454,8 @@ main() {
         [ -n "$DISK" ] || DISK=$(eligible_disks | head -1 | cut -f1)
         case "$ROLE" in server|agent|desktop) ;; *) ROLE=server ;; esac
         [ -b "$DISK" ] || { echo "milady-install: no target disk ($DISK)" >/dev/console; exit 1; }
+        ESP=$(part_name 2)
+        ROOT=$(part_name 3)
         run_unattended_install || exit 1
         sync
         reboot
@@ -464,6 +477,11 @@ main() {
     screen_account || exit 0
     [ "$ROLE" = "agent" ] && screen_token
     screen_confirm || exit 0
+
+    # ESP/ROOT are computed once here: the install steps run in subshells, so
+    # variables they set would not survive to the next step.
+    ESP=$(part_name 2)
+    ROOT=$(part_name 3)
 
     run_interactive_install || exit 1
     screen_done
