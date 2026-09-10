@@ -1,0 +1,39 @@
+{
+  "name": "autoresearch-train",
+  "description": "Run the mirror's train.py on the A4000 as a sandman GPU job (host home mounted once; uv venv from the host cache)",
+  "input": {
+    "repo": "autoresearch",
+    "branch": "master",
+    "glob": "train.py",
+    "name": "in"
+  },
+  "transform": {
+    "image": "ghcr.io/astral-sh/uv:python3.10-bookworm",
+    "cmd": [
+      "sh",
+      "-c",
+      "{ echo '--- /sandman/volumes ---'; ls -la /sandman/volumes/; echo '--- home ---'; ls -la /sandman/volumes/home/ | head -20; echo '--- home/.cache ---'; ls -la /sandman/volumes/home/.cache/ 2>&1 | head -12; echo '--- home/.cache/autoresearch ---'; ls -la /sandman/volumes/home/.cache/autoresearch/ 2>&1 | head -12; echo '--- repo ---'; ls /sandman/volumes/home/Documents/autoresearch 2>&1 | head -5; } > \"$OUT/diag.txt\" 2>&1\ncat \"$OUT/diag.txt\"\n"
+    ],
+    "workdir": "/sandman/volumes/home/Documents/autoresearch",
+    "env": {
+      "HOME": "/sandman/volumes/home",
+      "UV_PROJECT_ENVIRONMENT": "/sandman/volumes/home/.cache/autoresearch/sandman-venv",
+      "UV_CACHE_DIR": "/sandman/volumes/home/.cache/uv",
+      "UV_PYTHON_INSTALL_DIR": "/sandman/volumes/home/.local/share/uv/python",
+      "UV_LINK_MODE": "copy",
+      "MPLBACKEND": "Agg",
+      "HF_HUB_DISABLE_PROGRESS_BARS": "1"
+    },
+    "podSpec": "{\"volumes\":{\"home\":{\"hostPath\":\"/home/laneone\"}},\"workdir\":\"/sandman/volumes/home/Documents/autoresearch\"}",
+    "resourceRequests": {
+      "gpu": 1
+    },
+    "datumTimeout": "25m",
+    "jobTimeout": "40m"
+  },
+  "parallelism": {
+    "constant": 1
+  },
+  "enableStats": true,
+  "reprocess": true
+}
