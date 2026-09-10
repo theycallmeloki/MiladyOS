@@ -169,10 +169,11 @@ screen_token() {
 }
 
 screen_confirm() {
-    local extra=""
+    local extra="" payload="embedded container image (air-gapped)"
     [ "$ROLE" = "agent" ] && extra="\n  Token:     ${TOKEN:-(none - join later)}"
+    [ -f "$MEDIUM/payload/$PAYLOAD_NAME" ] || payload="none - will pull from registry"
     ui --yesno \
-        "\n  Role:      $ROLE\n  Disk:      $DISK   (WILL BE ERASED)\n  Username:  $USERNAME\n  Payload:   embedded container image\n  Hostname:  random milady-<id> at first boot$extra\n\n  Install MiladyOS now?" \
+        "\n  Role:      $ROLE\n  Disk:      $DISK   (WILL BE ERASED)\n  Username:  $USERNAME\n  Payload:   $payload\n  Hostname:  random milady-<id> at first boot$extra\n\n  Install MiladyOS now?" \
         0 0
 }
 
