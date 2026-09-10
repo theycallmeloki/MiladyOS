@@ -4,7 +4,7 @@
 > do a text-based Calamares, or any upstream Debian text installer? A text path
 > would also be much cleaner for automated QEMU testing.
 >
-> Status: **IMPLEMENTED — custom `dialog` TUI installer** (`ISO/installer/`).
+> Status: **IMPLEMENTED — custom `gum` TUI installer** (`ISO/installer/`).
 > The d-i research below is kept for reference; we did not adopt d-i because a
 > focused custom installer gives the branding/flow control we want and folds the
 > preseed/late_command job into one script.
@@ -15,14 +15,31 @@
 
 Calamares has no text/headless mode (see §1), and d-i's newt UI is not brandable
 without injecting extra binaries into its initrd. So the installer is a single
-`dialog`-based TUI that runs in the live session on the active console:
+script that runs in the live session on the active console:
 
 - `ISO/installer/milady-install` — the installer (screens + install engine).
 - `ISO/installer/ascii-logo.txt` — swappable ASCII banner (the only branding).
-- `ISO/systemd/milady-install.service` — runs it on `/dev/console` (ttyS0 on
-  serial fleet/CI boots, tty0 on VGA) and is live-only.
-- `ISO/config/package-lists/miladyos-installer.list.chroot` — dialog, parted,
-  dosfstools, e2fsprogs, rsync, grub-{pc,efi}-bin, efibootmgr, initramfs-tools.
+- `ISO/systemd/milady-install.service` — runs it on tty1 (VGA/monitor).
+- `ISO/systemd/milady-install-serial.service` — runs it on ttyS0 (headless).
+  Both start; a `flock` lets only the first to reach the install step proceed.
+- `ISO/config/package-lists/miladyos-installer.list.chroot` — gum, dialog,
+  parted, dosfstools, e2fsprogs, rsync, grub-{pc,efi}-bin, efibootmgr,
+  initramfs-tools.
+
+### UI: gum + matrix branding
+
+The TUI is [gum](https://github.com/charmbracelet/gum) (packaged in Debian
+trixie as `gum`). It was chosen after reviewing Omarchy's installer, whose text
+UI is the same toolkit: gum gives a modern prompt/cursor experience that plain
+`dialog` does not, and it is packaged upstream. Branding is deliberately small:
+
+- **Matrix palette** — a 16-colour VT palette (`set_matrix_palette`, green on
+  black) written with console escapes; ANSI SGR green is used everywhere else,
+  so a serial console (which ignores the VT palette) still reads green.
+- **Centered ASCII banner** — `ascii-logo.txt`, measured with `wc -L` under
+  `C.UTF-8` and centred to the terminal width (clamped on narrow consoles).
+- `dialog` is kept as a fallback: `MILADY_UI=dialog` forces the old UI, which
+  stays scriptable over a serial line.
 
 Flow: **banner -> role -> disk -> account -> (join token) -> confirm -> install
 -> reboot.** Hostname is not asked (first boot assigns random `milady-<id>`).
@@ -33,8 +50,37 @@ The install engine is the `preseed`/`late_command` job done natively: GPT with
 payload to `/opt/milady/payload`, the join token, create the operator account,
 install GRUB for UEFI **and** BIOS, `update-initramfs`, `update-grub`, reboot.
 
-Unattended/CI mode (no TUI): boot with
-`milady.auto=1 [milady.role=…] [milady.disk=…] [milady.password=…] [milady.token=…]`.
+### Unattended: `milady.auto` or a `cidata` volume
+
+Two ways to install with nobody at the keyboard:
+
+1. **`milady.auto=1`** on the kernel cmdline, plus optional non-secret
+   `milady.install.role|disk|user|password`.
+2. **A volume labelled `cidata`** (cloud-init `NoCloud`; `milady-join` is also
+   accepted) carrying `milady.conf` — the presence of that file is itself the
+   trigger, so "attach a drive and walk away" works:
+
+   ```
+   # milady.conf — key=value, parsed, never sourced (no code execution)
+   ROLE=agent
+   DISK=/dev/vda
+   USERNAME=milady
+   PASSWORD_HASH='$6$…'      # openssl passwd -6; PASSWORD= also accepted
+   JOIN_TOKEN=K10…::server:…
+   HOSTNAME=milady-42        # optional; else random at first boot
+   ```
+
+   An optional `authorized_keys` on the same volume is installed for the
+   operator account, and `milady-join` (just the token) works for interactive
+   installs that only need to be handed a token.
+
+The volume is copied off and unmounted before partitioning, so the install never
+depends on the medium still being attached. **Secrets live here, not on the
+cmdline:** `/proc/cmdline` is world-readable, so `milady-install` ignores a
+`milady[.install].token=` if it finds one (PLAN §Join-token secrecy).
+
+`MILADY_DRY=1` animates the screens and progress bar without touching a disk
+(UI testing); `MILADY_UI=dialog` selects the fallback UI.
 
 Calamares was removed from the build (package list + hook + live session); its
 module/branding files remain parked under `ISO/calamares/` for reference.

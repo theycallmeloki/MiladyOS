@@ -69,10 +69,13 @@ cluster as the target; Jenkins-in-container drives the same KanikoBuild CRs
   (`debian:13.4` builder image, same pattern as the sqlite_build stage).
   [RULED D1 — Debian upstream preferred; Arch route rejected.]
 - **Installer:** **text installer** (`ISO/installer/milady-install`) — a
-  `dialog` TUI that runs on the live console: banner → role → disk → account →
-  confirm → install → reboot. Copies the live rootfs to disk and installs GRUB
+  **gum** TUI (matrix palette + centered ASCII banner, `ascii-logo.txt`) that
+  runs on the live console: banner → role → disk → account → confirm →
+  install → reboot. Copies the live rootfs to disk and installs GRUB
   (UEFI + BIOS). Live boot for "normal ISO" feel; install-to-disk for fleet
-  persistence. Unattended via `milady.auto=1 …` kernel params.
+  persistence. Unattended via `milady.auto=1 …` kernel params, or a volume
+  labelled `cidata` (cloud-init NoCloud style) carrying `milady.conf` — which
+  is where secrets belong. `dialog` remains a fallback (`MILADY_UI=dialog`).
   [RULED D2 — both. Calamares (Qt GUI) retired: no text mode, 3D-dependent.]
 - GRUB with UEFI + BIOS boot; squashfs rootfs; persistence optional.
 - Hostname scheme `milady-<10001..99999>` (public range; 1..10000
@@ -90,7 +93,7 @@ ISO/
 ├── hooks/                     # lb hooks: embed payload, systemd units, kernel cmdline
 ├── includes.chroot/           # files staged into the live rootfs
 ├── includes.binary/           # files on the ISO filesystem itself
-├── installer/                 # text installer (dialog TUI) + ASCII banner
+├── installer/                 # text installer (gum TUI) + ASCII banner
 ├── payload/                   # build-time staging
 │   └── miladyos-image.tar.zst # docker save ogmiladyloki/miladyos → zstd
 ├── systemd/                   # first-boot units (installed into rootfs)
@@ -182,9 +185,11 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
   found: warn and wait/retry (worker never self-promotes unless explicitly
   told `role=server`).
 - **Join token (D7-sec):** server prints/persists
-  `/var/lib/rancher/k3s/server/node-token`; agent join prompts once
-  (or reads pre-seeded `/etc/milady/join-token` from USB label
-  `milady-join`). Never kernel cmdline (visible in /proc).
+  `/var/lib/rancher/k3s/server/node-token`; agent join prompts once, or reads
+  it from a volume labelled `cidata` (cloud-init NoCloud; also accepts
+  `milady-join`) — `milady.conf` / `milady-join`, copied off at install time
+  and written to `/etc/milady/join-token`. Never the kernel cmdline
+  (world-readable in /proc; the installer ignores it there).
 - **Networking:** k3s servicelb vs MetalLB [D10]; Nebula overlay stays
   container-side (LAN cluster for now).
 - **Storage:** Longhorn with storage-node labels
@@ -291,7 +296,8 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
   this entirely (writable root → disk-backed overlay2).
 - **dkms vs live-kernel** — driver build on first boot needs headers in ISO;
   failing that, bake driver matching the pinned ISO kernel (D8 fallback).
-- **Join-token secrecy** — console + file only; never cmdline.
+- **Join-token secrecy** — console + `cidata` volume file only; never cmdline
+  (enforced: `milady-install` ignores `milady[.install].token=`).
 - **k3s-on-Docker version coupling** — pin both; test upgrades in QEMU first.
 - **Jenkins per node** — every node runs the full container (Jenkins
   included); storage-heavy. Mitigation: `KUBERNETES_MODE=true` so nodes
