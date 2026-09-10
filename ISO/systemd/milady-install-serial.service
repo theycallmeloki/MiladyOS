@@ -1,11 +1,9 @@
 [Unit]
-Description=MiladyOS text installer (VGA/local console)
+Description=MiladyOS text installer (serial console)
 # Live-only: /run/live/medium exists only when booted from the ISO.
-# On installed systems this unit is inert and the gettys keep the console.
 ConditionPathExists=/run/live/medium
-# Claim the local VT (what a monitor shows). milady-install-serial.service
-# runs in parallel on ttyS0 for headless nodes; a flock in the installer
-# makes sure only one of them performs the install.
+# The VGA instance (milady-install.service) runs in parallel on tty1; a flock
+# in the installer script makes sure only one of them performs the install.
 Conflicts=getty@tty1.service serial-getty@ttyS0.service
 After=getty@tty1.service serial-getty@ttyS0.service
 
@@ -14,7 +12,7 @@ Type=idle
 StandardInput=tty
 StandardOutput=tty
 StandardError=tty
-TTYPath=/dev/tty1
+TTYPath=/dev/ttyS0
 ExecStart=/usr/local/sbin/milady-install
 TimeoutStartSec=0
 Restart=no

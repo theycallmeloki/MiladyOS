@@ -373,10 +373,38 @@ Internal paths, tools, units, and hostnames use **`milady`**: `/etc/milady/`,
 artifact prefix `miladyos-<version>`, the 5-octet version scheme, and
 `MILADYOS_*` env vars.
 
-The `milady` binary (LLM bridge) is the only host binary with that exact
-name today; native host tooling (`milady-*` scripts) coexists under
-`/usr/local/sbin`. Revisit namespacing if the bridge ever installs natively
-on the host (currently it lives inside the container only).
+The **`milady` binary** is the **host companion CLI** (`milady/`, Go) — the
+successor to the retired Python `mcp-llm-bridge`, not the bridge itself. It
+owns the operations that must run on the real host and installs to
+`/usr/local/bin/milady`:
+
+| command | what it does |
+|---|---|
+| `milady ask [prompt]` | drive the container's MCP (OpenAI-compatible + function calling) |
+| `milady slurp <path> [--push url]` | package a host folder as a build context (git/.dockerignore-aware) |
+| `milady k3s join` | discover a peer master + join the cluster (stub) |
+| `milady update [--check]` | self-update from the `milady-<os>-<arch>` release assets |
+| `milady version` | build/version banner |
+
+That makes the collision real, and it resolves cleanly — four distinct
+`milady*` objects, none of which shadow another:
+
+| object | path / name | role |
+|---|---|---|
+| host companion CLI | `/usr/local/bin/milady` | the operator's (and agent's) host command |
+| appliance plumbing | `/usr/local/sbin/milady-*` | firstboot/systemd helpers — internal, not a user command |
+| OS account | user `milady` (uid 1000) | owns her state on the host |
+| product surface | `miladyos` (`ogmiladyloki/miladyos`, `miladyosregistry.*`, ISO prefix, `MILADYOS_*`) | published artifacts |
+
+The CLI and the plumbing differ by name (`milady` vs `milady-*`); a username is
+not a PATH entry; and `miladyos` never names a host object. **Ruling:** keep
+this split. `milady` = the command the agent drives on the host; `milady-*` =
+internal plumbing; `miladyos` = product. The ISO should **ship the companion on
+the host** (`/usr/local/bin/milady`) so a fresh node has it out of the box —
+built from `milady/` at ISO build time (same repo/commit; the builder needs a
+Go ≥ the `go.mod` toolchain) or fetched from the matching `milady-<version>`
+release — rather than leaving it container-only. It is a plain CLI: no systemd
+unit, no daemon; `milady update` keeps it current.
 
 ## Versioning — 5-octet agentic semver
 
