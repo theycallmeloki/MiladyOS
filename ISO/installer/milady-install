@@ -64,6 +64,14 @@ mount_retry() {  # <dev> <target>
     return 1
 }
 
+# Only one console may drive an install. The VGA and serial instances both
+# start; the first to reach the install step takes this lock, the other backs
+# off (interactive: a message; unattended: silent exit).
+install_lock() {
+    exec 8>/run/milady-install.lock
+    flock -n 8
+}
+
 # The /dev/...N or /dev/...pN partition name for a disk + index.
 part_name() {
     case "$DISK" in
@@ -348,10 +356,10 @@ EOF
     local grubd="$TARGET/etc/default/grub"
     mkdir -p "$TARGET/etc/default"
     [ -f "$grubd" ] || printf 'GRUB_DEFAULT=0\nGRUB_TIMEOUT=5\n' >"$grubd"
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet console=ttyS0,115200n8 net.ifnames=0"/' \
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet console=tty0 console=ttyS0,115200n8 net.ifnames=0"/' \
         "$grubd" || true
     grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grubd" \
-        || printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet console=ttyS0,115200n8 net.ifnames=0"\n' >>"$grubd"
+        || printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet console=tty0 console=ttyS0,115200n8 net.ifnames=0"\n' >>"$grubd"
     grep -q '^GRUB_TERMINAL=' "$grubd" \
         || printf 'GRUB_TERMINAL="console serial"\n' >>"$grubd"
     grep -q '^GRUB_SERIAL_COMMAND=' "$grubd" \
@@ -477,14 +485,25 @@ run_unattended_install() {
 main() {
     [ "$(id -u)" -eq 0 ] || { echo "milady-install: must run as root" >&2; exit 1; }
     mkdir -p /run/milady-install
-    : >"$LOG"
-    # Follow the active console: vt220 for serial (fleet/CI), linux for VGA.
-    local active_console
-    active_console=$(awk '{print $NF}' /sys/class/tty/console/active 2>/dev/null)
-    case "$active_console" in
-        ttyS*|hvc*|ttyAMA*) export TERM=vt220 ;;
-        *)                  export TERM=linux ;;
+
+    # Which console are we on? The unit pins TTYPath; `tty` reads it back.
+    # Follow it for TERM (vt220 on serial, linux on VGA) and for the log name,
+    # so the VGA and serial instances don't clobber each other's logs.
+    local ttydev active_console
+    ttydev=$(tty 2>/dev/null || true)
+    [ -n "$ttydev" ] && LOG="/var/log/milady-install-$(basename "$ttydev").log"
+    case "$ttydev" in
+        /dev/ttyS*|/dev/hvc*|/dev/ttyAMA*) export TERM=vt220 ;;
+        /dev/tty[0-9]*)                    export TERM=linux ;;
+        *)
+            active_console=$(awk '{print $NF}' /sys/class/tty/console/active 2>/dev/null)
+            case "$active_console" in
+                ttyS*|hvc*|ttyAMA*) export TERM=vt220 ;;
+                *)                  export TERM=linux ;;
+            esac
+            ;;
     esac
+    : >"$LOG"
     LIVE_DISK=$(detect_live_disk || true)
     MEDIUM=$(detect_medium)
 
@@ -499,6 +518,7 @@ main() {
         [ -b "$DISK" ] || { echo "milady-install: no target disk ($DISK)" >/dev/console; exit 1; }
         ESP=$(part_name 2)
         ROOT=$(part_name 3)
+        install_lock || exit 0
         run_unattended_install || exit 1
         sync
         reboot
@@ -525,6 +545,12 @@ main() {
     # variables they set would not survive to the next step.
     ESP=$(part_name 2)
     ROOT=$(part_name 3)
+
+    if ! install_lock; then
+        ui --title "Installer busy" --msgbox \
+            "An installation is already in progress on another console." 0 0
+        exit 1
+    fi
 
     run_interactive_install || exit 1
     screen_done

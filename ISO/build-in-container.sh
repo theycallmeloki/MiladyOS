@@ -75,9 +75,9 @@ EOF
 printf '%s\n' "${VERSION:-dev}" > "$INC/etc/milady/version"
 
 # Text installer (D2): milady-install runs on the active console in the live
-# session (milady-install.service, copied by the systemd/*.service sweep
-# above). The ASCII banner is swappable branding — edit
-# ISO/installer/ascii-logo.txt.
+# session (milady-install.service / milady-install-serial.service, copied by
+# the systemd/*.service sweep above). The ASCII banner is swappable branding —
+# edit ISO/installer/ascii-logo.txt.
 install -m 0755 /iso/installer/milady-install "$INC/usr/local/sbin/milady-install"
 install -m 0644 /iso/installer/ascii-logo.txt "$INC/usr/share/milady/ascii-logo.txt"
 

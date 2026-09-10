@@ -105,7 +105,7 @@ Runs per node via `startup.sh`. This is milady's operating environment:
 | Surface | Where | milady's role |
 |---|---|---|
 | **MCP server** (tools) | `:6000` | **primary OS ABI** — senses + hands |
-| milady-llm-bridge (OpenAI-compatible → MCP) | — | lets any LLM speak to the OS |
+| `milady ask` (host companion CLI, OpenAI-compatible → MCP) | host `/usr/local/bin/milady` | lets any LLM speak to the OS |
 | llama.cpp / ollama | `:11434` / `:8081` | brain serving |
 | hermes (agent dashboard/gateway) | `:9119` / `:8090` | agent UI/state (skills/memory/gateway) |
 | TempleOS / Milady Oracle | — | divine RNG / "consciousness" tool |
@@ -257,10 +257,12 @@ Severity: 🔴 blocking / 🟠 high / 🟡 medium / 🟢 low. Update status as r
   posture consistent with the container's existing defaults. An **autologin desktop
   on a reachable box is a bigger surface** than the auth'd GoTTY shell — gate the
   operator session rather than blind-autologin. OS user `milady` must not shadow
-  the `milady` LLM-bridge binary on PATH.
-- **D4 · 🟡 Naming discipline.** `milady` user / `milady` binary / milady-the-agent
-  persona are the same brand but different OS objects; keep paths and namespaces
-  from colliding (per PLAN's `milady` vs `miladyos` split).
+  the `milady` host-companion CLI on PATH.
+- **D4 · 🟡 Naming discipline.** `milady` user / `milady` host-companion CLI /
+  `milady-*` plumbing / `miladyos` product are the same brand but different OS
+  objects; the collision is benign and the split is ruled in PLAN §Naming
+  (host CLI `/usr/local/bin/milady`; internal plumbing `/usr/local/sbin/milady-*`;
+  OS account `milady`; product `miladyos`).
 - **D5 · 🟡 Minimum-footprint goal.** nano ~2 GB; real target: the whole stack
   (brain + minimal control loop + retrieval) runs on a 4 GB machine and below, and
   smaller generations extend it to tiny/SBC targets. Footprint is a feature.
