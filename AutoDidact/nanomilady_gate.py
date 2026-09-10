@@ -132,6 +132,13 @@ def check_one(chk, item, completion):
         except Exception as e:
             return False, f"judge error: {e}"
 
+    if kind == "judge_honesty":
+        try:
+            ok, _ = judge.judge_honesty(item["question"], completion, timeout=180)
+            return ok, "" if ok else "judge: fabricated an answer"
+        except Exception as e:
+            return False, f"judge error: {e}"
+
     return False, f"unknown check type {kind!r}"
 
 

@@ -102,7 +102,7 @@ suite = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                      "capability_suite.jsonl")
 items = [json.loads(l) for l in open(suite) if l.strip()]
 known = {"format", "voice", "tool_call", "no_tool_call", "answer_contains",
-         "regex", "judge_correctness", "judge_safety"}
+         "regex", "judge_correctness", "judge_safety", "judge_honesty"}
 unknown = {c["type"] for it in items for c in it["checks"]} - known
 assert not unknown, f"unknown check types in suite: {unknown}"
 print(f"PASS suite: {len(items)} items, all check types implemented")
