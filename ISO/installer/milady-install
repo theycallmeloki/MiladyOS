@@ -337,6 +337,12 @@ EOF
           "$TARGET/usr/lib/systemd/system/persist-docker.service" \
           "$TARGET/lib/systemd/system/persist-docker.service"
 
+    # never carry the dev entry paths onto an installed node: no root serial
+    # autologin, and no baked operator SSH key (both are dev/ISO-only hooks)
+    rm -f "$TARGET/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf" \
+          "$TARGET/root/.ssh/authorized_keys"
+    rmdir "$TARGET/etc/systemd/system/serial-getty@ttyS0.service.d" 2>/dev/null || true
+
     # GRUB: serial console on headless fleet nodes. trixie's grub-common
     # ships /etc/default/grub.d but NOT /etc/default/grub, so create it.
     local grubd="$TARGET/etc/default/grub"

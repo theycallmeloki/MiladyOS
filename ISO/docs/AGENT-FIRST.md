@@ -176,9 +176,9 @@ not a product surface to invest in:
 - The ISO is appliance-driven: prefer an **optional local view session that rides
   the control-plane/server node**, not a separate no-container "desktop product"
   that runs nothing (see issue D-2 / AL-6).
-- Default appliance identity: **`milady` / `milady`**, preset in the Calamares
-  users module (skippable), mirroring the container's existing `milady/milady`
-  defaults (Jenkins, GoTTY) into one consistent account.
+- Default appliance identity: **`milady` / `milady`**, preset in the text
+  installer's account screen (changeable), mirroring the container's existing
+  `milady/milady` defaults (Jenkins, GoTTY) into one consistent account.
 
 The view layer is for the *human guest*. milady herself does not drive a
 compositor — she drives MCP. Never design a GUI you expect the 1B to click.
@@ -309,7 +309,7 @@ moat.
 | AL-2 | Primary user | **milady (the agent).** Human = operator/guest who watches, steers, vetoes. |
 | AL-3 | Desktop investment | **Thin sway view layer; invest little.** Observability, not a rice project. |
 | AL-4 | Brain-slot ABI | **Model-agnostic, weak-brain-first.** Tools + RAG over static skills. |
-| AL-5 | Default identity | `milady`/`milady`, preset in Calamares (skippable), mirroring container defaults. |
+| AL-5 | Default identity | `milady`/`milady`, preset in the text installer's account screen (changeable), mirroring container defaults. |
 | AL-6 | View layer placement | **PENDING** — optional sway session on the server/control-plane node; drop the no-container "desktop" product (D-2). |
 | AL-7 | Model release stream | **PENDING** — nano now; larger coming; shrinking tail is the roadmap/"as small as task allows" (A-5). |
 | AL-8 | Skills vs tools | **PENDING/RECOMMEND** — MCP tools + RAG; no static-skill dependency (B-1). |
@@ -333,7 +333,7 @@ moat.
 6. **WS-5 Fleet training substrate** — where 27B/70B GRPO runs; GPU placement,
    model egress across the fleet. *XL, later.*
 7. **WS-6 Release candidate** — embedded nano brain, `milady`/`milady` default,
-   branding layers on the ISO (boot/session/Calamares), docs, provenance surface.
+   branding layers on the ISO (boot/session/installer), docs, provenance surface.
    *M.*
 
 **Recommended proof before broad build:** a QEMU control-plane boot that boots to

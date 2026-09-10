@@ -21,6 +21,8 @@ VERSION="${VERSION:-$(bash "$ISO_DIR/version.sh")}"
 MILADYOS_IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/miladyos:latest}"
 BUILDER_TAG="milady-iso-builder:13.4"
 MILADYOS_ROLE="${MILADYOS_ROLE:-server}"   # seed node.conf: server|agent
+MILADY_DEV="${MILADY_DEV:-0}"             # 1 = keep dev entry paths (root serial
+                                          # autologin + baked SSH key)
 
 NO_PAYLOAD=0
 [[ "${1:-}" == "--no-payload" ]] && NO_PAYLOAD=1
@@ -56,6 +58,7 @@ docker run --rm --privileged \
     -e MILADYOS_IMAGE="$MILADYOS_IMAGE" \
     -e NO_PAYLOAD="$NO_PAYLOAD" \
     -e MILADYOS_ROLE="$MILADYOS_ROLE" \
+    -e MILADY_DEV="$MILADY_DEV" \
     -e MILADY_BOOTAPPEND_LIVE="${MILADY_BOOTAPPEND_LIVE:-}" \
     "$BUILDER_TAG"
 

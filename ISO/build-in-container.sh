@@ -17,6 +17,19 @@ for e in /iso/* /iso/.[!.]*; do
 done
 cd /build
 
+# --- dev vs production entry paths -----------------------------------------
+# Production builds omit the dev-only hooks: 1351 bakes root autologin on the
+# serial console, 1350 bakes one operator's SSH key into root. Both land in
+# the live rootfs (and therefore in anything installed from it), so they must
+# not ship. Set MILADY_DEV=1 for a dev ISO that keeps console access.
+if [ "${MILADY_DEV:-0}" = "1" ]; then
+    echo "dev hooks: INCLUDED (MILADY_DEV=1)"
+else
+    rm -f config/hooks/normal/1350-dev-ssh.chroot \
+          config/hooks/normal/1351-dev-autologin.chroot
+    echo "dev hooks: omitted (production build)"
+fi
+
 # --- lb config -------------------------------------------------------------
 lb config
 
