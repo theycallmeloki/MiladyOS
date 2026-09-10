@@ -205,8 +205,10 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
   (`longhorn.io/node=true`) applied by role script; default storage class
   like current `longhorn-values.yaml`.
 - k3s version [D5]: no pin — `1200-k3s.chroot` lets get.k3s.io install the
-  current stable (the hook honors `K3S_VERSION` if an operator sets it, but
-  build.sh doesn't). The old Dockerfile `v1.26.10+k3s2` env is gone — the
+  current stable (the hook honors `K3S_VERSION`, which `build.sh` now forwards;
+  if the channel endpoint is unreachable it resolves the same latest-stable tag
+  from the GitHub API — local networks here TLS-intercept `update.k3s.io`).
+  The old Dockerfile `v1.26.10+k3s2` env is gone — the
   container never ran k3s, and k3sup (remote bootstrap) was removed; the
   node runtime lives on the host only.
 
