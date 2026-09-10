@@ -202,3 +202,38 @@ Add whatever helps you do your job. This is your cheat sheet. Update it as you d
   — a *different* training domain from autoresearch's from-scratch `train.py`,
   but the same loop contract: one editable artifact, fixed budget, one
   reproducible metric, keep/discard on that metric, never stop.
+
+## Sandman cannot host-mount on remote workers — the GPU runner instead
+
+**Blocker (verified in source):** a job placed on a *remote* worker is executed
+through the worker's `POST /exec` (`runExec` in `worker.go`), and `execRequest`
+has **no field for PodSpec volumes** — the worker builds its own mounts (only
+`/tmp` plus the shipped input sides). So `podSpec.volumes[].hostPath` works only
+for daemon-local execution; on `miladyos-42` it is silently ignored (the path
+turns out to be a docker-created workdir). Combined with this box's docker
+hanging on very large image layers, a self-contained training image is also out.
+Conclusion: **a sandman pipeline cannot reuse the host venv/cache on the GPU
+worker.** The spec is kept at `deploy/autoresearch-train.pipeline.json` for when
+sandman grows mount support.
+
+**What actually runs the GPU: `autoresearch_runner.py`.** A small stdlib HTTP
+service (it has no MiladyOS deps on purpose) that the Symphony agent calls.
+- `POST /experiment {"train_py": "...", "description": "..."}` writes the
+  candidate over `~/Documents/autoresearch/train.py`, runs `uv run train.py` with
+  `CUDA_VISIBLE_DEVICES=1` (the A4000), parses the `val_bpb`/`peak_vram_mb`
+  summary, then **restores the original train.py**. Returns JSON.
+- Unit `~/.config/systemd/user/autoresearch-runner.service`, port **18700**;
+  ufw allows it from the LAN + pod CIDR. Log: `~/.local/state/autoresearch-runner.log`.
+- The 3090 is untouched: `CUDA_VISIBLE_DEVICES=1` + the worker pinned to `-gpu 1`.
+
+**Symphony turn budget** is `agent.max_turns` in the `symphony-workflow`
+ConfigMap, which is **ArgoCD-managed** (app `websites-private`, source
+`theycallmeloki/self-hosted-k8s-private` `deploy/symphony/configmap.yaml`,
+auto-sync + selfHeal — a direct `kubectl patch` is reverted). It was raised
+`1 -> 200` in the source repo and pushed; restart the Deployment to load it.
+
+**Long program.md intent (live):** `int-1789023381869814-alUeDQ`. The agent runs
+the full loop (`results.tsv`, keep-on-improvement, `git reset` otherwise) with
+training executed by the runner on the A4000. First results: baseline
+`1.524827`, then DEPTH 8->6 `1.480264` kept. (A4000 numbers are higher than the
+3090's `1.327183` because fewer tokens fit in the same 5-minute budget.)
