@@ -340,6 +340,9 @@ EOF
     rm -f "$TARGET/etc/systemd/system/multi-user.target.wants/var-lib.mount" \
           "$TARGET/etc/systemd/system/local-fs.target.wants/var-lib.mount" \
           "$TARGET/etc/systemd/system/multi-user.target.wants/milady-install.service" \
+          "$TARGET/etc/systemd/system/multi-user.target.wants/milady-install-serial.service" \
+          "$TARGET/usr/lib/systemd/system/milady-install.service" \
+          "$TARGET/usr/lib/systemd/system/milady-install-serial.service" \
           "$TARGET/usr/lib/systemd/system/var-lib.mount" \
           "$TARGET/lib/systemd/system/var-lib.mount" \
           "$TARGET/usr/lib/systemd/system/persist-docker.service" \
