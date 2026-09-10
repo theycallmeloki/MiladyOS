@@ -169,7 +169,12 @@ The **desktop view layer is deliberately small** — an observability afterthoug
 not a product surface to invest in:
 
 - **Compositor: sway** (wlroots, in official trixie → reproducible with the
-  existing `ISO/build.sh` determinism). Not a ricing project. Minimal.
+  existing `ISO/build.sh` determinism). Not a ricing project. Minimal. niri and
+  hyprland are not in trixie; if they land in backports the package list changes,
+  not the shape of the session.
+- The **desktop variant** (`role=desktop`, PLAN D4) is the standalone human box:
+  the same sway session, started from the console with `startx` (`docs/DESKTOP.md`).
+  No k3s, no container, and no autologin graphical session (D-3).
 - Purpose: let an operator *watch milady* — her state: the `memory/` journal,
   hermes/pi transcripts, MCP/logs, sandman runs, evolution goals, docs, a terminal,
   and a browser into GoTTY/docs/:8081/dashboards.
@@ -249,7 +254,8 @@ Severity: 🔴 blocking / 🟠 high / 🟡 medium / 🟢 low. Update status as r
   milady present**. Tier payload per model generation (nano in ISO; large via
   egress/registry). Mirrors the existing `payload/miladyos-image.tar.zst` pattern.
 - **D2 · 🟠 Where the view layer rides.** PLAN's `desktop` role today = *no k3s, no
-  container* — a bare openbox box that runs nothing. But the view layer is
+  container* — a standalone box with no cluster role (since 2026-09-10 it ships a
+  light sway session, `docs/DESKTOP.md`). But the view layer is
   observability of the control plane. **Recommended: optional local sway session on
   the server/control-plane node**; drop the dead no-container "desktop product"
   (AL-6).

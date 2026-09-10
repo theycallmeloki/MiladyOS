@@ -81,6 +81,14 @@ printf '%s\n' "${VERSION:-dev}" > "$INC/etc/milady/version"
 install -m 0755 /iso/installer/milady-install "$INC/usr/local/sbin/milady-install"
 install -m 0644 /iso/installer/ascii-logo.txt "$INC/usr/share/milady/ascii-logo.txt"
 
+# Desktop variant (role=desktop): light sway session. `startx` is the
+# Wayland-first session launcher (docs/DESKTOP.md); Debian's own sway config
+# is extended via config.d, never replaced. Packages come from
+# config/package-lists/miladyos-desktop.list.chroot.
+mkdir -p "$INC/usr/local/bin" "$INC/etc/sway/config.d"
+install -m 0755 /iso/desktop/startx "$INC/usr/local/bin/startx"
+install -m 0644 /iso/desktop/99-milady.conf "$INC/etc/sway/config.d/99-milady.conf"
+
 # Host companion CLI (milady/, Go) -> /usr/local/bin/milady on the node, so a
 # fresh install has it out of the box (PLAN §Naming). Built from the same repo
 # state; version/commit injected like the release workflow does. The binary is

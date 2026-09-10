@@ -79,9 +79,10 @@ cluster as the target; Jenkins-in-container drives the same KanikoBuild CRs
   [RULED D2 — both. Calamares (Qt GUI) retired: no text mode, 3D-dependent.]
 - GRUB with UEFI + BIOS boot; squashfs rootfs; persistence optional.
 - Hostname scheme `milady-<10001..99999>` (public range; 1..10000
-  RESERVED for a future milady maker NFT identity mapping); autologin
-  console banner; no X needed
-  (headless appliance; GoTTY already provides web shell via container).
+  RESERVED for a future milady maker NFT identity mapping); console banner.
+  Server/agent are headless (no X; GoTTY already provides a web shell via the
+  container). `role=desktop` ships a light sway Wayland session started with
+  `startx` — see `docs/DESKTOP.md`.
 - ISO layout target in this repo:
 
 ```
@@ -94,6 +95,9 @@ ISO/
 ├── includes.chroot/           # files staged into the live rootfs
 ├── includes.binary/           # files on the ISO filesystem itself
 ├── installer/                 # text installer (gum TUI) + ASCII banner
+├── desktop/                   # role=desktop session (startx -> sway)
+│   ├── startx                 # Wayland-first session launcher
+│   └── 99-milady.conf         # /etc/sway/config.d layer (never replaces)
 ├── payload/                   # build-time staging
 │   └── miladyos-image.tar.zst # docker save ogmiladyloki/miladyos → zstd
 ├── systemd/                   # first-boot units (installed into rootfs)
@@ -129,6 +133,10 @@ ISO/
   kubectl, helm, talosctl (legacy ops), jq, curl, tmux, git, qrencode
   (token QR), avahi-utils (discovery), zstd. No k3sup — the ISO installs
   k3s at build time, so the remote-bootstrap tool is obsolete (see L4).
+- **Desktop session** packages (`sway`, `foot`, `wmenu`, `xwayland`,
+  `fonts-dejavu-core`, `dbus-user-session`) live in
+  `miladyos-desktop.list.chroot`; only `role=desktop` uses them, via `startx`
+  (`docs/DESKTOP.md`).
 - Avahi-daemon enabled — startup.sh's `discover_k8s_server()` already
   queries `_kubernetes._tcp`; the ISO extends this into join logic.
 
@@ -163,10 +171,11 @@ docker run --privileged --user root --restart=unless-stopped --net=host \
     ops) or `/etc/milady/node.conf`, or the installer's role screen. The
     operator decides the node's role — no auto-election.
   - **Desktop mode (RULED):** `role=desktop` — no k3s, no control-plane
-    container. Boots to a super-thin default environment (no WM preinstalled);
-    the user installs what they need (WM/compositor/apps) from there. The
-    installer's role screen offers master | worker | desktop; desktop answers
-    seed nothing k3s-related.
+    container. Boots to the console; the light **sway** Wayland session is
+    started with `startx` (`ISO/desktop/`, `docs/DESKTOP.md`). sway is the
+    trixie-available light compositor — niri/hyprland are not in Debian 13.
+    The installer's role screen offers master | worker | desktop; desktop
+    answers seed nothing k3s-related.
   - **Role switching is explicit and clean:** `role-switch.sh` tears down the
     current lifecycle before starting the new one — stop k3s + the milady
     container, reset `/var/lib/rancher/k3s` state (server→agent: remove

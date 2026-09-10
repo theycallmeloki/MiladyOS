@@ -1,0 +1,41 @@
+#!/bin/sh
+# MiladyOS desktop variant — graphical session launcher.
+#
+# The desktop role is Wayland-first: `startx` here starts the light **sway**
+# session (docs/DESKTOP.md, docs/AGENT-FIRST.md AL-3), NOT an X11 server.
+# `sway` works directly too; this name is kept because it is the command
+# operators reach for. To use the real X11 startx, install `xinit` and run
+# /usr/bin/startx.
+#
+# Usage: startx [extra sway arguments]
+set -eu
+
+if ! command -v sway >/dev/null 2>&1; then
+    echo "startx: sway is not installed on this image" >&2
+    exit 1
+fi
+
+if ! ls /dev/dri/card* >/dev/null 2>&1; then
+    echo "startx: no DRM/KMS device (/dev/dri/card*) — nothing to draw on" >&2
+    exit 1
+fi
+
+# pam_systemd normally provides XDG_RUNTIME_DIR (/run/user/$UID) on a getty
+# login; fall back to the conventional path for root/su sessions.
+if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    export XDG_RUNTIME_DIR
+fi
+
+# wlroots has no official proprietary-NVIDIA support; sway refuses to start
+# unless told to. The repo's desktop boxes are often NVIDIA (3090/A4000).
+if [ -e /sys/module/nvidia/version ] || [ -e /proc/driver/nvidia/version ]; then
+    set -- --unsupported-gpu "$@"
+fi
+
+# Prefer the per-user DBus session bus (dbus-user-session); fall back to a
+# private one so portals/clipboard still work from a plain console.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-run-session >/dev/null 2>&1; then
+    exec dbus-run-session -- sway "$@"
+fi
+exec sway "$@"

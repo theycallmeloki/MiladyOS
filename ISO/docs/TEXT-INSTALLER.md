@@ -107,6 +107,11 @@ three roles are distinct and verified:
 | agent | — | joins a master | yes (worker) | yes |
 | desktop | — | — | no | no |
 
+`desktop` additionally carries the light sway session (role screen: *Desktop
+(standalone + startx session)*); `startx` on the console starts it — see
+`docs/DESKTOP.md`. The role is still seeded via `node.conf`, and the first-boot
+banner prints the hint.
+
 Finally the **real ISO with the embedded payload** (0.0.0.0.701, 6.4 GB) was
 installed through the TUI: the installer copied the 5.4 GB payload to
 `/opt/milady/payload`, and first boot loaded it from disk with no registry pull
