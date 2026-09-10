@@ -126,10 +126,22 @@ Add whatever helps you do your job. This is your cheat sheet. Update it as you d
 
 ## A-path test state (2026-09-09/10)
 
-- `qwen-shim` user service: `~/.local/bin/qwen-shim.py` on `:18020` maps
-  `qwen3.8-27b` -> ollama `llama3.1:8b` (the real vLLM image/weights are gone
-  from this box). Test harness only; `systemctl --user stop qwen-shim` to remove.
-- ufw now allows `18020/tcp` from `192.168.1.0/24` and `10.244.0.0/16` (Symphony
+- **`qwen3.8-27b` served for real** by `~/Documents/qwen38-27b-rtx3090`
+  (github.com/syv-ai/qwen38-27b-rtx3090), bare-metal venv path (Docker is unusable
+  here: overlayfs-on-btrfs hangs extracting the 9.5 GB image).
+  - venv: `venv/` (vLLM 0.28.0, torch 2.13.0+cu130); model
+    `models/Qwen3.8-27B-W4A16-AutoRound` + `-fast` variant (19 GB download,
+    requant lm_head/embed/MTP + draft vocab + fast variant).
+  - all 30 `patches/*.patch` applied to `venv/lib/python3.14/site-packages/vllm`.
+  - `nvcc` (Arch `cuda` 13.3) installed at `/opt/cuda/bin` — FlashInfer JIT needs it.
+  - user unit `qwen-serving.service`: `CTX=long`, `MAX_LEN=150000`, `GPU_UTIL=0.90`,
+    `SPEC=mtp`, `PREFIX_CACHE=1`, `CUDA_VISIBLE_DEVICES=0`, `CUDA_HOME=/opt/cuda`.
+    Serves on **`:18020`** as `qwen3.8-27b` (matches Symphony's pi config).
+    Long mode = fp8 KV; **GPU KV pool 156,887 tokens, 1.05x at 150k**.
+    `qwen-shim` (llama3.1:8b) is stopped/disabled and retired.
+  - To switch modes: edit `CTX=` (`fast`=64k bf16/FA, `long`=150k fp8, `huge`=200k
+    KVarN needs `bash kvarn/install.sh`) and restart `qwen-serving`.
+- ufw allows `18020/tcp` from `192.168.1.0/24` and `10.244.0.0/16` (Symphony
   pi config expects `http://192.168.1.147:18020/v1`).
 - A-path verified so far: enqueue (HTTP 201, bound to fork URL) -> Symphony
   dispatch -> **RepoDelta bootstrap works** (workspace `/data/workspaces/<id>`
