@@ -6,8 +6,12 @@ unit-testable on the host. train_r1.py imports these.
 SPAN CONTRACT (reviewer-verified requirement): correctness_reward grades ONLY
 the post-</think> answer region. The <think> content is never fed to the
 judge and never scored — GRPO still shapes thinking implicitly through the
-answer reward (the comedy-as-side-effect experiment), but no reward term
-reads the think text directly.
+answer reward, but no reward term reads the think text directly.
+
+MILADY VOICE (NANO_MILADY_DESIGN.md §The Reward Stack #3): milady_voice_reward
+scores the ANSWER region for Milady diction and against corporate filler. It
+is format-gated and capped so it cannot be farmed by spamming lexicon. This is
+what makes the merged LoRA a milady and not just a lore-answering Qwen.
 """
 
 import os
@@ -113,4 +117,80 @@ def correctness_reward(prompts, completions, answer, **kwargs) -> list[float]:
         except Exception as e:
             sys.stderr.write(f"[r1] judge call failed: {e}\n")
             rewards.append(0.0)
+    return rewards
+
+
+# ── Milady voice (heuristic, from SOUL.md/IDENTITY.md via the design doc) ──
+# Two tiers so an iconic multi-word catchphrase outweighs a bare "milady".
+MILADY_LEXICON_STRONG = (
+    "council: milady",
+    "first of all, your honor",
+    "first of all your honor",
+    "not my problem milady",
+    "network spirituality",
+    "complexity demon",
+    "milady method",
+    "holy mission",
+    "templeos",
+    "terry davis",
+)
+MILADY_LEXICON_WEAK = (
+    "grug", "lgtm", "gmilady", "<3", "milady", "s.m.i.t.h", "ma dame",
+    "angel investor", "the mesh",
+)
+# Anti-rewards: corporate filler, hedging, refusal-speak (design doc §3).
+MILADY_ANTI_FILLER = (
+    "great question",
+    "i'd be happy to help",
+    "i would be happy to help",
+    "as an ai language model",
+    "i'm sorry, but",
+    "i cannot assist",
+    "it's important to note",
+    "in conclusion",
+    "furthermore",
+    "i hope this helps",
+    "let me know if you have any questions",
+    "please note that",
+    "as previously mentioned",
+)
+
+
+def milady_voice_reward(prompts, completions, **kwargs) -> list[float]:
+    """Milady-voice reward on the ANSWER REGION ONLY, bounded to [0, 1].
+
+    Guards (design doc §Reward Hacking):
+      * format-gated — 0.0 without a closed </think> and a non-empty answer,
+        so she cannot skip the answer and farm catchphrases;
+      * per-tier caps — at most 2 strong (0.35 each) and 2 weak (0.15 each)
+        hits count, so repetition is worthless;
+      * anti-filler penalty (0.5 each, capped at 1.0) — corporate voice
+        actively loses, which is what separates milady from a help desk.
+    """
+    rewards = []
+    for c in completions:
+        text = c if isinstance(c, str) else c[-1]["content"]
+        if THINK_CLOSE not in text:
+            rewards.append(0.0)
+            continue
+        ans = text.split(THINK_CLOSE)[-1].strip()
+        if not ans:
+            rewards.append(0.0)
+            continue
+        low = ans.lower()
+        strong = sum(1 for t in MILADY_LEXICON_STRONG if t in low)
+        weak = sum(1 for t in MILADY_LEXICON_WEAK if t in low)
+        filler = sum(1 for t in MILADY_ANTI_FILLER if t in low)
+        lex = min(strong, 2) * 0.35 + min(weak, 2) * 0.15
+        # density guard: a long answer that is MOSTLY catchphrases is soup, not
+        # an answer — damp it so repetition can never outscore a real one.
+        words = re.findall(r"[a-z0-9<>:']+", low)
+        if len(words) >= 10:
+            matched = sum(len(t.split()) * low.count(t) for t in
+                          MILADY_LEXICON_STRONG + MILADY_LEXICON_WEAK)
+            if matched / len(words) > 0.60:
+                lex *= 0.5
+        warm = 0.10 if len(ans) <= 400 else 0.0  # short + warm per SOUL.md
+        pen = min(filler * 0.5, 1.0)
+        rewards.append(max(0.0, min(1.0, lex + warm - pen)))
     return rewards
