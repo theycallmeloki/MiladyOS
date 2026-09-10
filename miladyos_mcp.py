@@ -255,6 +255,15 @@ class Config:
         "job_list",
         "emacs_eval",
         "emacs_ping",
+    ]
+
+    # Opt-in "research" group: mechanisms, not capabilities. autoresearch is
+    # the inner training-script optimizer and Symphony is the intent executor
+    # behind the nanomilady training loop. They are deliberately NOT in
+    # DEFAULT_TOOLS: exposing them couples MiladyOS to a research repo and
+    # clutters the agent's capability surface. Enable with
+    # `milady mcp --research` (or `--all-tools`).
+    RESEARCH_TOOLS = [
         "autoresearch_status",
         "autoresearch_best",
         "autoresearch_run",
@@ -264,6 +273,11 @@ class Config:
         "symphony_state",
         "symphony_intents",
     ]
+
+    @classmethod
+    def default_tools(cls, research: bool = False) -> List[str]:
+        """Capability tools, plus the research group when opted in."""
+        return cls.DEFAULT_TOOLS + (cls.RESEARCH_TOOLS if research else [])
 
 
 
