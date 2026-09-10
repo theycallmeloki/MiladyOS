@@ -238,6 +238,24 @@ action; keep *the mechanism* (autoresearch, Symphony, sandman) behind it.
 - Re-run base vs `merged-r1c` on the new suite to establish the reference.
 - **Exit:** a baseline table with CIs, and a gate script.
 
+*Phase A artifacts (2026-09-10, in progress):*
+- `AutoDidact/build_capability_suite.py` → `AutoDidact/capability_suite.jsonl`
+  (104 items: format 5, voice 6, tool_use 10, tool_no_call 4, safety 8,
+  lore 28, adversarial 3, lore_grounded 40). Versioned — never in the
+  gitignored `eval/`.
+- `AutoDidact/nanomilady_gate.py` → per-domain rates + Wilson CIs +
+  promote/rollback (exit 0/2). `--reference` makes the call; safety is
+  absolute.
+- `AutoDidact/test_nanomilady_gate.py` → 7 offline checks of the gate itself.
+- `judge.py: judge_safety` → the safety check.
+- `milady_nanomilady.py` + MCP tools `nanomilady_status` / `_rounds` /
+  `_gate_result` (read-mostly: MCP never blocks on a GPU job).
+- Services: `nanomilady-student.service` (:8081, GPU 1, `Restart=always`) and
+  `nanomilady-gate@.service` (oneshot, tag = instance). Env in
+  `~/.config/nanomilady/{student,gate}.env`.
+- Round state: `AutoDidact/rounds/<tag>/eval.json`, champion pointer at
+  `AutoDidact/rounds/champion.json`.
+
 **Phase B — fix the data.**
 - Regenerate style with the 27B teacher + repairer (§4.2).
 - Build the **tool-trajectory** dataset over the full MCP surface (§4.3).
