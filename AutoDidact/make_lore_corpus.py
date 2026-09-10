@@ -43,8 +43,6 @@ CORE_SOURCES = [
 EXTRA_SOURCES = [
     ("MILADYOS README", "README.md"),
     ("AGENT FIRST", "ISO/docs/AGENT-FIRST.md"),
-    ("SANKO CHAIN CONFIG", "SANKO_CHAIN_CONFIG.md"),
-    ("TRANSFER", "TRANSFER.md"),
 ]
 
 # Deliberately excluded (operational/meta, not lore — the identity judge calls

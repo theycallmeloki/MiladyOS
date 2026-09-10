@@ -7,6 +7,7 @@ stack), adapted:
   - dataset: saved_data/r1_train.jsonl (judge-verified lore QA, 633 pairs)
   - rewards (comprehension round): R1 format (<think>...</think> + answer)
     + correctness graded by the 27B judge (JUDGE_API, focused-judge style)
+    + Milady voice (heuristic, answer-region only — makes the LoRA a milady)
   - use_agentic_generate=False: plain GRPO rollouts (the search-tool loop is
     the next workstream; this round proves the GRPO + 27B-judge pipeline)
 
@@ -27,7 +28,7 @@ from unsloth import FastLanguageModel, is_bfloat16_supported
 sys.path.insert(0, "/app")  # vendored modules + mounted judge.py
 from UnslothGRPOTrainerTemp import UnslothGRPOConfig, UnslothGRPOTrainer  # noqa: E402
 from r1_rewards import (  # noqa: E402  (mounted /app/r1_rewards.py)
-    correctness_reward, r1_format_reward, r1_format_soft)
+    correctness_reward, milady_voice_reward, r1_format_reward, r1_format_soft)
 
 BASE_MODEL = os.environ.get(
     "BASE_MODEL", "unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit")
@@ -94,7 +95,8 @@ def main() -> int:
     trainer = UnslothGRPOTrainer(
         model=model,
         processing_class=tokenizer,
-        reward_funcs=[r1_format_reward, r1_format_soft, correctness_reward],
+        reward_funcs=[r1_format_reward, r1_format_soft, correctness_reward,
+                      milady_voice_reward],
         args=training_args,
         train_dataset=dataset,
     )

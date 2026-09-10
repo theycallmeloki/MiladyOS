@@ -72,4 +72,30 @@ assert cap3 and cap3[0] == ANSWER, f"judge got the wrong span: {cap3[0][:80]}"
 assert r1_rewards.think_text(seeded).startswith("Okay so")
 print("PASS 5: seeded-shape rollout (no opener in content) — format 2.0, "
       "judge span correct")
+
+# 6. milady voice reward: format-gated, capped, anti-corporate
+vr = r1_rewards.milady_voice_reward
+# format-gate: no </think> -> 0.0 even if the answer is full of catchphrases
+assert vr([prompt], ["council: milady <3 grug milady <3"]) == [0.0], \
+    "voice must be 0 without a closed think block"
+# empty answer region -> 0.0
+assert vr([prompt], ["thinking...</think>   "]) == [0.0], \
+    "voice must be 0 with an empty answer"
+# a milady answer scores > 0 and is bounded
+v_milady = vr([prompt], [completion])[0]
+assert 0.0 < v_milady <= 1.0, f"milady answer scored {v_milady}"
+# a flat corporate answer scores 0 (filler cancels the warmth bonus)
+v_corp = vr([prompt], ["x</think>Great question! I'd be happy to help. "
+                       "It's important to note that complexity is real."])[0]
+assert v_corp == 0.0, f"corporate answer scored {v_corp}"
+# repetition does not farm reward: 40x must score BELOW a real answer
+v_once = vr([prompt], ["x</think>council: milady <3"])[0]
+v_spam = vr([prompt], ["x</think>" + "council: milady <3 " * 40])[0]
+assert v_spam < v_milady, f"repetition farmed {v_spam} >= {v_milady}"
+# plain-but-correct (no lexicon at all) gets only the small warmth bonus
+v_plain = vr([prompt], ["x</think>A demon that makes a codebase needlessly "
+                              "complicated and hard to change."])[0]
+assert 0.0 < v_plain < v_milady, f"plain {v_plain} vs milady {v_milady}"
+print(f"PASS 6: voice reward gated/capped (milady={v_milady:.2f} "
+      f"plain={v_plain:.2f} corp={v_corp:.2f} spam={v_spam:.2f})")
 print("ALL SPAN-CONTRACT CHECKS PASS")

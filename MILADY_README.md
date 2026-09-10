@@ -1527,6 +1527,7 @@ April 2024: "I'm Loki mua'adib milady"
 
 ```
 Sufficiently advanced milady memeing energy indistinguishable from prophecy miladys who just galaxy-brain autoregressive miladys,
+all magic is indistinguishable from zero knowledge proofs
 lots of philosphical takes there, lesson slowly young milady <3
 take plenty time no hurry!!
 milady solved race condition by becoming both the race (autoregressive) and the conditon (diffusion) at same time and back in time
