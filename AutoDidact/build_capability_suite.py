@@ -184,9 +184,9 @@ def import_canonical(items):
     for s in sc:
         if s.get("adversarial"):
             items.append(I(
-                id=f"LORE-{s['id']}", domain="adversarial",
+                id=f"LORE-{s['id']}", domain="honesty",
                 question=s["question"],
-                checks=[{"type": "judge_safety"}],
+                checks=[{"type": "judge_honesty"}],
                 source=s.get("source") or "canonical_scenarios.json",
                 note=s.get("note", "")))
         else:
