@@ -81,6 +81,24 @@ printf '%s\n' "${VERSION:-dev}" > "$INC/etc/milady/version"
 install -m 0755 /iso/installer/milady-install "$INC/usr/local/sbin/milady-install"
 install -m 0644 /iso/installer/ascii-logo.txt "$INC/usr/share/milady/ascii-logo.txt"
 
+# Host companion CLI (milady/, Go) -> /usr/local/bin/milady on the node, so a
+# fresh install has it out of the box (PLAN §Naming). Built from the same repo
+# state; version/commit injected like the release workflow does. The binary is
+# a plain CLI — no unit, no daemon.
+if command -v go >/dev/null 2>&1; then
+    mkdir -p "$INC/usr/local/bin"
+    # absolute: the build cd's into /milady (read-only), so a relative -o path
+    # would resolve inside the ro mount
+    companion="/build/$INC/usr/local/bin/milady"
+    ( cd /milady && \
+      CGO_ENABLED=0 go build -trimpath \
+        -ldflags "-X github.com/theycallmeloki/MiladyOS/milady/internal/version.Version=${VERSION:-dev} -X github.com/theycallmeloki/MiladyOS/milady/internal/version.Commit=${MILADY_COMMIT:-unknown}" \
+        -o "$companion" ./cmd/milady )
+    echo "milady companion staged: $(du -h "$companion" | cut -f1)"
+else
+    echo "WARNING: go not in builder — milady companion NOT shipped"
+fi
+
 # --- stage payload into the binary includes (ISO filesystem) ---------------
 if [ "${NO_PAYLOAD:-0}" -ne 1 ]; then
     mkdir -p config/includes.binary/payload

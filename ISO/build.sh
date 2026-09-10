@@ -52,6 +52,7 @@ docker build -t "$BUILDER_TAG" -f "$ISO_DIR/builder/Dockerfile" "$ISO_DIR/builde
 mkdir -p "$OUT_DIR" "$CACHE_DIR"
 docker run --rm --privileged \
     -v "$ISO_DIR":/iso:ro \
+    -v "$REPO_DIR/milady":/milady:ro \
     -v "$OUT_DIR":/out \
     -v "$CACHE_DIR":/build/cache \
     -e VERSION="$VERSION" \
@@ -59,6 +60,7 @@ docker run --rm --privileged \
     -e NO_PAYLOAD="$NO_PAYLOAD" \
     -e MILADYOS_ROLE="$MILADYOS_ROLE" \
     -e MILADY_DEV="$MILADY_DEV" \
+    -e MILADY_COMMIT="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unknown)" \
     -e MILADY_BOOTAPPEND_LIVE="${MILADY_BOOTAPPEND_LIVE:-}" \
     "$BUILDER_TAG"
 
