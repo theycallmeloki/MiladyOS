@@ -29,7 +29,7 @@ when:
 
 steps:
   iso-build:
-    image: milady-iso-runner:1
+    image: miladyosregistry.transparentlyrotatableproxy.site/milady-iso-runner:1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/cache/milady-iso:/var/cache/milady-iso
@@ -50,7 +50,12 @@ steps:
         cd "$CI_WORKSPACE"
 
         VERSION=$(bash ISO/version.sh)
-        echo "iso-build: version=$VERSION registry=$REG image=$IMAGE payload=${PAYLOAD:-0}"
+
+        # Builder image: a content-addressed Kaniko artifact (the registry is
+        # the layer cache). Unchanged Dockerfile => same tag => pull, no build.
+        BTAG="b$(sha256sum ISO/builder/Dockerfile | cut -c1-12)"
+        export MILADY_BUILDER_IMAGE="${REG}/milady-iso-builder:${BTAG}"
+        echo "iso-build: version=$VERSION registry=$REG image=$IMAGE payload=${PAYLOAD:-0} builder=$MILADY_BUILDER_IMAGE"
 
         # --- registry-skip guard: the registry is the cache ----------------
         if curl -fsSL "https://${REG}/v2/${IMAGE}/tags/list" --max-time 20 2>/dev/null \

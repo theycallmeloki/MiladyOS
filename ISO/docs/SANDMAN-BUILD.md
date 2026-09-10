@@ -172,3 +172,37 @@ audit answers "is this repo tracked and current?". Add `--json` for tooling.
   Docker worker (`miladyos-42`) with a local warm cache volume; needs the
   `sandman` worker-volume fix (`worker.go`/`datum_engine.go`) and is best for
   interactive `run-cron` builds.
+
+### Prebuilt image cache (Kaniko, verified)
+
+`ISO/sandman/publish-images.sh` pushes the builder + runner images as
+**KanikoBuilds** with content-addressed tags. No container and no Woodpecker
+needed — `kaniko-submit.py` applies the CR straight to the cluster:
+
+```
+$ ISO/sandman/publish-images.sh
+== milady-iso-builder -> .../milady-iso-builder:b000120e3140e
+== milady-iso-runner  -> .../milady-iso-runner:re778ad7d26d8
+== runner stable tag: .../milady-iso-runner:1
+```
+
+Then a build pulls the builder instead of running `docker build`:
+
+```
+MILADY_BUILDER_IMAGE=.../milady-iso-builder:b000120e3140e bash ISO/build.sh
+```
+
+`ISO/woodpecker/iso-build.yml` derives the same tag from
+`ISO/builder/Dockerfile` automatically, and `build.sh` falls back to a local
+`docker build` when the tag is absent — so a changed Dockerfile still builds,
+and the next publish turns it back into a registry hit.
+
+The same contexts also ride **`milady slurp <folder> --push
+http://<container>:6000/upload --name <job>`** when the control-plane container
+is up: `import_context` lands them as forge repos with an injected kaniko
+pipeline. Both roads end at the same registry tag — slurp is the git-aware
+packager, `publish-images.sh` is the containerless one.
+
+The store is already live (`KanikoBuild` CRD + `kaniko-hook` + registry LB
+`192.168.1.202:5000`); only the ISO step itself needs the privileged host
+daemon.

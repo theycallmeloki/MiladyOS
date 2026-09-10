@@ -74,11 +74,11 @@ fi
 # --- 2. builder image ------------------------------------------------------
 # The builder is itself a build-bus artifact: a Kaniko-built image in the
 # registry whose layers are the cache. Prefer it when given.
-if [ -n "$MILADY_BUILDER_IMAGE" ]; then
-    echo "builder: pulling $MILADY_BUILDER_IMAGE (build-bus artifact)"
-    docker pull "$MILADY_BUILDER_IMAGE"
+if [ -n "$MILADY_BUILDER_IMAGE" ] && docker pull "$MILADY_BUILDER_IMAGE" >/dev/null; then
+    echo "builder: using registry artifact $MILADY_BUILDER_IMAGE"
     BUILDER_TAG="$MILADY_BUILDER_IMAGE"
 else
+    [ -n "$MILADY_BUILDER_IMAGE" ] && echo "builder: $MILADY_BUILDER_IMAGE unavailable — building locally"
     docker build -t "$BUILDER_TAG" -f "$ISO_DIR/builder/Dockerfile" "$ISO_DIR/builder"
 fi
 docker run --rm --privileged \
