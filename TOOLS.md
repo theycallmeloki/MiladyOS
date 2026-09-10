@@ -169,4 +169,36 @@ Add whatever helps you do your job. This is your cheat sheet. Update it as you d
   on a node without the cached image and the pull stalled, so the Deployment was
   pinned: `spec.template.spec.nodeSelector.kubernetes.io/hostname=talos-ms4-c7v`
   (the node that has `symphony:ee87142780f1` cached). **Temporary** — revert when
-  the image is everywhere / registry pull is healthy.
+  the image is everywhere / registry pull is healthy. (Pin has since been
+  removed; `.126` was cordoned/NotReady, Symphony rescheduled to `talos-ga5-yk4`.)
+
+## GPU split + sandman as the training executor (2026-09-10)
+
+- **3090 (index 0) is reserved for qwen-serving.** The sandman worker on
+  `miladyos-42` now runs with `-gpu 1` (see `~/.local/bin/sandman-worker-up`), so
+  it advertises **only the A4000** and sandman jobs can never grab the 3090.
+  Verify: `sandman nodes` shows `1 NVIDIA RTX A4000` for `miladyos-42`.
+- **ufw**: `4343/tcp` allowed from `192.168.1.0/24` (so the control plane at
+  `.15` can reach the worker's exec endpoint) and from `10.244.0.0/16` (pod CIDR,
+  for direct `/exec` calls). Without the LAN rule every GPU job fails with
+  `Post http://192.168.1.147:4343/exec: i/o timeout`.
+- **How to run on the A4000 through sandman** (workers do *not* support
+  `sandman run` — `handleRun` is nil on a worker, the connection just closes):
+  create a *pipeline* with `--gpu 1`; the control plane places it on the only GPU
+  host and allocates device index 1. Probe that proved it:
+  `sandman pipeline create <name> --input autoresearch@master --glob program.md
+   --image nvidia/cuda:12.4.0-base-ubuntu22.04 --gpu 1 --sh 'nvidia-smi -L'`
+  then `sandman pipeline run <name>`. Project a test pipeline when done.
+- **Transform inputs/outputs**: `--glob` selects input files (one datum each);
+  the container gets them in its workdir. `--enable-stats` makes per-datum
+  output readable at `GET /api/v1/jobs/{id}/datums/{datumID}` (without it the
+  daemon returns "per-datum statistics are not enabled"). Pipeline `PodSpec`
+  volumes are `hostPath` mounts reaching user code at `/sandman/volumes/<name>`,
+  and `resourceRequests.gpu` requests whole devices.
+- **AutoDidact** lives at `MiladyOS/AutoDidact/` (per prior ruling it should move
+  to `autoresearch/autodidact/` with its own deps, never into the minimal core).
+  It is Unsloth + GRPO + vLLM LoRA self-training (generate QA -> agentic search
+  -> self-verify; entry `run_autodidact.sh`, metric via `eval_scorer.py`/`judge.py`)
+  — a *different* training domain from autoresearch's from-scratch `train.py`,
+  but the same loop contract: one editable artifact, fixed budget, one
+  reproducible metric, keep/discard on that metric, never stop.
