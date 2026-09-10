@@ -118,3 +118,57 @@ Per-build knobs live in the pipeline's `env` (`PAYLOAD`, `UPLOAD_ISO`), or in a
   already offline.
 - Optional egress: publish the ISO/manifest to a GitHub release
   (`iso-jit.yml` already does this for no-payload builds on CI).
+
+---
+
+## 7. Build-bus path (Woodpecker + registry cache)
+
+The same build also runs on the fabric's **existing build bus**, which is how
+every other image here is built. It needs no sandman worker volume at all:
+
+| piece | what it does |
+|---|---|
+| `ISO/woodpecker/iso-build.yml` | manual Woodpecker pipeline (modeled on `woodpecker/scratch-build.yml`): build on the **host daemon** (`docker.sock`), registry-skip guard keyed on `miladyos-iso:<version>` |
+| `ISO/sandman/miladyos-iso-watch.pipeline.json` | git-input watch: mirrors `theycallmeloki/MiladyOS` and POSTs the bus on a push |
+| `build.sh` `MILADY_BUILDER_IMAGE` | pull the Kaniko-built builder image instead of `docker build` (Kaniko layers = the cache) |
+| `build.sh` `MILADY_CACHE_IMAGE` / `MILADY_CACHE_PUSH` | the `CACHE_DIR` (debootstrap + apt archives + k3s) as a registry image: a cold host extracts instead of downloading |
+
+The dedupe key is the **version** (`version.json` + git commit count) — immutable
+per commit, so re-triggering a build is a no-op and the registry doubles as the
+artifact tracker (`<registry>/miladyos-iso:<version>`).
+
+### git-input vs spout
+
+We use **git-input + watch** (the `symphony-watch` shape): pushes to the remote
+flow through `gh-webhook` → delta → the `miladyos` mirror commit → the watch
+fires. A **spout** was considered and rejected for this: a spout has no input
+and runs continuously, so it is a *poller*, not an event receiver — useful only
+if webhooks are unavailable, at the cost of a long-lived container and blind
+polling. The event path already exists and is durable (`gh-events` repo).
+
+### Tracking git-input repos
+
+`ISO/sandman/git-input-audit.py` lists every pipeline that declares both a
+mirror and a `git.url`, with the mirror branch head and its age — so a stale or
+missing mapping is visible instead of guessed:
+
+```
+$ ISO/sandman/git-input-audit.py
+pipeline                url                                        mirror      branch  head          age
+autoresearch-watch      https://github.com/.../autoresearch.git   autoresearch master  351b134be586  1d
+symphony-watch          https://github.com/.../symphony.git       symphony     master  ee87142780f1  6d
+...
+```
+
+This covers the pi/ACP pipelines in Symphony too — they are git-input watches
+(`ability-check-watch`, `address-*-watch`, `dice-roll-watch`, …), so the same
+audit answers "is this repo tracked and current?". Add `--json` for tooling.
+
+### Which path to use
+
+- **Build bus** (`ISO/woodpecker/iso-build.yml`): fleet/CI builds, registry
+  cache, no sandman changes needed. The default for automation.
+- **Sandman worker job** (`ISO/sandman/iso-build.pipeline.json`): on the plain
+  Docker worker (`miladyos-42`) with a local warm cache volume; needs the
+  `sandman` worker-volume fix (`worker.go`/`datum_engine.go`) and is best for
+  interactive `run-cron` builds.

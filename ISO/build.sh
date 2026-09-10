@@ -24,6 +24,14 @@ MILADYOS_ROLE="${MILADYOS_ROLE:-server}"   # seed node.conf: server|agent|deskto
 MILADY_DEV="${MILADY_DEV:-0}"             # 1 = keep dev entry paths (root serial
                                           # autologin + baked SSH key)
 
+# --- registry-as-cache images (optional) -----------------------------------
+# The ISO build bus (ISO/woodpecker/iso-build.yml) builds/pushes these with
+# the cluster registry as the cache; a bus run pulls them instead of
+# rebuilding. Unset => the historical local-only behaviour.
+MILADY_BUILDER_IMAGE="${MILADY_BUILDER_IMAGE:-}"  # registry/milady-iso-builder:<rev>
+MILADY_CACHE_IMAGE="${MILADY_CACHE_IMAGE:-}"      # registry/milady-iso-cache:<rev>
+MILADY_CACHE_PUSH="${MILADY_CACHE_PUSH:-0}"       # 1 = publish CACHE_DIR as an image
+
 NO_PAYLOAD=0
 [[ "${1:-}" == "--no-payload" ]] && NO_PAYLOAD=1
 
@@ -46,10 +54,33 @@ if [ "$NO_PAYLOAD" -eq 0 ]; then
     fi
 fi
 
-# --- 2. builder image ------------------------------------------------------
-docker build -t "$BUILDER_TAG" -f "$ISO_DIR/builder/Dockerfile" "$ISO_DIR/builder"
-
 mkdir -p "$OUT_DIR" "$CACHE_DIR"
+
+# --- warm cache from the registry (cold host) ------------------------------
+# A local CACHE_DIR always wins (faster than a pull); the image is the
+# portable copy of debootstrap + apt archives + the k3s binary/installer.
+if [ -n "$MILADY_CACHE_IMAGE" ] && [ ! -e "$CACHE_DIR/.seeded" ]; then
+    echo "cache: seeding from $MILADY_CACHE_IMAGE"
+    if docker pull "$MILADY_CACHE_IMAGE" >/dev/null 2>&1; then
+        cid=$(docker create "$MILADY_CACHE_IMAGE")
+        docker cp "$cid:/." "$CACHE_DIR/" >/dev/null 2>&1 || true
+        docker rm -f "$cid" >/dev/null 2>&1 || true
+        touch "$CACHE_DIR/.seeded"
+    else
+        echo "cache: $MILADY_CACHE_IMAGE unavailable — cold build"
+    fi
+fi
+
+# --- 2. builder image ------------------------------------------------------
+# The builder is itself a build-bus artifact: a Kaniko-built image in the
+# registry whose layers are the cache. Prefer it when given.
+if [ -n "$MILADY_BUILDER_IMAGE" ]; then
+    echo "builder: pulling $MILADY_BUILDER_IMAGE (build-bus artifact)"
+    docker pull "$MILADY_BUILDER_IMAGE"
+    BUILDER_TAG="$MILADY_BUILDER_IMAGE"
+else
+    docker build -t "$BUILDER_TAG" -f "$ISO_DIR/builder/Dockerfile" "$ISO_DIR/builder"
+fi
 docker run --rm --privileged \
     -v "$ISO_DIR":/iso:ro \
     -v "$REPO_DIR/milady":/milady:ro \
@@ -64,5 +95,15 @@ docker run --rm --privileged \
     -e MILADY_COMMIT="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unknown)" \
     -e MILADY_BOOTAPPEND_LIVE="${MILADY_BOOTAPPEND_LIVE:-}" \
     "$BUILDER_TAG"
+
+# --- publish the cache image (build-bus warm cache) -------------------------
+# docker import/export carries the directory tree as an image; the registry
+# then holds debootstrap + apt archives + k3s so a cold host skips the
+# downloads entirely.
+if [ "$MILADY_CACHE_PUSH" = 1 ] && [ -n "$MILADY_CACHE_IMAGE" ]; then
+    echo "cache: publishing $MILADY_CACHE_IMAGE"
+    tar -C "$CACHE_DIR" --exclude=.seeded -cf - . | docker import - "$MILADY_CACHE_IMAGE"
+    docker push "$MILADY_CACHE_IMAGE"
+fi
 
 echo "done: $(ls -lh "$OUT_DIR"/*.iso 2>/dev/null | awk '{print $9, $5}')"
