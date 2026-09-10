@@ -1,0 +1,29 @@
+{
+  "name": "miladyos-iso-build",
+  "description": "Build a MiladyOS ISO on miladyos-42's Docker with a warm cache under /sandman/volumes/milady-iso. Tick on demand with `sandman pipeline run-cron miladyos-iso-build` (do not wait for the weekly cron).",
+  "input": {
+    "cron": "@every 168h",
+    "name": "tick"
+  },
+  "transform": {
+    "image": "milady-iso-runner:1",
+    "cmd": ["bash", "/sandman/volumes/miladyos-repo/ISO/sandman/run-build.sh"],
+    "env": {
+      "PAYLOAD": "0",
+      "UPLOAD_ISO": "0"
+    },
+    "podSpec": "{\"volumes\":{\"miladyos-repo\":{\"hostPath\":\"/home/laneone/Documents/MiladyOS\"},\"milady-iso\":{\"hostPath\":\"/sandman/volumes/milady-iso\"},\"docker\":{\"hostPath\":\"/var/run/docker.sock\"}}}",
+    "datumTimeout": "60m",
+    "jobTimeout": "90m",
+    "resourceRequests": {
+      "cpu": 2,
+      "memory": "2G"
+    }
+  },
+  "placement": "delta",
+  "parallelism": {
+    "constant": 1
+  },
+  "enableStats": true,
+  "reprocess": true
+}

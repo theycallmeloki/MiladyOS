@@ -114,10 +114,38 @@ if [ "${NO_PAYLOAD:-0}" -ne 1 ]; then
     echo "payload embedded: $(du -h config/includes.binary/payload/miladyos-image.tar.zst | cut -f1)"
 fi
 
+# --- warm k3s cache (D5 + local builds) ------------------------------------
+# /build/cache persists across builds. Cache the get.k3s.io script and the
+# installed k3s binary so a rebuild installs k3s with no network at all: the
+# hook skips download entirely when the binary is pre-staged (the installer's
+# INSTALL_K3S_SKIP_DOWNLOAD path), which also sidesteps networks that TLS-
+# intercept update.k3s.io. The first build populates the binary below.
+K3S_CACHE=/build/cache/k3s
+mkdir -p "$K3S_CACHE"
+if [ ! -s "$K3S_CACHE/k3s-install.sh" ]; then
+    curl -fsSL https://get.k3s.io -o "$K3S_CACHE/k3s-install.sh" 2>/dev/null \
+        || rm -f "$K3S_CACHE/k3s-install.sh"
+fi
+if [ -s "$K3S_CACHE/k3s-install.sh" ]; then
+    install -m 0644 "$K3S_CACHE/k3s-install.sh" "$INC/usr/share/milady/k3s-install.sh"
+fi
+if [ -x "$K3S_CACHE/k3s" ]; then
+    mkdir -p "$INC/usr/local/bin"
+    install -m 0755 "$K3S_CACHE/k3s" "$INC/usr/local/bin/k3s"
+    echo "k3s cache: staging $K3S_CACHE/k3s"
+fi
+
 # --- lb build --------------------------------------------------------------
 # Persistent caches: /build/cache is a bind mount of the host cache volume
 # (debootstrap tarball + apt archives survive across builds).
 lb build
+
+# --- populate the k3s cache from this build --------------------------------
+if [ ! -x "$K3S_CACHE/k3s" ] && [ -x chroot/usr/local/bin/k3s ]; then
+    cp -f chroot/usr/local/bin/k3s "$K3S_CACHE/k3s"
+    chmod 0755 "$K3S_CACHE/k3s"
+    echo "k3s cache: stored $(du -h "$K3S_CACHE/k3s" | cut -f1)"
+fi
 
 # --- collect artifact ------------------------------------------------------
 ISO_NAME="miladyos-${VERSION}.iso"
