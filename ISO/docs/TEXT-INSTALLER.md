@@ -39,7 +39,7 @@ Unattended/CI mode (no TUI): boot with
 Calamares was removed from the build (package list + hook + live session); its
 module/branding files remain parked under `ISO/calamares/` for reference.
 
-### Verified (QEMU, 0.0.0.0.694 unattended / 0.0.0.0.698 interactive)
+### Verified (QEMU: 0.0.0.0.694 unattended, 0.0.0.0.698 interactive, 0.0.0.0.701 full payload)
 
 Payload-less test ISO + `qemu-install-test.sh … install` then `… boot`,
 observed over serial: install completes, the installed node boots (BIOS GRUB,
@@ -50,14 +50,21 @@ fixed in the process — see `memory/2026-09-09.md`.
 
 The **interactive dialog TUI** was then driven over the serial socket (a stdlib
 Python driver; dialog embeds attribute escapes inside strings, so match on
-de-escaped output). Server run exercised every screen — banner/ASCII art, role
-menu, disk menu, username/password/confirm, summary, gauge steps, completion,
-reboot — and produced a working node; an agent run exercised the join-token
-screen (`ROLE=agent`, no token → join later). That run also found the floppy
-`/dev/fd0` being offered as an install target, now fixed.
+de-escaped output). Server, agent, and desktop runs each exercised every
+screen — banner/ASCII art, role menu, disk menu, username/password/confirm,
+summary, gauge steps, completion, reboot — and produced a working node. The
+three roles are distinct and verified:
 
-Still not exercised: the embedded container payload (tests used
-`--no-payload`, so the container pulls from the registry).
+| role | k3s | k3s-agent | milady-container | token screen |
+|------|-----|-----------|------------------|--------------|
+| server | control plane | — | yes (cluster-init) | no |
+| agent | — | joins a master | yes (worker) | yes |
+| desktop | — | — | no | no |
+
+Finally the **real ISO with the embedded payload** (0.0.0.0.701, 6.4 GB) was
+installed through the TUI: the installer copied the 5.4 GB payload to
+`/opt/milady/payload`, and first boot loaded it from disk with no registry pull
+(`image_size=5761747092`), k3s `Ready control-plane`, 0 failed units.
 
 ---
 
