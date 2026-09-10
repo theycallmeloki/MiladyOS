@@ -37,6 +37,11 @@ def cli():
     help="Load all available tools instead of the default list",
 )
 @click.option(
+    "--research",
+    is_flag=True,
+    help="Also load the opt-in research group (autoresearch_*, symphony_*)",
+)
+@click.option(
     "--templates-dir",
     default="templates",
     help="Directory containing pipeline templates",
@@ -74,7 +79,7 @@ def cli():
     default="",
     help="Base path for URL construction (only used with sse transport)",
 )
-def mcp(all_tools, templates_dir, redis_host, redis_port, transport, host, port, base_path):
+def mcp(all_tools, research, templates_dir, redis_host, redis_port, transport, host, port, base_path):
     """Run the MiladyOS MCP server.
 
     Provides MCP-compatible tools for MiladyOS pipeline management.
@@ -93,8 +98,9 @@ def mcp(all_tools, templates_dir, redis_host, redis_port, transport, host, port,
     from miladyos_mcp import MiladyOSToolServer
     
     # Create and run the server
-    # Make sure execute_command is always included (since it's not a template-based tool)
-    default_tools = Config.DEFAULT_TOOLS.copy()
+    # Capability tools by default. --research adds autoresearch_*/symphony_*
+    # (the training-loop engine) and --all-tools loads literally everything.
+    default_tools = Config.default_tools(research=research)
     if "execute_command" not in default_tools:
         default_tools.append("execute_command")
     

@@ -263,16 +263,20 @@ action; keep *the mechanism* (autoresearch, Symphony, sandman) behind it.
   manifests.
 - **Exit:** the ISO/mesh can boot with nanomilady as the brain.
 
-## 8. Decisions needed
+## 8. Decisions (locked 2026-09-10)
 
-1. **Style teacher**: use the 27B alone (safe, 50 %, more verbose), or the
-   7B-milady for flavour + the 27B as repairer (riskier, more "milady",
-   higher rejection)? *Recommendation: 27B + repairer; keep the 7B as an
-   optional style-diversity source behind the judge.*
-2. **Tool set for v0**: all MCP tools, or a safe core (read/exec/emacs/jobs)
-   first? *Recommendation: safe core first; add evolve/jobs once the syntax
-   is stable.*
-3. **Round cadence**: timer (e.g. 6 h) vs manual trigger. *Recommendation:
-   timer, with a manual override and automatic rollback.*
-4. **MCP surface**: accept the §6 split (nanomilady_* front, autoresearch*
-   opt-in)? *Recommendation: yes.*
+1. **Style teacher = 27B + 7B, with the 27B as repairer** ("most milady
+   option"). The 7B `theycallmeloki/milady` provides the flavour (creative
+   spelling, terseness); the 27B generates the bulk and *repairs* rejects
+   into faithful rewrites. Every pair still passes the 27B judge before it
+   can enter training.
+2. **v0 tool set = safe core** (read/exec/emacs/jobs). autoresearch is **not**
+   among nanomilady's tools. Widen only after the syntax is stable.
+3. **Round cadence = timer + automatic rollback.** The conductor runs rounds
+   on a schedule; a candidate that regresses any gate is rolled back
+   automatically and the previous model keeps serving.
+4. **MCP surface split — implemented.** `miladyos_mcp.py` `DEFAULT_TOOLS` is
+   now capability-only (19 tools); `autoresearch_*` and `symphony_*` moved to
+   an opt-in `RESEARCH_TOOLS` group (8 tools) enabled with
+   `milady mcp --research` (or `--all-tools`). A `nanomilady_*` control group
+   will be added in Phase A as the user-facing front for the training loop.
