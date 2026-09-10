@@ -129,3 +129,29 @@ the launcher and packages exist instead:
 sh -n ISO/desktop/startx
 command -v sway startx foot wmenu      # inside the installed/booted node
 ```
+
+### Install-to-disk flow (`qemu-install-test.sh`)
+
+```sh
+# 1. install (VNC :5 = 5905, installer on serial)
+ISO/qemu-install-test.sh ISO/out/miladyos-<version>.iso .desktop.qcow2 install
+socat - UNIX-CONNECT:/tmp/milady-install-serial.sock   # drive the TUI
+#    role screen -> "Desktop   (standalone + startx session)"
+# 2. boot the installed disk
+ISO/qemu-install-test.sh ISO/out/miladyos-<version>.iso .desktop.qcow2 boot
+#    log in on tty1 over VNC, then:  startx
+```
+
+QEMU's default `-vga std` (bochs-drm) gives KMS, and mesa renders with llvmpipe
+(software) — no GPU/NVIDIA flag needed, just slow.
+
+**VNC + Mod4:** sway's default `$mod` is Super, which some VNC clients cannot
+send. Override it on the box (Debian's config includes `config-vars.d/*` *after*
+`set $mod Mod4`, so this applies to the bindings below it):
+
+```sh
+echo 'set $mod Mod1' | sudo tee /etc/sway/config-vars.d/99-mod
+```
+
+To leave the session: `Mod+Shift+e` (or `Ctrl+Alt+F2` and kill sway from the
+other TTY).
