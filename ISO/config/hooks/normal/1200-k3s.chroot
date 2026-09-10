@@ -12,7 +12,14 @@ set -e
 export INSTALL_K3S_EXEC="server --docker"
 export INSTALL_K3S_SKIP_ENABLE=true
 
-if [ -n "${K3S_VERSION:-}" ]; then
+# Warm cache: the ISO builder may stage a previously installed binary at
+# /usr/local/bin/k3s. With it present the installer skips both the download and
+# the channel lookup (INSTALL_K3S_SKIP_DOWNLOAD -> verify_k3s_is_executable), so
+# a rebuild needs no network for k3s at all.
+if [ -x /usr/local/bin/k3s ]; then
+    export INSTALL_K3S_SKIP_DOWNLOAD=true
+    echo "k3s: using cached binary /usr/local/bin/k3s"
+elif [ -n "${K3S_VERSION:-}" ]; then
     export INSTALL_K3S_VERSION="$K3S_VERSION"
 elif ! curl -fsS --max-time 15 https://update.k3s.io/v1-release/channels/stable >/dev/null 2>&1; then
     # The channel endpoint can be unreachable or TLS-intercepted on local
@@ -29,7 +36,12 @@ elif ! curl -fsS --max-time 15 https://update.k3s.io/v1-release/channels/stable 
     fi
 fi
 
-curl -fsSL https://get.k3s.io -o /tmp/k3s-install.sh
+# Cached installer script when the builder staged one, else fetch it.
+if [ -f /usr/share/milady/k3s-install.sh ]; then
+    cp /usr/share/milady/k3s-install.sh /tmp/k3s-install.sh
+else
+    curl -fsSL https://get.k3s.io -o /tmp/k3s-install.sh
+fi
 sh /tmp/k3s-install.sh
 rm -f /tmp/k3s-install.sh
 
