@@ -1,0 +1,26 @@
+# MiladyOS ISO — desktop variant (role=desktop) graphical session.
+#
+# live-build installs every *.list.chroot into the one shared rootfs, so these
+# land on server/agent nodes too (the ISO is a single artifact, D9). Only the
+# desktop role uses them, and only when the operator runs `startx`.
+#
+# Keep this list deliberately small: a light Wayland session for the human
+# guest, not a rice project (docs/AGENT-FIRST.md AL-3). The compositor is
+# **sway** because it is in Debian trixie (wlroots, i3-compatible) — niri and
+# hyprland are not; see docs/DESKTOP.md.
+
+# compositor + built-in bar (swaybar); pulls swaybg, libwlroots, mesa DRI
+sway
+
+# default $term and $menu in Debian's sway config
+foot
+wmenu
+
+# X11 applications inside the session
+xwayland
+
+# monospace font — foot/swaybar have none without it
+fonts-dejavu-core
+
+# user session bus; pulls libpam-systemd (XDG_RUNTIME_DIR, logind seat)
+dbus-user-session

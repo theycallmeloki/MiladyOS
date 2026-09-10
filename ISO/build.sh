@@ -20,7 +20,7 @@ VERSION="${VERSION:-$(bash "$ISO_DIR/version.sh")}"
 
 MILADYOS_IMAGE="${MILADYOS_IMAGE:-ogmiladyloki/miladyos:latest}"
 BUILDER_TAG="milady-iso-builder:13.4"
-MILADYOS_ROLE="${MILADYOS_ROLE:-server}"   # seed node.conf: server|agent
+MILADYOS_ROLE="${MILADYOS_ROLE:-server}"   # seed node.conf: server|agent|desktop
 MILADY_DEV="${MILADY_DEV:-0}"             # 1 = keep dev entry paths (root serial
                                           # autologin + baked SSH key)
 

@@ -412,7 +412,7 @@ screen_role() {
     ui_choose "What is this machine for?" \
         "server|Cluster master   (k3s server + control plane)" \
         "agent|Worker   (joins an existing master)" \
-        "desktop|Standalone   (no cluster)"
+        "desktop|Desktop   (standalone + startx session)"
 }
 
 # Eligible install targets, one per line: name<TAB>size<TAB>model.

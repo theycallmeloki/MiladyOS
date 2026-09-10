@@ -53,4 +53,14 @@ cat > /etc/issue <<EOF
 ║   version: $VERSION                                          ║
 ╚══════════════════════════════════════════════════════════════╝
 EOF
+
+# Desktop variant: point the operator at the graphical session. ROLE is seeded
+# by the installer / role-switch in node.conf (role-detect runs after us).
+if [ -f /etc/milady/node.conf ]; then
+    . /etc/milady/node.conf 2>/dev/null || true
+    if [ "${ROLE:-}" = "desktop" ]; then
+        printf "\nType 'startx' for the light sway desktop (docs/DESKTOP.md).\n" >> /etc/issue
+    fi
+fi
+
 echo "milady-firstboot: hostname=$HOST"

@@ -66,7 +66,7 @@ elif [ "$NEW_ROLE" = "agent" ]; then
 else
     # desktop: everything stays stopped/disabled
     systemctl disable k3s.service k3s-agent.service milady-container.service 2>/dev/null || true
-    echo "milady-role-switch: desktop — k3s + container disabled"
+    echo "milady-role-switch: desktop — k3s + container disabled; run 'startx' for the sway session"
 fi
 
 # container runs on server/agent; it reads the new role from node.conf

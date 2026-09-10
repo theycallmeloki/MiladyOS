@@ -107,6 +107,7 @@ if [ "$ROLE" = "server" ]; then
     fi
 elif [ "$ROLE" = "desktop" ]; then
     console "milady: desktop role — no k3s, no control-plane container"
+    console "milady: run 'startx' on this console for the light sway session"
     systemctl disable k3s.service k3s-agent.service >/dev/null 2>&1 || true
     rm -f /etc/avahi/services/kubernetes.service 2>/dev/null || true
 else
