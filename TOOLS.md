@@ -237,3 +237,44 @@ the full loop (`results.tsv`, keep-on-improvement, `git reset` otherwise) with
 training executed by the runner on the A4000. First results: baseline
 `1.524827`, then DEPTH 8->6 `1.480264` kept. (A4000 numbers are higher than the
 3090's `1.327183` because fewer tokens fit in the same 5-minute budget.)
+
+## 27B model server stability + AutoDidact judge (2026-09-10)
+
+The bare-metal qwen server (`qwen-serving`, `:18020`) was crash-looping under
+load. Two independent causes, both fixed:
+
+1. **VRAM exhaustion (the real one).** `GPU_UTIL=0.90` on a 24 G 3090 with a
+   ~2 G desktop reserved 21.2 G (16 G weights + 5.5 G KV) and left ~0.3 G for
+   prefill activations → OOM under real requests. The scary-looking
+   `RuntimeError: torch_call_dispatcher("aten::empty", "memory_format", ...)`
+   inside `marlin_gemm` was just the same OOM surfacing through the dispatcher
+   — **not** an inductor/Marlin bug (it persisted under `--enforce-eager`).
+   Current stable config: `GPU_UTIL=0.84`, `MAX_LEN=100000` (KV pool 139,705,
+   1.40× concurrency), `EXTRA_ARGS=--enforce-eager`, `Restart=always`.
+2. **`ninja` missing.** FlashInfer/FlashAttention JIT-compiles at startup and
+   aborts with `FileNotFoundError: 'ninja'`. `pacman -S ninja`. (`nvcc` from
+   Arch `cuda` was already needed for the same reason.)
+
+To be robust: **always set `Restart=always`** for vLLM units — it exits 0 on a
+clean `EngineDeadError` shutdown, so `on-failure` will *not* bring it back.
+
+**Judge (`AutoDidact/judge.py`) notes:** at `max_tokens=256`
+`judge_correctness` returns `"\n\nYes"`/`"No"` with an ~80-char think block —
+the reasoning block does not eat the content budget at `reasoning_effort=low`.
+`judge_faithful` over 40k chars takes ~38 s. Restart takes ~60–150 s.
+
+**`eval/history.jsonl` units gotcha:** `score` is a **count**, not a ratio —
+`{"score": 1.0, "n": 69}` is **1/69**, not 69/69. Read `score`/`n`.
+
+### nanomilady (the training target)
+- Design of record: `~/Documents/nanomilady/NANO_MILADY_DESIGN.md` (500 GB
+  drive). Reward stack = format + correctness + **Milady voice**; "generator >
+  student"; "grounding or nothing".
+- Live path is **DeepSeek-R1-Distill-Qwen-1.5B**: `train_r1.py` (GRPO) /
+  `train_r2_sft.py` (SFT) LoRA r=32 → `merge_lora.py` bf16 base →
+  `make_nanomilady.sh` → serve.
+- bf16 base for merges is already in the shared cache:
+  `/run/media/laneone/storage/models/hf-cache-user` (`HF_HOME`).
+- Era venv with `peft` lives on the drive: `AutoDidact/.venv/bin/python`
+  (peft 0.20, transformers 4.57, torch 2.11+cu130). The Docker runners
+  (`run_r1.sh`, `run_r2_sft.sh`) hang on this host's overlayfs-on-btrfs.
