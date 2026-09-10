@@ -1,0 +1,36 @@
+{
+  "name": "miladyos-iso-watch",
+  "description": "Mirror + trigger for theycallmeloki/MiladyOS: a push to the tracked branch commits into the `miladyos` mirror and POSTs the Woodpecker ISO build bus (ISO/woodpecker/iso-build.yml). The mirror head is the build's provenance; `ISO/sandman/git-input-audit.py` lists this mapping alongside every other git-input pipeline.",
+  "transform": {
+    "image": "python:3.12-alpine",
+    "cmd": [
+      "python3",
+      "-c",
+      "\nimport json, os, urllib.request\n\nwid = os.environ[\"ISO_BUILD_ID\"]\ntok = os.environ[\"WOODPECKER_TOKEN\"]\nwp = os.environ.get(\"WOODPECKER_URL\", \"http://192.168.1.147:8000\").rstrip(\"/\")\nvars_ = {k: os.environ[k] for k in (\n    \"PAYLOAD\", \"UPLOAD_ISO\", \"REGISTRY\", \"IMAGE\",\n    \"MILADY_BUILDER_IMAGE\", \"MILADY_CACHE_IMAGE\") if os.environ.get(k)}\nbody = json.dumps({\"branch\": \"main\", \"variables\": vars_}).encode()\nreq = urllib.request.Request(\n    wp + \"/api/repos/\" + wid + \"/pipelines\",\n    data=body,\n    headers={\"Authorization\": \"Bearer \" + tok, \"Content-Type\": \"application/json\"},\n    method=\"POST\",\n)\ntry:\n    resp = urllib.request.urlopen(req, timeout=30)\n    print(\"triggered:\", resp.read().decode()[:200], flush=True)\nexcept Exception as e:\n    print(\"trigger failed:\", repr(e), flush=True)\n    raise SystemExit(1)\n"
+    ],
+    "env": {
+      "ISO_BUILD_ID": "0",
+      "PAYLOAD": "0",
+      "UPLOAD_ISO": "0",
+      "WOODPECKER_URL": "http://192.168.1.147:8000",
+      "SANDMAN_ADDR": "http://192.168.1.15:4242"
+    },
+    "secrets": [
+      {
+        "name": "wp-bus",
+        "key": "token",
+        "envVar": "WOODPECKER_TOKEN"
+      }
+    ]
+  },
+  "input": {
+    "name": "miladyos",
+    "repo": "miladyos",
+    "glob": "/",
+    "branch": "main",
+    "git": {
+      "url": "https://github.com/theycallmeloki/MiladyOS.git",
+      "branch": "main"
+    }
+  }
+}

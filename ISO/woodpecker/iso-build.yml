@@ -1,0 +1,96 @@
+# MiladyOS ISO build bus — one manual pipeline that turns a checkout into a
+# registry-tagged ISO, with the registry as both the cache and the tracker.
+#
+# Same shape as woodpecker/scratch-build.yml: the heavy work runs on the HOST
+# daemon (docker.sock mounted), and the registry-skip guard makes the pipeline
+# idempotent — <REGISTRY>/<IMAGE>:<version> already present => nothing rebuilt.
+# The version is immutable per commit (version.json + git count), so it is an
+# exact cache key: re-triggering the same commit is a no-op.
+#
+# Trigger (deliberate only — nothing auto-runs): the `miladyos-iso-watch`
+# sandman git-input pipeline (ISO/sandman/miladyos-iso-watch.pipeline.json)
+# POSTs here on a MiladyOS push, or call it directly:
+#   POST /api/repos/<id>/pipelines  variables: {PAYLOAD: "1", UPLOAD_ISO: "1"}
+#
+# Agent volumes (repo must be trusted: woodpecker-cli --repo-trusted-volumes):
+#   /var/run/docker.sock     host daemon -> the privileged live-build container
+#   /var/cache/milady-iso    persistent live-build cache + out/ + payload/
+#
+# Vars:
+#   PAYLOAD=1   embed the miladyos image (=> ~6.4 GB ISO)
+#   UPLOAD_ISO=1 push the ISO to the registry (registry = artifact store)
+#   REGISTRY / IMAGE / RUNNER_IMAGE override destinations
+#   MILADY_BUILDER_IMAGE / MILADY_CACHE_IMAGE switch the build onto the
+#     build-bus builder + cache images (cold hosts pull instead of rebuilding)
+#
+# The pipeline image is ISO/sandman/Dockerfile (docker CLI + bash/git/rsync/jq).
+when:
+  - event: manual
+
+steps:
+  iso-build:
+    image: milady-iso-runner:1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/cache/milady-iso:/var/cache/milady-iso
+    environment:
+      CONTAINER_REGISTRY:
+        from_secret: CONTAINER_REGISTRY
+      DOCKERHUB_USERNAME:
+        from_secret: DOCKERHUB_USERNAME
+      DOCKERHUB_PASSWORD:
+        from_secret: DOCKERHUB_PASSWORD
+    commands:
+      - |
+        set -eu
+        REG="${REGISTRY:-${CONTAINER_REGISTRY:-miladyosregistry.transparentlyrotatableproxy.site}}"
+        IMAGE="${IMAGE:-miladyos-iso}"
+        export CACHE_DIR=/var/cache/milady-iso
+        export OUT_DIR=/var/cache/milady-iso/out
+        cd "$CI_WORKSPACE"
+
+        VERSION=$(bash ISO/version.sh)
+        echo "iso-build: version=$VERSION registry=$REG image=$IMAGE payload=${PAYLOAD:-0}"
+
+        # --- registry-skip guard: the registry is the cache ----------------
+        if curl -fsSL "https://${REG}/v2/${IMAGE}/tags/list" --max-time 20 2>/dev/null \
+             | grep -q "\"${VERSION}\""; then
+          echo "registry-skip: ${REG}/${IMAGE}:${VERSION} already built"
+          exit 0
+        fi
+        echo "registry-miss: building ${VERSION}"
+
+        # --- build on the host daemon -------------------------------------
+        ARGS=""
+        [ "${PAYLOAD:-0}" = 1 ] || ARGS="--no-payload"
+        VERSION="$VERSION" bash ISO/build.sh $ARGS
+
+        ISO_FILE=$(ls -t "$OUT_DIR"/miladyos-*.iso 2>/dev/null | head -1)
+        [ -n "$ISO_FILE" ] || { echo "no ISO produced under $OUT_DIR"; exit 1; }
+        SHA=$(sha256sum "$ISO_FILE" | awk '{print $1}')
+        SIZE=$(stat -c %s "$ISO_FILE")
+        echo "built: $ISO_FILE ($SIZE bytes, sha256 $SHA)"
+
+        # --- manifest: the audit trail, next to the ISO on the cache vol ----
+        printf '{"version":"%s","iso":"%s","size":%s,"sha256":"%s","built":"%s","build":%s,"payload":%s}\n' \
+          "$VERSION" "$(basename "$ISO_FILE")" "$SIZE" "$SHA" \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${CI_BUILD_NUMBER:-0}" \
+          "$([ "${PAYLOAD:-0}" = 1 ] && echo true || echo false)" \
+          > "$OUT_DIR/manifest-$VERSION.json"
+
+        # --- publish: registry as the artifact tracker --------------------
+        if [ "${UPLOAD_ISO:-0}" = 1 ]; then
+          echo "publish: ${REG}/${IMAGE}:${VERSION}"
+          if [ -n "${DOCKERHUB_PASSWORD:-}" ]; then
+            echo "$DOCKERHUB_PASSWORD" | docker login "$REG" \
+              -u "${DOCKERHUB_USERNAME:-milady}" --password-stdin >/dev/null 2>&1 || true
+          fi
+          D="$CI_WORKSPACE/.iso-publish"
+          rm -rf "$D"; mkdir -p "$D"
+          cp "$ISO_FILE" "$D/miladyos.iso"
+          printf 'FROM scratch\nCOPY miladyos.iso /\n' > "$D/Dockerfile"
+          docker build -t "$REG/$IMAGE:$VERSION" "$D"
+          docker push "$REG/$IMAGE:$VERSION"
+          docker image prune -f >/dev/null 2>&1 || true
+          rm -rf "$D"
+        fi
