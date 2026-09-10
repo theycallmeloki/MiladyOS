@@ -1,22 +1,29 @@
 #!/bin/bash
-# MiladyOS text installer.
+# MiladyOS text installer — gum TUI, matrix palette, centered ASCII banner.
 #
-#   Interactive: run on the active console by milady-install.service.
-#   Unattended:  boot with  milady.auto=1 [milady.install.role=...]
-#                [milady.install.disk=...] [milady.install.password=...]
-#                [milady.install.token=...]   (milady.role/disk/... also work;
-#                milady.install.* wins, so the live node's role can differ
-#                from the installed node's role)
+#   Interactive: run on the active console by milady-install.service (tty1)
+#                and milady-install-serial.service (ttyS0).
+#   Unattended:  boot with  milady.auto=1   (non-secret params may also ride
+#                the cmdline: milady.install.role|disk|user|password), or
+#                attach a volume labelled `cidata` (cloud-init NoCloud style)
+#                carrying milady.conf — the install then runs itself.
+#
+# Secrets (join token, password hash, SSH keys) belong on that `cidata`
+# volume, never on the kernel cmdline: /proc/cmdline is world-readable
+# (PLAN §Join-token secrecy). A token found on the cmdline is ignored.
 #
 # Flow (few steps):  banner -> role -> disk -> account -> (token) -> confirm
-#                    -> install -> reboot.
+#                    -> install -> reboot.  Everything except the password is
+#                    asked upfront; the disk is the only real decision.
 #
 # What it does: partitions the target GPT (bios_grub + ESP + root), formats,
 # copies the live rootfs to disk, writes fstab/node.conf/payload, creates the
 # operator account, installs GRUB for UEFI and BIOS, and reboots. Hostname is
-# left to first boot (milady-set-hostname: random milady-<10001..99999>).
+# left to first boot (milady-set-hostname: random milady-<10001..99999>) unless
+# the cidata volume names one.
 set -uo pipefail
 
+GUM=${GUM:-gum}
 DIALOG=${DIALOG:-dialog}
 LOG=${MILADY_INSTALL_LOG:-/var/log/milady-install.log}
 TARGET=/target
@@ -25,15 +32,31 @@ PAYLOAD_NAME=miladyos-image.tar.zst
 ASCII=${MILADY_ASCII:-/usr/share/milady/ascii-logo.txt}
 MIN_BYTES=$((8 * 1024 * 1024 * 1024))   # 8 GiB minimum target
 
-# Filled by the screens / cmdline.
+# --- Matrix palette --------------------------------------------------------
+# 16-colour VT palette (matrix green on black). Console escapes are a Linux
+# VT extension: ignored over a serial line, where the ANSI SGR colours below
+# still give us green. Applied once, before the first screen.
+MATRIX_PALETTE=(
+    000000 00ff41 00b000 00ff9c 00d7a0 00c000 00ffd7 b6ffb6
+    0d3b0d 00ff41 00ff41 7dff7d 00e000 00ff41 00ff9c d0ffd0
+)
+
+# --- Filled by the screens / cidata / cmdline ------------------------------
 ROLE=""
 DISK=""
 USERNAME="milady"
-PASSWORD="milady"
+PASSWORD=""
+PASSWORD_HASH=""
 TOKEN=""
 ESP=""
 ROOT=""
 LIVE_DISK=""
+CIDATA_DEV=""
+CIDATA_STAGE=/run/milady-install/cidata
+CIDATA_HOSTNAME=""
+CIDATA_KEYS=""
+LOGO_WIDTH=9
+UI=gum
 
 # --- helpers ---------------------------------------------------------------
 
@@ -98,6 +121,267 @@ detect_live_disk() {
     [ -n "$pk" ] && printf '/dev/%s\n' "$pk"
 }
 
+# --- UI backend ------------------------------------------------------------
+# gum is the interactive TUI. dialog stays as a fallback (older media,
+# scripted serial automation: MILADY_UI=dialog).
+init_ui() {
+    case "${MILADY_UI:-auto}" in
+        gum|dialog) UI=$MILADY_UI ;;
+        *) if command -v "$GUM" >/dev/null 2>&1; then UI=gum; else UI=dialog; fi ;;
+    esac
+    log "ui backend: $UI"
+}
+
+# --- branding --------------------------------------------------------------
+
+term_width() {
+    # A serial console often reports 0x0 (no winsize), so try, in order:
+    # stty -> $COLUMNS -> tput -> 80. A Linux VT under KMS reports a real size.
+    local w src
+    for src in stty columns tput; do
+        case "$src" in
+        stty)    w=$(stty size 2>/dev/null </dev/tty | awk '{print $2}') ;;
+        columns) w=${COLUMNS:-} ;;
+        tput)    w=$(command -v tput >/dev/null 2>&1 && tput cols 2>/dev/null || true) ;;
+        esac
+        case "$w" in ''|*[!0-9]*) continue ;; esac
+        [ "$w" -gt 0 ] 2>/dev/null && { printf '%s\n' "$w"; return 0; }
+    done
+    printf '80\n'
+}
+
+logo_width() {
+    local w=""
+    [ -r "$ASCII" ] && w=$(LC_ALL=C.UTF-8 wc -L <"$ASCII" 2>/dev/null | tr -d ' ')
+    case "$w" in ''|*[!0-9]*) w=9 ;; esac
+    printf '%s\n' "$w"
+}
+
+# The banner, centered and matrix-green. Swappable branding: edit
+# ISO/installer/ascii-logo.txt (any number of lines; width is measured).
+logo_print() {
+    local art width pad spaces line
+    if [ -r "$ASCII" ]; then art=$(cat "$ASCII"); else art="MiladyOS"; fi
+    width=$(term_width)
+    pad=$(( (width - $(logo_width)) / 2 ))
+    (( pad < 0 )) && pad=0
+    spaces=$(printf '%*s' "$pad" '')
+    while IFS= read -r line; do
+        printf '%s\033[1;32m%s\033[0m\n' "$spaces" "$line"
+    done <<<"$art"
+}
+
+center_line() {  # <text> [sgr]
+    local text=$1 sgr=${2:-0;32} width pad
+    width=$(term_width)
+    pad=$(( (width - ${#text}) / 2 ))
+    (( pad < 0 )) && pad=0
+    printf '%*s\033[%sm%s\033[0m\n' "$pad" '' "$sgr" "$text"
+}
+
+clear_screen() { printf '\033[?25l\033[H\033[2J\033[0m'; }
+
+set_matrix_palette() {
+    # Linux VT only; a serial console ignores these (and needs no palette).
+    case "$(tty 2>/dev/null || true)" in /dev/tty[0-9]*) ;; *) return 0 ;; esac
+    local i
+    for i in "${!MATRIX_PALETTE[@]}"; do
+        printf '\033]P%x%s' "$i" "${MATRIX_PALETTE[$i]}"
+    done
+    printf '\033[0m'
+}
+
+# --- UI primitives (backend-neutral) ---------------------------------------
+
+# Pick one of "value|label" specs; prints the value.
+ui_choose() {  # <header> <value|label>...
+    local header=$1; shift
+    local -a vals=() labels=()
+    local spec
+    for spec in "$@"; do
+        vals+=("${spec%%|*}")
+        labels+=("${spec#*|}")
+    done
+    case "$UI" in
+    gum)
+        # gum choose reads the option list from stdin and its keys from
+        # /dev/tty itself, so the list must reach stdin: do NOT redirect
+        # stdin here (that replaces the list and gum dies with "no options
+        # provided"). systemd already makes stdin the console tty.
+        local sel i
+        sel=$(printf '%s\n' "${labels[@]}" |
+            "$GUM" choose --header "$header" --height 12 \
+                --header.foreground "#00ff41" \
+                --cursor.foreground "#00ff41" \
+                --selected.foreground "#000000" \
+                --selected.background "#00ff41") || return $?
+        for i in "${!labels[@]}"; do
+            [ "${labels[$i]}" = "$sel" ] && { printf '%s\n' "${vals[$i]}"; return 0; }
+        done
+        return 1
+        ;;
+    dialog)
+        local -a args=()
+        local i
+        for i in "${!vals[@]}"; do args+=("${vals[$i]}" "${labels[$i]}"); done
+        ui --title "MiladyOS" --menu "$header" 0 0 0 "${args[@]}"
+        ;;
+    esac
+}
+
+# Text (or password) prompt; prints the value.
+ui_input() {  # <prompt> <placeholder> [default] [password]
+    local prompt=$1 ph=${2:-} def=${3:-} pw=${4:-}
+    case "$UI" in
+    gum)
+        local -a a=(--prompt "$prompt> " --placeholder "$ph" \
+            --prompt.foreground "#00ff41" \
+            --placeholder.foreground "#0d3b0d" \
+            --cursor.foreground "#00ff41")
+        [ -n "$def" ] && a+=(--value "$def")
+        [ "$pw" = password ] && a+=(--password)
+        "$GUM" input "${a[@]}"
+        ;;
+    dialog)
+        if [ "$pw" = password ]; then
+            ui --title "MiladyOS" --passwordbox "$prompt" 0 0
+        else
+            ui --title "MiladyOS" --inputbox "$prompt" 0 0 "$def"
+        fi
+        ;;
+    esac
+}
+
+# Yes/no; exit status is the answer.
+ui_confirm() {  # <text>
+    case "$UI" in
+    gum)
+        "$GUM" confirm "$1" --affirmative "Install" --negative "Cancel" \
+            --prompt.foreground "#00ff41" \
+            --selected.foreground "#000000" \
+            --selected.background "#00ff41"
+        ;;
+    dialog)
+        ui --title "MiladyOS" --yesno "$1" 0 0
+        ;;
+    esac
+}
+
+ui_msg() {  # <text>
+    case "$UI" in
+    gum)
+        printf '%s\n' "$1" |
+            "$GUM" style --border double --border-foreground "#00ff41" \
+                --foreground "#00ff41" --padding "1 2" --margin "1" >&2
+        printf '\033[1;32m  press ENTER to continue\033[0m ' >&2
+        read -r _ </dev/tty || true
+        ;;
+    dialog)
+        ui --title "MiladyOS" --msgbox "$1" 0 0 >/dev/null
+        ;;
+    esac
+}
+
+# --- progress --------------------------------------------------------------
+
+ui_progress_begin() {
+    clear_screen
+    printf '\n' >/dev/tty
+    logo_print >/dev/tty
+    printf '\n' >/dev/tty
+    center_line "installing MiladyOS" "1;32" >/dev/tty
+    printf '\n' >/dev/tty
+}
+
+ui_progress_update() {  # <pct> <msg> [spin]
+    local pct=$1 msg=$2 spin=${3:--} width=40 filled i bar=""
+    filled=$(( pct * width / 100 ))
+    (( filled < 0 )) && filled=0
+    (( filled > width )) && filled=$width
+    for ((i = 0; i < filled; i++)); do bar+="█"; done
+    for ((i = filled; i < width; i++)); do bar+="░"; done
+    printf '\033[K  \033[1;32m%s\033[0m %s %3d%%  %s\r' "$bar" "$spin" "$pct" "$msg" >/dev/tty
+}
+
+ui_progress_end() { printf '\n\033[?25h' >/dev/tty; }
+
+# --- cidata volume ---------------------------------------------------------
+# A volume labelled `cidata` (cloud-init NoCloud) or `milady-join` carries the
+# unattended config and the secrets. It is copied off and unmounted up front,
+# so the install never depends on the medium still being attached.
+
+detect_cidata() {
+    local dev label
+    while read -r dev label; do
+        [ -b "$dev" ] || continue
+        case "$dev" in */zram*|*/loop*|*/ram*|*/dm-*) continue ;; esac
+        [ -n "$LIVE_DISK" ] && [ "$dev" = "$LIVE_DISK" ] && continue
+        case "$label" in
+            cidata|CIDATA|milady-join|MILADY-JOIN|MILADY_JOIN)
+                printf '%s\n' "$dev"; return 0 ;;
+        esac
+    done < <(lsblk -pno NAME,LABEL 2>/dev/null)
+    return 1
+}
+
+# KEY=VALUE, no code execution. Unknown keys are logged and skipped.
+load_cidata_conf() {  # <file>
+    local line key val
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in ''|'#'*) continue ;; esac
+        case "$line" in *=*) ;; *) continue ;; esac
+        key=${line%%=*}
+        val=${line#*=}
+        key=$(printf '%s' "$key" | tr -d '[:space:]')
+        val=$(printf '%s' "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        case "$val" in
+            \"*\") val=${val#\"}; val=${val%\"} ;;
+            \'*\') val=${val#\'}; val=${val%\'} ;;
+        esac
+        case "$key" in
+            ROLE)                ROLE=$val ;;
+            DISK)                DISK=$val ;;
+            USERNAME|USER)       USERNAME=$val ;;
+            PASSWORD)            PASSWORD=$val ;;
+            PASSWORD_HASH)       PASSWORD_HASH=$val ;;
+            JOIN_TOKEN|TOKEN)    TOKEN=$val ;;
+            HOSTNAME)            CIDATA_HOSTNAME=$val ;;
+            *)                   log "cidata: ignoring key '$key'" ;;
+        esac
+    done <"$1"
+}
+
+# Detect, copy off, and parse the cidata volume. 0 when one was found.
+load_cidata() {
+    local dev
+    dev=$(detect_cidata) || return 1
+    CIDATA_DEV=$dev
+    rm -rf "$CIDATA_STAGE"
+    mkdir -p "$CIDATA_STAGE" /run/milady-install/mnt
+    if ! mount -o ro "$dev" /run/milady-install/mnt 2>>"$LOG"; then
+        log "cidata: could not mount $dev"
+        return 1
+    fi
+    cp -a /run/milady-install/mnt/. "$CIDATA_STAGE/" 2>>"$LOG" || true
+    umount /run/milady-install/mnt 2>/dev/null || true
+    log "cidata: copied $dev -> $CIDATA_STAGE ($(ls -1 "$CIDATA_STAGE" 2>/dev/null | tr '\n' ' '))"
+
+    # token: PLAN §Join-token secrecy — file, never cmdline
+    if [ -r "$CIDATA_STAGE/milady-join" ]; then
+        TOKEN=$(tr -d '[:space:]' <"$CIDATA_STAGE/milady-join")
+    elif [ -r "$CIDATA_STAGE/join-token" ]; then
+        TOKEN=$(tr -d '[:space:]' <"$CIDATA_STAGE/join-token")
+    fi
+
+    # SSH keys for the operator account
+    if [ -r "$CIDATA_STAGE/authorized_keys" ]; then
+        CIDATA_KEYS=$CIDATA_STAGE/authorized_keys
+    fi
+
+    [ -r "$CIDATA_STAGE/milady.conf" ] && load_cidata_conf "$CIDATA_STAGE/milady.conf"
+    return 0
+}
+
 # --- screens ---------------------------------------------------------------
 
 banner_text() {
@@ -107,27 +391,40 @@ banner_text() {
 }
 
 screen_welcome() {
-    ui --title "MiladyOS" --msgbox "$(banner_text)" 0 0
+    if [ "$UI" = dialog ]; then
+        ui --title "MiladyOS" --msgbox "$(banner_text)" 0 0 >/dev/null
+        return 0
+    fi
+    clear_screen
+    printf '\n\n' >/dev/tty
+    logo_print >/dev/tty
+    printf '\n' >/dev/tty
+    center_line "the appliance operating system" "0;32" >/dev/tty
+    printf '\n' >/dev/tty
+    center_line "server  ·  agent  ·  desktop" "1;32" >/dev/tty
+    printf '\n\n\n' >/dev/tty
+    center_line "press ENTER to begin" "0;32" >/dev/tty
+    printf '\033[?25h' >/dev/tty
+    read -r _ </dev/tty || true
 }
 
 screen_role() {
-    ui --title "Node role" --menu \
-        "What is this machine for?\n\n  server   cluster master (k3s server, control plane)\n  agent    worker (joins an existing master)\n  desktop  standalone, no cluster" \
-        0 0 3 \
-        server  "Cluster master (k3s server + control plane)" \
-        agent   "Worker (joins an existing master)" \
-        desktop "Standalone (no cluster)"
+    ui_choose "What is this machine for?" \
+        "server|Cluster master   (k3s server + control plane)" \
+        "agent|Worker   (joins an existing master)" \
+        "desktop|Standalone   (no cluster)"
 }
 
 # Eligible install targets, one per line: name<TAB>size<TAB>model.
-# Excludes the live medium, the live docker scratch disk (MILADY_DOCKER),
-# mounted disks, and pseudo disks (zram/loop/ram/dm).
+# Excludes the live medium, the cidata volume, the live docker scratch disk
+# (MILADY_DOCKER), mounted disks, and pseudo disks (zram/loop/ram/dm).
 eligible_disks() {
     local name size type model bytes
     while read -r name size type model; do
         [ "$type" = "disk" ] || continue
         case "$name" in */zram*|*/loop*|*/ram*|*/dm-*|*/fd*) continue ;; esac
         [ -n "$LIVE_DISK" ] && [ "$name" = "$LIVE_DISK" ] && continue
+        [ -n "$CIDATA_DEV" ] && [ "$name" = "$CIDATA_DEV" ] && continue
         # drop anything below the install minimum (also catches the QEMU
         # floppy /dev/fd0, which is a 'disk' of 4K)
         bytes=$(lsblk -bdno SIZE "$name" 2>/dev/null | head -1)
@@ -139,55 +436,67 @@ eligible_disks() {
 }
 
 screen_disk() {
-    local -a items=()
+    local -a specs=()
     local name size model
     while IFS=$'\t' read -r name size model; do
-        items+=("$name" "$size  $model")
+        specs+=("$name|$name   $size   $model")
     done < <(eligible_disks)
 
-    if [ "${#items[@]}" -eq 0 ]; then
-        ui --title "No disks" --msgbox \
-            "No installable disks were found.\n\nAttach a target disk and start the installer again." 0 0
+    if [ "${#specs[@]}" -eq 0 ]; then
+        ui_msg "No installable disks were found.
+
+Attach a target disk and start the installer again."
         return 1
     fi
 
-    ui --title "Target disk" --menu \
-        "Choose the disk to install MiladyOS on.\n\nALL DATA ON THAT DISK WILL BE ERASED." \
-        0 0 0 "${items[@]}"
+    ui_choose "Choose the disk to install MiladyOS on.
+
+ALL DATA ON THAT DISK WILL BE ERASED." "${specs[@]}"
 }
 
 screen_account() {
-    USERNAME=$(ui --title "Account" --inputbox "Username:" 0 0 "milady") || return 1
-    [ -n "$USERNAME" ] || USERNAME=milady
+    local u p1 p2
+    u=$(ui_input "Username" "alphanumeric, no spaces" "milady") || return 1
+    [ -n "$u" ] && USERNAME=$u
 
-    local p1 p2
     while :; do
-        p1=$(ui --title "Account" --passwordbox "Password for $USERNAME:" 0 0) || return 1
-        p2=$(ui --title "Account" --passwordbox "Confirm password:" 0 0) || return 1
-        [ "$p1" = "$p2" ] && break
-        ui --title "Passwords differ" --msgbox "The passwords do not match. Try again." 0 0
+        p1=$(ui_input "Password for $USERNAME" "used for user + root" "" password) || return 1
+        p2=$(ui_input "Confirm password" "must match" "" password) || return 1
+        if [ -n "$p1" ] && [ "$p1" = "$p2" ]; then
+            break
+        elif [ -z "$p1" ]; then
+            ui_msg "Your password can't be blank."
+        else
+            ui_msg "The passwords didn't match. Try again."
+        fi
     done
-    PASSWORD=${p1:-milady}
+    PASSWORD=$p1
 }
 
 screen_token() {
-    TOKEN=$(ui --title "Join token" --inputbox \
-        "Paste the master's join token (optional).\n\nLeave blank to join later once the token is available." \
-        0 0 "") || TOKEN=""
+    local t
+    t=$(ui_input "Join token (optional)" "leave blank to join later" "$TOKEN" password) || t=""
+    TOKEN=$t
 }
 
 screen_confirm() {
     local extra="" payload="embedded container image (air-gapped)"
-    [ "$ROLE" = "agent" ] && extra="\n  Token:     ${TOKEN:-(none - join later)}"
+    [ "$ROLE" = "agent" ] && extra="
+  Token:     ${TOKEN:-(none - join later)}"
     [ -f "$MEDIUM/payload/$PAYLOAD_NAME" ] || payload="none - will pull from registry"
-    ui --yesno \
-        "\n  Role:      $ROLE\n  Disk:      $DISK   (WILL BE ERASED)\n  Username:  $USERNAME\n  Payload:   $payload\n  Hostname:  random milady-<id> at first boot$extra\n\n  Install MiladyOS now?" \
-        0 0
+    ui_confirm "Role:      $ROLE
+  Disk:      $DISK   (WILL BE ERASED)
+  Username:  $USERNAME
+  Payload:   $payload
+  Hostname:  ${CIDATA_HOSTNAME:-random milady-<id> at first boot}$extra
+
+  Install MiladyOS now?"
 }
 
 screen_done() {
-    ui --title "MiladyOS" --msgbox \
-        "\n  Installation complete.\n\n  Remove the install medium and reboot to start MiladyOS." 0 0
+    ui_msg "Installation complete.
+
+Remove the install medium and reboot to start MiladyOS."
 }
 
 # --- install engine (all output goes to $LOG) ------------------------------
@@ -292,10 +601,12 @@ EOF
     # fresh identity every install
     : >"$TARGET/etc/machine-id"
     rm -f "$TARGET/var/lib/dbus/machine-id"
-    printf 'debian\n' >"$TARGET/etc/hostname"
+    local hostname="debian"
+    [ -n "$CIDATA_HOSTNAME" ] && hostname=$CIDATA_HOSTNAME
+    printf '%s\n' "$hostname" >"$TARGET/etc/hostname"
     cat >"$TARGET/etc/hosts" <<EOF
 127.0.0.1   localhost
-127.0.1.1   debian
+127.0.1.1   $hostname
 EOF
     rm -f "$TARGET"/etc/ssh/ssh_host_*
 
@@ -319,6 +630,10 @@ EOF
     mkdir -p "$TARGET/etc/milady"
     printf 'ROLE=%s\n' "$ROLE" >"$TARGET/etc/milady/node.conf"
     rm -f "$TARGET/etc/milady/role-applied"
+    if [ -n "$CIDATA_HOSTNAME" ]; then
+        # tell firstboot not to randomise the name we were given
+        printf '%s\n' "$CIDATA_HOSTNAME" >"$TARGET/etc/milady/hostname"
+    fi
     if [ -n "$TOKEN" ]; then
         printf '%s\n' "$TOKEN" >"$TARGET/etc/milady/join-token"
         chmod 600 "$TARGET/etc/milady/join-token"
@@ -336,7 +651,7 @@ EOF
     # installed nodes have a writable root: the live-mode MILADY_DOCKER
     # scratch mount has no disk, and systemd's RequiresMountsFor=/var/lib
     # pulls var-lib.mount in for logind/timers/etc. Remove the unit entirely
-    # (disabling alone is not enough) plus the live installer unit.
+    # (disabling alone is not enough) plus the live installer units.
     rm -f "$TARGET/etc/systemd/system/multi-user.target.wants/var-lib.mount" \
           "$TARGET/etc/systemd/system/local-fs.target.wants/var-lib.mount" \
           "$TARGET/etc/systemd/system/multi-user.target.wants/milady-install.service" \
@@ -353,6 +668,10 @@ EOF
     rm -f "$TARGET/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf" \
           "$TARGET/root/.ssh/authorized_keys"
     rmdir "$TARGET/etc/systemd/system/serial-getty@ttyS0.service.d" 2>/dev/null || true
+
+    # the installer itself is live-only: with no live medium on the installed
+    # node it cannot run, so don't ship it
+    rm -f "$TARGET/usr/local/sbin/milady-install"
 
     # GRUB: serial console on headless fleet nodes. trixie's grub-common
     # ships /etc/default/grub.d but NOT /etc/default/grub, so create it.
@@ -386,8 +705,28 @@ EOF
     if ! chroot "$TARGET" id "$USERNAME" >/dev/null 2>&1; then
         chroot "$TARGET" useradd -m -s /bin/bash ${groups:+-G "$groups"} "$USERNAME"
     fi
-    printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$TARGET" chpasswd
-    printf 'root:%s\n' "$PASSWORD" | chroot "$TARGET" chpasswd
+    if [ -n "$PASSWORD_HASH" ]; then
+        log "setting password from cidata hash"
+        printf '%s:%s\n' "$USERNAME" "$PASSWORD_HASH" | chroot "$TARGET" chpasswd -e
+        printf 'root:%s\n' "$PASSWORD_HASH" | chroot "$TARGET" chpasswd -e
+    else
+        printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$TARGET" chpasswd
+        printf 'root:%s\n' "$PASSWORD" | chroot "$TARGET" chpasswd
+    fi
+
+    # operator SSH keys from the cidata volume (unattended fleet builds)
+    if [ -n "$CIDATA_KEYS" ] && [ -s "$CIDATA_KEYS" ]; then
+        log "installing operator authorized_keys from cidata"
+        local home
+        home=$(chroot "$TARGET" getent passwd "$USERNAME" | cut -d: -f6)
+        [ -n "$home" ] || home="/home/$USERNAME"
+        mkdir -p "$TARGET$home/.ssh"
+        cp "$CIDATA_KEYS" "$TARGET$home/.ssh/authorized_keys"
+        chmod 700 "$TARGET$home/.ssh"
+        chmod 600 "$TARGET$home/.ssh/authorized_keys"
+        chown -R "$(chroot "$TARGET" id -u "$USERNAME")":"$(chroot "$TARGET" id -g "$USERNAME")" \
+            "$TARGET$home/.ssh" 2>/dev/null || true
+    fi
 }
 
 install_bootloader() {
@@ -419,51 +758,90 @@ finalize() {
 
 # --- runners ---------------------------------------------------------------
 
+# The engine steps, in order, with the bar percentage each one starts at.
+# MILADY_DRY=1 animates them without touching a disk (UI testing).
+progress_steps() {
+    printf '%s\t%s\n' \
+        3  "Partitioning $DISK" \
+        12 "Formatting filesystems" \
+        20 "Copying MiladyOS to disk" \
+        65 "Configuring system" \
+        85 "Installing bootloader" \
+        96 "Finishing up"
+}
+
 run_interactive_install() {
-    local fifo rc
+    local fifo rc pct=0 msg="Starting..." spin=0
+    local spins='|/-\'
+    mkdir -p /run/milady-install
     fifo=$(mktemp -u /run/milady-install.fifo.XXXXXX)
     mkfifo "$fifo"
 
-    # Install in a child; its exit status is the install result. Progress is
-    # written to the FIFO that dialog reads; when the child exits the FIFO
-    # closes and the gauge ends. --nocancel: a disk wipe is not interruptible.
+    # Install in a child; its exit status is the install result. Progress goes
+    # to the FIFO; the child closing it ends the loop below.
     (
         exec 9>"$fifo"
-        step() { printf '%s\nXXX\n%s\nXXX\n' "$1" "$2" >&9; }
+        step() { printf '%s\t%s\n' "$1" "$2" >&9; }
         set -e
-        step 3   "Partitioning $DISK"
-        partition_disk
-        step 12  "Formatting filesystems"
-        format_disk
-        step 20  "Copying MiladyOS to disk"
-        copy_system
-        step 65  "Configuring system"
-        configure_system
-        step 85  "Installing bootloader"
-        install_bootloader
-        step 96  "Finishing up"
-        finalize
+        if [ -n "${MILADY_DRY:-}" ]; then
+            while IFS=$'\t' read -r pct text; do
+                step "$pct" "$text"
+                sleep 1
+            done < <(progress_steps)
+        else
+            step 3   "Partitioning $DISK"
+            partition_disk
+            step 12  "Formatting filesystems"
+            format_disk
+            step 20  "Copying MiladyOS to disk"
+            copy_system
+            step 65  "Configuring system"
+            configure_system
+            step 85  "Installing bootloader"
+            install_bootloader
+            step 96  "Finishing up"
+            finalize
+        fi
         step 100 "Done"
     ) >>"$LOG" 2>&1 &
     local pid=$!
 
-    ui --title "Installing MiladyOS" --nocancel --gauge "Starting..." 14 72 0 <"$fifo"
-    wait "$pid"
-    rc=$?
+    # Animate while the child works: read with a timeout so the spinner keeps
+    # turning during the long steps (the rootfs copy dominates).
+    exec 9<"$fifo"
+    ui_progress_begin
+    while :; do
+        if IFS=$'\t' read -r -t 0.2 p m <&9; then
+            pct=$p msg=$m
+        else
+            rc=$?
+            (( rc > 128 )) || break   # not a timeout -> EOF, child is done
+        fi
+        spin=$(( (spin + 1) % 4 ))
+        ui_progress_update "$pct" "$msg" "${spins:spin:1}"
+    done
+    exec 9<&-
+    wait "$pid"; rc=$?
     rm -f "$fifo"
 
     if [ "$rc" -ne 0 ]; then
-        ui --title "Install failed" --msgbox \
-            "The installation failed (exit $rc).\n\nLast log lines:\n\n$(tail -n 12 "$LOG" 2>/dev/null)" 0 0
+        ui_progress_end
+        ui_msg "The installation failed (exit $rc).
+
+Last log lines:
+
+$(tail -n 12 "$LOG" 2>/dev/null)"
         return 1
     fi
+    ui_progress_update 100 "Done" " "
+    ui_progress_end
 }
 
 run_unattended_install() {
     local step rc out
     exec >>/dev/console 2>&1
-    printf 'milady-install: unattended install  role=%s disk=%s user=%s\n' \
-        "$ROLE" "$DISK" "$USERNAME"
+    printf 'milady-install: unattended install  role=%s disk=%s user=%s cidata=%s\n' \
+        "$ROLE" "$DISK" "$USERNAME" "${CIDATA_DEV:-none}"
     for step in partition_disk format_disk copy_system configure_system \
                 install_bootloader finalize; do
         printf 'milady-install: %s\n' "$step"
@@ -507,17 +885,55 @@ main() {
             ;;
     esac
     : >"$LOG"
+
+    # Some consoles report no geometry at all (a serial line that never
+    # negotiated a winsize comes up 0x0). Our banner centring and gum's
+    # renderer both need a real size, and gum renders nothing at all at 0
+    # columns, so hand the tty a sane default when it has none. A real VT
+    # under KMS reports its true size and is left alone.
+    local rows cols sz
+    sz=$(stty size 2>/dev/null </dev/tty || echo "0 0")
+    rows=${sz%% *}; cols=${sz##* }
+    case "$rows" in ''|*[!0-9]*) rows=0 ;; esac
+    case "$cols" in ''|*[!0-9]*) cols=0 ;; esac
+    if [ "$rows" -le 0 ] || [ "$cols" -le 0 ]; then
+        stty rows 24 cols 80 </dev/tty 2>/dev/null \
+            && log "console reported ${rows}x${cols}; set 24x80 for the TUI"
+    fi
+
+    init_ui
+    set_matrix_palette
     LIVE_DISK=$(detect_live_disk || true)
     MEDIUM=$(detect_medium)
 
-    if [ -n "$(cmdline milady.auto || true)" ]; then
-        ROLE=$(cmdline milady.install.role || cmdline milady.role || echo server)
-        DISK=$(cmdline milady.install.disk || cmdline milady.disk || true)
-        USERNAME=$(cmdline milady.install.user || cmdline milady.user || echo milady)
-        PASSWORD=$(cmdline milady.install.password || cmdline milady.password || echo milady)
-        TOKEN=$(cmdline milady.install.token || cmdline milady.token || true)
-        [ -n "$DISK" ] || DISK=$(eligible_disks | head -1 | cut -f1)
+    load_cidata || true
+
+    # Unattended when asked for, or when a cidata volume carries our config
+    # (the "attach a drive and walk away" flow).
+    local auto
+    auto=$(cmdline milady.auto || true)
+    if [ -z "$auto" ] && [ -n "$CIDATA_DEV" ] && [ -r "$CIDATA_STAGE/milady.conf" ]; then
+        auto=1
+        log "cidata: milady.conf found, running unattended"
+    fi
+
+    if [ -n "$auto" ]; then
+        # non-secret cmdline params override the volume; the join token never
+        # comes from the cmdline (PLAN §Join-token secrecy)
+        local v
+        v=$(cmdline milady.install.role || cmdline milady.role || true); [ -n "$v" ] && ROLE=$v
+        v=$(cmdline milady.install.disk || cmdline milady.disk || true); [ -n "$v" ] && DISK=$v
+        v=$(cmdline milady.install.user || cmdline milady.user || true); [ -n "$v" ] && USERNAME=$v
+        v=$(cmdline milady.install.password || cmdline milady.password || true); [ -n "$v" ] && PASSWORD=$v
+        if cmdline milady.install.token >/dev/null 2>&1 || cmdline milady.token >/dev/null 2>&1; then
+            log "WARNING: ignoring join token on the kernel cmdline - put it on a cidata volume"
+        fi
+
+        : "${ROLE:=server}"
+        : "${USERNAME:=milady}"
+        : "${PASSWORD:=milady}"
         case "$ROLE" in server|agent|desktop) ;; *) ROLE=server ;; esac
+        [ -n "$DISK" ] || DISK=$(eligible_disks | head -1 | cut -f1)
         [ -b "$DISK" ] || { echo "milady-install: no target disk ($DISK)" >/dev/console; exit 1; }
         ESP=$(part_name 2)
         ROOT=$(part_name 3)
@@ -535,8 +951,9 @@ main() {
     local bytes
     bytes=$(lsblk -bno SIZE "$DISK" 2>/dev/null | head -1)
     if [ "${bytes:-0}" -lt "$MIN_BYTES" ]; then
-        ui --title "Disk too small" --msgbox \
-            "$DISK is smaller than the 8 GiB minimum.\n\nChoose a larger disk." 0 0
+        ui_msg "$DISK is smaller than the 8 GiB minimum.
+
+Choose a larger disk."
         exit 1
     fi
 
@@ -550,14 +967,13 @@ main() {
     ROOT=$(part_name 3)
 
     if ! install_lock; then
-        ui --title "Installer busy" --msgbox \
-            "An installation is already in progress on another console." 0 0
+        ui_msg "An installation is already in progress on another console."
         exit 1
     fi
 
     run_interactive_install || exit 1
     screen_done
-    if ui --yesno "Reboot now?" 0 0; then
+    if ui_confirm "Reboot now?"; then
         sync
         reboot
     fi

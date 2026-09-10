@@ -3,6 +3,10 @@
 # it needs in the live environment.
 
 # --- TUI ---
+# gum is the installer's UI (matrix palette + centered ASCII banner).
+# dialog is kept as a fallback (MILADY_UI=dialog) for scripted serial
+# automation and older media.
+gum
 dialog
 
 # --- disk + filesystems ---
@@ -22,3 +26,8 @@ grub-efi-amd64-bin
 efibootmgr
 initramfs-tools
 kmod
+
+# --- branding ---
+# `milady-install` measures the banner with `wc -L`, which needs a UTF-8
+# locale to count characters rather than bytes; C.UTF-8 is built into glibc.
+# (no extra packages: coreutils/sed/grep come with the base system)

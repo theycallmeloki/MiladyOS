@@ -77,6 +77,19 @@ fi
 
 rm -f "$MON" "$SER" "$SERLOG" 2>/dev/null || true
 
+# Optional cidata volume (unattended install): a filesystem labelled `cidata`
+# carrying milady.conf / authorized_keys. Give the basename of a file that
+# lives in out/ (mounted as /work in the container).
+CIDATA_NAME="${CIDATA_NAME:-}"
+CIDATA_ARGS=()
+if [ -n "$CIDATA_NAME" ] && [ -f "$ISO_DIR/out/$CIDATA_NAME" ]; then
+    CIDATA_ARGS=(-drive "file=/work/$CIDATA_NAME,if=none,id=cidata,format=raw,readonly=on"
+                 -device virtio-blk-pci,drive=cidata)
+    echo "cidata volume: $CIDATA_NAME (attached as vdc)"
+elif [ -n "$CIDATA_NAME" ]; then
+    echo "WARNING: CIDATA_NAME=$CIDATA_NAME not found in out/" >&2
+fi
+
 if [ "$MODE" = "install" ]; then
     docker run -d --rm --name "$NAME" \
         --device /dev/kvm --device /dev/net/tun --cap-add NET_ADMIN \
@@ -91,6 +104,7 @@ if [ "$MODE" = "install" ]; then
             -drive file="$DISK",if=virtio,format=qcow2 \
             -chardev socket,id=ser,path="$SER",server=on,wait=off,logfile="$SERLOG",logappend=off \
             -serial chardev:ser \
+            "${CIDATA_ARGS[@]}" \
             -boot d -no-reboot \
             -monitor unix:"$MON",server=on,wait=off \
             -vnc :5 \
@@ -98,7 +112,11 @@ if [ "$MODE" = "install" ]; then
             -device virtio-net-pci,netdev=n0,mac=02:00:00:00:00:03 \
     >/dev/null 2>&1
     echo "install VM up: serial=$SER (text installer) log=$SERLOG vnc=:5 monitor=$MON"
-    echo "  installer target: the SECOND virtio disk (vdb, $DISK_NAME)"
+    if [ "${#CIDATA_ARGS[@]}" -gt 0 ]; then
+        echo "  installer target: the 40G qcow2 (device order shifts — the cidata volume claims a virtio slot first)"
+    else
+        echo "  installer target: the SECOND virtio disk (vdb, $DISK_NAME)"
+    fi
 else
     docker run -d --rm --name "$NAME" \
         --device /dev/kvm --device /dev/net/tun --cap-add NET_ADMIN \
