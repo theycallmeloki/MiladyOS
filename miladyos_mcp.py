@@ -255,6 +255,9 @@ class Config:
         "job_list",
         "emacs_eval",
         "emacs_ping",
+        "nanomilady_status",
+        "nanomilady_rounds",
+        "nanomilady_gate_result",
     ]
 
     # Opt-in "research" group: mechanisms, not capabilities. autoresearch is
@@ -342,6 +345,35 @@ class MiladyOSToolServer:
                     "type": "object",
                     "properties": {},
                     "required": []
+                }
+            },
+            "nanomilady_status": {
+                "name": "Nanomilady Status",
+                "description": "Where nanomilady is right now: promoted (champion) round, student-server and 27B-judge health, frozen capability-suite size, and every scored round with per-domain rates. Read-only; never blocks on GPU work.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            "nanomilady_rounds": {
+                "name": "Nanomilady Rounds",
+                "description": "List scored nanomilady rounds (newest first) with per-domain pass rates and the promote/rollback decision.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            "nanomilady_gate_result": {
+                "name": "Nanomilady Gate Result",
+                "description": "Full promotion-gate payload for one round tag, including per-domain CIs, the decision reasons, and the failing item ids.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tag": {"type": "string", "description": "Round tag, e.g. base-phase-a"}
+                    },
+                    "required": ["tag"]
                 }
             },
             "execute_command": {
@@ -1032,6 +1064,21 @@ class MiladyOSToolServer:
                     return {"success": True, "result": _emacs_client_eval("(emacs-version)")}
                 except Exception as e:
                     return {"success": False, "status": "error", "error": str(e)}
+
+            elif tool_id == "nanomilady_status":
+                from milady_nanomilady import mcp_status
+                return await asyncio.to_thread(mcp_status)
+
+            elif tool_id == "nanomilady_rounds":
+                from milady_nanomilady import mcp_rounds
+                return await asyncio.to_thread(mcp_rounds)
+
+            elif tool_id == "nanomilady_gate_result":
+                from milady_nanomilady import mcp_gate_result
+                tag = arguments.get("tag")
+                if not tag:
+                    return {"success": False, "status": "error", "error": "tag is required"}
+                return await asyncio.to_thread(mcp_gate_result, tag)
 
             elif tool_id == "evolve_template":
                 template_name = arguments.get("template_name")
