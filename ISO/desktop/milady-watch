@@ -21,6 +21,12 @@ if ! command -v surf >/dev/null 2>&1; then
     exit 1
 fi
 
+# WebKitGTK's accelerated compositing wants a working GL stack; on a VM (or any
+# box without a GPU driver) llvmpipe is all there is and the window can come up
+# blank or not at all. These are the documented escape hatches.
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export LIBGL_ALWAYS_SOFTWARE=1
+
 # GoTTY is behind HTTP basic auth, so any HTTP status (401 included) proves the
 # port is alive; only a connection failure returns 000.
 for _ in $(seq 1 30); do
