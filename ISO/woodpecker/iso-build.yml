@@ -31,7 +31,10 @@ steps:
       - /var/cache/milady-iso:/var/cache/milady-iso
     commands:
       - |
-        set -eu
+        set -e
+        # NOTE: no `set -u` — Woodpecker only passes the variables a trigger
+        # supplies, so unset ones (REGISTRY, PAYLOAD, …) are normal; `-u` would
+        # abort on the first one. Defaults are guarded with `[ -n ]` below.
         REG="$REGISTRY"
         [ -n "$REG" ] || REG="$CONTAINER_REGISTRY"
         [ -n "$REG" ] || REG=miladyosregistry.transparentlyrotatableproxy.site
