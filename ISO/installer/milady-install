@@ -682,6 +682,10 @@ EOF
         "$grubd" || true
     grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$grubd" \
         || printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet console=tty0 console=ttyS0,115200n8 net.ifnames=0"\n' >>"$grubd"
+    # The installed system's boot menu is what an operator sees at every power
+    # on — without this update-grub labels it "Debian GNU/Linux".
+    grep -q '^GRUB_DISTRIBUTOR=' "$grubd" \
+        || printf 'GRUB_DISTRIBUTOR="MiladyOS"\n' >>"$grubd"
     grep -q '^GRUB_TERMINAL=' "$grubd" \
         || printf 'GRUB_TERMINAL="console serial"\n' >>"$grubd"
     grep -q '^GRUB_SERIAL_COMMAND=' "$grubd" \
@@ -704,6 +708,16 @@ EOF
     log "creating account $USERNAME"
     if ! chroot "$TARGET" id "$USERNAME" >/dev/null 2>&1; then
         chroot "$TARGET" useradd -m -s /bin/bash ${groups:+-G "$groups"} "$USERNAME"
+    fi
+    # Docker access is part of being a MiladyOS operator, not something to
+    # escalate for: every node drives the host docker socket (the milady
+    # container, k3s on docker, plain `docker ps`). Applied unconditionally
+    # rather than through `useradd -G` so a pre-existing account picks it up
+    # too — the new group needs a fresh login to take effect.
+    if chroot "$TARGET" getent group docker >/dev/null 2>&1; then
+        chroot "$TARGET" usermod -aG docker "$USERNAME"
+    else
+        log "WARNING: no docker group in the target — is docker-ce installed?"
     fi
     if [ -n "$PASSWORD_HASH" ]; then
         log "setting password from cidata hash"
