@@ -30,6 +30,13 @@ else
     echo "dev hooks: omitted (production build)"
 fi
 
+# --- brand the boot splash -------------------------------------------------
+# live-build substitutes only its own @TOKENS@; stamp ours before lb build
+# renders config/bootloaders/splash.svg -> splash.png (isolinux + GRUB).
+if [ -f config/bootloaders/splash.svg ]; then
+    sed -i "s/@MILADY_VERSION@/${VERSION:-dev}/g" config/bootloaders/splash.svg
+fi
+
 # --- lb config -------------------------------------------------------------
 lb config
 
