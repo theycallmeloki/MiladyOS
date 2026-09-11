@@ -10,12 +10,14 @@
 # Runs from the sway config (exec milady-watch) in the role=desktop session.
 set -u
 
-# Ports to try, in order:
-#   1337 — the "observe milady" emacs client (repo startup.sh since 873eb51)
-#   8088 — the plain terminal the *currently published* image still starts
-# Trying both means a node works whether its container image predates or
-# postdates that change.
-GOTTY_PORTS="${MILADY_GOTTY_PORTS:-1337 8088}"
+# Ports to try, in order. 1337 is the "observe milady" emacs client (repo
+# startup.sh since 873eb51, and what the published image serves today).
+# :8088 is deliberately NOT a fallback any more: startup.sh now runs
+# `filebrowser -r /models` there, so parking the kiosk on it would show a file
+# browser rather than milady. Set MILADY_GOTTY_PORTS="1337 8088" only to talk
+# to a node whose container image predates that change (older images ran a
+# plain bash GoTTY on 8088).
+GOTTY_PORTS="${MILADY_GOTTY_PORTS:-1337}"
 FALLBACK="file:///usr/share/milady/desktop-watch.html"
 
 # surf is the browser: WebKitGTK (GoTTY needs JS + WebSockets, so a text
