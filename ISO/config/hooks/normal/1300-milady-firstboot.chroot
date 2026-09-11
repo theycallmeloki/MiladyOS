@@ -17,3 +17,11 @@ systemctl enable milady-sshkeys.service >/dev/null 2>&1 || true
 
 # avahi must run before role detection can discover a master
 systemctl enable avahi-daemon.service >/dev/null 2>&1 || true
+
+# Timezone: the fleet runs UTC. Deterministic logs across nodes, no DST
+# surprises, and the boot splash's build stamp is UTC too. The installer
+# copies this rootfs, so installed nodes inherit it; systemd-timesyncd keeps
+# the clock honest once the node is on the network.
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+printf 'UTC\n' > /etc/timezone
+systemctl enable systemd-timesyncd.service >/dev/null 2>&1 || true
