@@ -28,10 +28,12 @@ export WEBKIT_DISABLE_COMPOSITING_MODE=1
 export LIBGL_ALWAYS_SOFTWARE=1
 
 # GoTTY is behind HTTP basic auth, so any HTTP status (401 included) proves the
-# port is alive; only a connection failure returns 000.
+# port is alive; only a connection failure returns 000. curl prints "000"
+# itself on failure, so the exit status is what needs handling here — an
+# `|| echo 000` would append a second 000 and make every attempt look alive.
 for _ in $(seq 1 30); do
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$WATCH_URL" 2>/dev/null || echo 000)
-    if [ "$code" != "000" ] && [ -n "$code" ]; then
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$WATCH_URL" 2>/dev/null) || code=000
+    if [ "$code" != "000" ]; then
         # Credentials ride in the URL so the kiosk does not open on an auth
         # prompt; GoTTY's defaults are milady:milady, overridable like startup.sh.
         exec surf "http://${MILADY_ADMIN_ID:-milady}:${MILADY_ADMIN_PASSWORD:-milady}@localhost:${GOTTY_PORT}/"
