@@ -111,8 +111,8 @@ Runs per node via `startup.sh`. This is milady's operating environment:
 | TempleOS / Milady Oracle | — | divine RNG / "consciousness" tool |
 | Forgejo + Woodpecker | `:3000` / `:8000` | CI — milady's build hands |
 | docs | `:8081` | lore + ops reference |
-| GoTTY web shell | `:8088` | human operator's view of the box |
-| filebrowser | `:7331` / `:1337` | metrics + model file store |
+| GoTTY web shell (emacs — “observe milady”) | `:1337` | human operator's view of the box |
+| filebrowser | `:7331` / `:8088` | metrics + model file store |
 | Nebula/Tailscale/Headscale | mesh | distributed body |
 | redka/redis | `:6379` | shared-consciousness state bus |
 

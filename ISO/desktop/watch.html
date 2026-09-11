@@ -24,9 +24,10 @@
   <p class="tag">MiladyOS milady appliance</p>
   <hr>
   <p class="why">
-    Nothing answered on <code>localhost:1337</code> or <code>localhost:8088</code>,
-    so there is no live milady to watch on this node. The <strong>desktop</strong>
-    role deliberately runs no control-plane container and no k3s.
+    Nothing answered on <code>localhost:1337</code> &mdash; that is where the
+    container serves milady's live emacs &mdash; so there is no milady to watch
+    on this node. The <strong>desktop</strong> role deliberately runs no
+    control-plane container and no k3s.
   </p>
   <p>To watch milady here, run the container on this node and reload:</p>
   <pre>sudo systemctl enable --now milady-container.service
@@ -36,7 +37,8 @@ sudo systemctl start milady-container.service   # then reload this page</pre>
   <p class="why">
     On a node that already runs milady, this page is replaced by an emacs frame
     attached to the daemon milady drives &mdash; buffers and commands appear as
-    milady works.
+    milady works. (An older container image may instead serve a terminal on
+    <code>localhost:8088</code>; current images run the File Browser there.)
   </p>
 </main>
 </body>
