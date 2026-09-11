@@ -26,7 +26,10 @@ OUT=${OUT:-$WORK/sandman-out}
 PAYLOAD=${PAYLOAD:-0}
 UPLOAD_ISO=${UPLOAD_ISO:-0}
 DRY=${DRY:-0}
-export DOCKER_HOST=${DOCKER_HOST:-unix://$DOCKER_SOCK}
+# Force the mounted socket. The runner image (docker:cli) bakes
+# DOCKER_HOST=tcp://docker:2375 for the DinD convention, so a `:-` default here
+# would never apply and the CLI would chase a nonexistent `docker` host.
+export DOCKER_HOST="unix://$DOCKER_SOCK"
 
 REPO="$WORK/src/MiladyOS"
 ISO_DIR="$REPO/ISO"
