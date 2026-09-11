@@ -93,10 +93,16 @@ installs `xinit` and wants the literal X11 `startx`, they call
 Proprietary NVIDIA is detected (`/sys/module/nvidia/version`) and sway is given
 `--unsupported-gpu`, without which wlroots refuses to start on the blob driver.
 
-`ISO/desktop/99-milady.conf` -> `/etc/sway/config.d/99-milady.conf` layers a
-solid near-black background onto Debian's config. Debian's `/etc/sway/config`
-already includes `/etc/sway/config.d/*`, so we extend it instead of replacing
-it (and keep getting upstream fixes).
+`ISO/desktop/99-milady.conf` -> `/etc/sway/config.d/99-milady.conf` layers the
+MiladyOS brand wallpaper (`/usr/share/backgrounds/miladyos.jpg`, staged from
+`desktop/wallpaper.jpg`) plus an `exec foot` onto Debian's config, so a session
+opens onto something usable instead of an empty desktop. Debian's
+`/etc/sway/config` already includes `/etc/sway/config.d/*`, so we extend it
+instead of replacing it (and keep getting upstream fixes).
+
+The drop-in sets exactly one `output * bg` line on purpose: a second one would
+silently replace the first, so there is no "flat colour fallback" line — if the
+wallpaper file is ever missing, sway logs it and keeps its own default.
 
 ## 4. Where the role wires in
 
@@ -140,6 +146,32 @@ socat - UNIX-CONNECT:/tmp/milady-install-serial.sock   # drive the TUI
 # 2. boot the installed disk
 ISO/qemu-install-test.sh ISO/out/miladyos-<version>.iso .desktop.qcow2 boot
 #    log in on tty1 over VNC, then:  startx
+```
+
+**Unattended desktop install (verified 2026-09-11, 0.0.0.0.738).** Attach a
+cidata volume whose `milady.conf` says `ROLE=desktop` and the installer runs
+itself — no TUI driving:
+
+```sh
+# build a cidata ISO (any FS with volume label `cidata` works; xorriso lives
+# in the builder image)
+printf 'ROLE=desktop\nUSERNAME=milady\nPASSWORD=l\nHOSTNAME=milady-42001\n' \
+    > /tmp/desktop-cidata/milady.conf
+CIDATA_NAME=desktop-cidata.iso ISO/qemu-install-test.sh <iso> .desktop.qcow2 install
+# serial log shows:  milady-install: unattended install role=desktop ... complete
+```
+
+Then `boot`, log in, `startx` — verified end to end: sway comes up with swaybar,
+the brand wallpaper and a `foot` window, clock showing UTC.
+
+**Driving the VM headlessly.** The monitor/serial sockets are created by a
+root container, so `chmod 777` them (or use `sudo socat`) before connecting.
+Screenshots and keystrokes both go through the monitor:
+
+```sh
+chmod 777 /tmp/milady-install-mon.sock      # root-owned
+printf 'screendump /tmp/shot.ppm\n'  | socat - UNIX-CONNECT:/tmp/milady-install-mon.sock
+printf 'sendkey m\nsendkey i\nsendkey ret\n' | socat - UNIX-CONNECT:/tmp/milady-install-mon.sock
 ```
 
 QEMU's default `-vga std` (bochs-drm) gives KMS, and mesa renders with llvmpipe

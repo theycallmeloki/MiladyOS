@@ -95,6 +95,9 @@ install -m 0644 /iso/installer/ascii-logo.txt "$INC/usr/share/milady/ascii-logo.
 mkdir -p "$INC/usr/local/bin" "$INC/etc/sway/config.d"
 install -m 0755 /iso/desktop/startx "$INC/usr/local/bin/startx"
 install -m 0644 /iso/desktop/99-milady.conf "$INC/etc/sway/config.d/99-milady.conf"
+# Desktop wallpaper (referenced by 99-milady.conf).
+mkdir -p "$INC/usr/share/backgrounds"
+install -m 0644 /iso/desktop/wallpaper.jpg "$INC/usr/share/backgrounds/miladyos.jpg"
 
 # Host companion CLI (milady/, Go) -> /usr/local/bin/milady on the node, so a
 # fresh install has it out of the box (PLAN §Naming). Built from the same repo
