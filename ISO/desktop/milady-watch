@@ -1,17 +1,21 @@
 #!/bin/sh
 # milady-watch — open the desktop's browser on milady's live emacs.
 #
-# GoTTY (:1337) inside the miladyos container serves emacsclient -t attached to
-# the emacs daemon milady drives over MCP, so a browser parked on it shows what
+# GoTTY inside the miladyos container serves emacsclient -t attached to the
+# emacs daemon milady drives over MCP, so a browser parked on it shows what
 # milady is doing, live ("observe milady"). This launcher waits for the
-# container's GoTTY to answer, then parks surf there; if it never answers it
+# container's GoTTY to answer, then parks surf there; if nothing ever answers it
 # opens a local page explaining why instead of a browser error.
 #
 # Runs from the sway config (exec milady-watch) in the role=desktop session.
 set -u
 
-GOTTY_PORT="${MILADY_GOTTY_PORT:-1337}"
-WATCH_URL="http://localhost:${GOTTY_PORT}/"
+# Ports to try, in order:
+#   1337 — the "observe milady" emacs client (repo startup.sh since 873eb51)
+#   8088 — the plain terminal the *currently published* image still starts
+# Trying both means a node works whether its container image predates or
+# postdates that change.
+GOTTY_PORTS="${MILADY_GOTTY_PORTS:-1337 8088}"
 FALLBACK="file:///usr/share/milady/desktop-watch.html"
 
 # surf is the browser: WebKitGTK (GoTTY needs JS + WebSockets, so a text
@@ -31,15 +35,18 @@ export LIBGL_ALWAYS_SOFTWARE=1
 # port is alive; only a connection failure returns 000. curl prints "000"
 # itself on failure, so the exit status is what needs handling here — an
 # `|| echo 000` would append a second 000 and make every attempt look alive.
-for _ in $(seq 1 30); do
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$WATCH_URL" 2>/dev/null) || code=000
-    if [ "$code" != "000" ]; then
-        # Credentials ride in the URL so the kiosk does not open on an auth
-        # prompt; GoTTY's defaults are milady:milady, overridable like startup.sh.
-        exec surf "http://${MILADY_ADMIN_ID:-milady}:${MILADY_ADMIN_PASSWORD:-milady}@localhost:${GOTTY_PORT}/"
-    fi
-    sleep 1
+for port in $GOTTY_PORTS; do
+    for _ in $(seq 1 10); do
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
+            "http://localhost:${port}/" 2>/dev/null) || code=000
+        if [ "$code" != "000" ]; then
+            # Credentials ride in the URL so the kiosk does not open on an auth
+            # prompt; GoTTY's defaults are milady:milady, overridable like startup.sh.
+            exec surf "http://${MILADY_ADMIN_ID:-milady}:${MILADY_ADMIN_PASSWORD:-milady}@localhost:${port}/"
+        fi
+        sleep 1
+    done
 done
 
-echo "milady-watch: nothing on ${WATCH_URL} after 30s — showing the explainer" >&2
+echo "milady-watch: no GoTTY on ${GOTTY_PORTS} — showing the explainer" >&2
 exec surf "$FALLBACK"
