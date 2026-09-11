@@ -1,0 +1,22 @@
+# MiladyOS live entries (BIOS/isolinux).
+#
+# live-build generates live.cfg from this template — the stock one labels the
+# entries "Live system (<flavour>)". config/bootloaders/syslinux_common/ is
+# copied over live-build's template before the @TOKENS@ are substituted, so
+# replacing the .in is what renames the BIOS menu to match GRUB's.
+#
+# The live medium is also the installer: the live session starts the text
+# installer on the console (docs/TEXT-INSTALLER.md).
+
+label live-@FLAVOUR@
+	menu label ^MiladyOS live
+	menu default
+	linux @LINUX@
+	initrd @INITRD@
+	append @APPEND_LIVE@
+
+label live-@FLAVOUR@-failsafe
+	menu label MiladyOS live (fail-safe mode)
+	linux @LINUX@
+	initrd @INITRD@
+	append @APPEND_LIVE_FAILSAFE@
