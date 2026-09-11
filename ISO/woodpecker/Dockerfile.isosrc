@@ -1,0 +1,23 @@
+# Self-contained ISO source image: the MiladyOS tree baked in, so the build
+# container needs NO host repo bind mounts.
+#
+# Why: a Woodpecker step runs in a container, but the `docker` it calls talks to
+# the *host* daemon — so nested `docker run -v <path>` binds resolve as host
+# paths, and the step's own workspace paths do not exist there. The build-bus
+# pipeline therefore bakes the checkout into this image (docker build sends the
+# context client-side) and binds only MIRRORED host paths at run time:
+#
+#   /var/cache/milady-iso      -> /build/cache   (live-build cache, k3s)
+#   /var/cache/milady-iso/out  -> /out           (ISO artifact)
+#
+# Both exist at the same path on the host, so the host daemon resolves them.
+#
+#   docker build --build-arg BUILDER=<registry/milady-iso-builder:tag> \
+#       -f ISO/wopper/Dockerfile.isosrc -t milady-iso-local:<version> .
+ARG BUILDER
+FROM ${BUILDER}
+
+# /iso and /milady are what build-in-container.sh (the inherited ENTRYPOINT)
+# expects; the rest of the tree is not needed to build the ISO.
+COPY ISO /iso
+COPY milady /milady
