@@ -40,6 +40,15 @@ log() { printf 'iso-build: %s\n' "$*" >&2; }
 docker version >/dev/null 2>&1 || { log "cannot reach the host docker ($DOCKER_SOCK)"; exit 1; }
 [ -f "$SRC/ISO/build.sh" ] || { log "$SRC does not look like the MiladyOS repo"; exit 1; }
 
+# Reuse the Kaniko-built builder artifact when the registry has it (the same
+# content-addressed tag the Woodpecker bus uses). build.sh falls back to a
+# local `docker build` if the tag is missing, so this is safe either way.
+REG=${REGISTRY:-miladyosregistry.transparentlyrotatableproxy.site}
+if [ -f "$SRC/ISO/builder/Dockerfile" ]; then
+    BTAG="b$(sha256sum "$SRC/ISO/builder/Dockerfile" | cut -c1-12)"
+    export MILADY_BUILDER_IMAGE="$REG/milady-iso-builder:$BTAG"
+fi
+
 mkdir -p "$WORK/src" "$CACHE_DIR" "$OUT_DIR/payload" "$OUT"
 
 # --- 1. materialize the source tree -----------------------------------------
