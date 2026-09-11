@@ -1,0 +1,37 @@
+#!/bin/sh
+# milady-watch — open the desktop's browser on milady's live emacs.
+#
+# GoTTY (:1337) inside the miladyos container serves emacsclient -t attached to
+# the emacs daemon milady drives over MCP, so a browser parked on it shows what
+# milady is doing, live ("observe milady"). This launcher waits for the
+# container's GoTTY to answer, then parks surf there; if it never answers it
+# opens a local page explaining why instead of a browser error.
+#
+# Runs from the sway config (exec milady-watch) in the role=desktop session.
+set -u
+
+GOTTY_PORT="${MILADY_GOTTY_PORT:-1337}"
+WATCH_URL="http://localhost:${GOTTY_PORT}/"
+FALLBACK="file:///usr/share/milady/desktop-watch.html"
+
+# surf is the browser: WebKitGTK (GoTTY needs JS + WebSockets, so a text
+# browser will not do) and small enough for a light session.
+if ! command -v surf >/dev/null 2>&1; then
+    echo "milady-watch: surf is not installed" >&2
+    exit 1
+fi
+
+# GoTTY is behind HTTP basic auth, so any HTTP status (401 included) proves the
+# port is alive; only a connection failure returns 000.
+for _ in $(seq 1 30); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$WATCH_URL" 2>/dev/null || echo 000)
+    if [ "$code" != "000" ] && [ -n "$code" ]; then
+        # Credentials ride in the URL so the kiosk does not open on an auth
+        # prompt; GoTTY's defaults are milady:milady, overridable like startup.sh.
+        exec surf "http://${MILADY_ADMIN_ID:-milady}:${MILADY_ADMIN_PASSWORD:-milady}@localhost:${GOTTY_PORT}/"
+    fi
+    sleep 1
+done
+
+echo "milady-watch: nothing on ${WATCH_URL} after 30s — showing the explainer" >&2
+exec surf "$FALLBACK"
