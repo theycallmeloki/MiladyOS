@@ -7,8 +7,8 @@ import (
 	"github.com/theycallmeloki/MiladyOS/milady/internal/version"
 )
 
-// notImplemented marks a registered-but-unbuilt command. Skeleton phase only:
-// replaced by real implementations as each capability lands.
+// notImplemented marks a registered-but-unbuilt command (`milady ask` is the
+// remaining one: it needs the MCP + function-calling loop, not a stub-fix).
 func notImplemented(cmd *cobra.Command) error {
 	return &NotImplementedError{cmd: cmd}
 }
@@ -36,6 +36,10 @@ func NewRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		Version:       version.Version,
 	}
+
+	// `--version` prints the same banner as `milady version`: the bare
+	// version.Version would drop the commit and toolchain a bug report needs.
+	root.SetVersionTemplate(version.String() + "\n")
 
 	root.AddCommand(
 		newAskCmd(),
