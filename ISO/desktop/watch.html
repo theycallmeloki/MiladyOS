@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MiladyOS — milady is not on this node</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #0b0a12; color: #dcdae8; font: 16px/1.6 "DejaVu Sans", system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  main { max-width: 46rem; padding: 3rem; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; letter-spacing: .02em; }
+  .tag { color: #a49fc4; margin: 0 0 2rem; }
+  hr { border: 0; height: 2px; background: linear-gradient(90deg, #ff8a2b, #e2542a, #6b46e0); margin: 0 0 2rem; }
+  code { background: #1a1530; padding: .15em .4em; border-radius: 4px; color: #ffd7a8; }
+  pre { background: #1a1530; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+  .why { color: #b9b4d6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>MiladyOS</h1>
+  <p class="tag">MiladyOS milady appliance</p>
+  <hr>
+  <p class="why">
+    Nothing answered on <code>localhost:1337</code>, so there is no live milady
+    to watch on this node. The <strong>desktop</strong> role deliberately runs
+    no control-plane container and no k3s.
+  </p>
+  <p>To watch milady here, run the container on this node and reload:</p>
+  <pre>sudo systemctl enable --now milady-container.service
+sudo systemctl start milady-container.service   # then reload this page</pre>
+  <p>Or switch this node's role:</p>
+  <pre>sudo milady-role-switch server   # or: agent</pre>
+  <p class="why">
+    On a node that already runs milady, this page is replaced by an emacs frame
+    attached to the daemon milady drives &mdash; buffers and commands appear as
+    milady works.
+  </p>
+</main>
+</body>
+</html>

@@ -98,6 +98,9 @@ install -m 0644 /iso/desktop/99-milady.conf "$INC/etc/sway/config.d/99-milady.co
 # Desktop wallpaper (referenced by 99-milady.conf).
 mkdir -p "$INC/usr/share/backgrounds"
 install -m 0644 /iso/desktop/wallpaper.jpg "$INC/usr/share/backgrounds/miladyos.jpg"
+# "Observe milady" kiosk: opens the container's GoTTY (:1337, emacsclient -t).
+install -m 0755 /iso/desktop/milady-watch "$INC/usr/local/bin/milady-watch"
+install -m 0644 /iso/desktop/watch.html "$INC/usr/share/milady/desktop-watch.html"
 
 # Host companion CLI (milady/, Go) -> /usr/local/bin/milady on the node, so a
 # fresh install has it out of the box (PLAN §Naming). Built from the same repo

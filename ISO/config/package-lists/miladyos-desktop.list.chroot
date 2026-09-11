@@ -19,6 +19,11 @@ wmenu
 # X11 applications inside the session
 xwayland
 
+# kiosk browser for milady-watch: parks on the container's GoTTY (:1337) so the
+# desktop always shows milady's live emacs. WebKitGTK — GoTTY needs JS +
+# WebSockets, so a text browser will not do; surf is the lightest that works.
+surf
+
 # monospace font — foot/swaybar have none without it
 fonts-dejavu-core
 
