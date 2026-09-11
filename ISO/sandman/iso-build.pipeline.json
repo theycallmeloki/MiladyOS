@@ -3,7 +3,8 @@
   "description": "Build a MiladyOS ISO on miladyos-42's Docker with a warm cache under /sandman/volumes/milady-iso. Tick on demand with `sandman pipeline run-cron miladyos-iso-build` (do not wait for the weekly cron).",
   "input": {
     "cron": "@every 168h",
-    "name": "tick"
+    "name": "tick",
+    "overwrite": true
   },
   "transform": {
     "image": "milady-iso-runner:1",
