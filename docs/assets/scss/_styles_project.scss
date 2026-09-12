@@ -1,471 +1,358 @@
-// MiladyOS Matrix Theme - "Wake up, Milady..."
-// Custom styling for the MiladyOS documentation
-
-// ============================================================================
-// MATRIX COLOR PALETTE
-// ============================================================================
-$matrix-black: #0a0a0a;
-$matrix-dark: #0d1117;
-$matrix-green: #00ff41;
-$matrix-green-dim: #00cc33;
-$matrix-green-glow: #00ff4180;
-$matrix-cyan: #00d4ff;
-$matrix-pink: #ff6b9d;  // Milady accent
-$matrix-purple: #c44569;
-$matrix-text: #c9d1d9;
-$matrix-text-dim: #8b949e;
-
-// ============================================================================
-// BASE STYLES - THE DIGITAL RAIN FOUNDATION
-// ============================================================================
-body {
-  background-color: $matrix-dark !important;
-  color: $matrix-text !important;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+// Documentation is for sustained reading. Keep the welcome page's identity,
+// with a restrained hierarchy and no ambient animation or text glow.
+:root {
+  color-scheme: dark;
+  --docs-surface: #141c14;
+  --docs-panel: #182119;
+  --docs-muted: #a8b3a1;
+  --docs-heading: #f0f0df;
+  --bs-secondary-color: #a8b3a1;
+  --bs-emphasis-color: #f0f0df;
+  --bs-tertiary-bg: #182119;
 }
 
-// Main content area
-.td-main main {
-  background-color: $matrix-dark;
+html { scroll-padding-top: 6rem; }
+body { -webkit-font-smoothing: antialiased; }
+::selection { background: #c4f57a; color: #101710; }
+
+// Visible focus rings survive dark backgrounds and active navigation states.
+a:focus-visible, button:focus-visible, summary:focus-visible,
+input:focus-visible, [tabindex="0"]:focus-visible {
+  outline: 2px solid $primary;
+  outline-offset: 4px;
 }
 
-.td-content {
-  background-color: transparent;
-}
+a { text-underline-offset: 0.2em; }
 
-// ============================================================================
-// NAVIGATION - FOLLOW THE WHITE RABBIT
-// ============================================================================
 .td-navbar {
-  background: linear-gradient(180deg, $matrix-black 0%, rgba($matrix-dark, 0.95) 100%) !important;
-  border-bottom: 1px solid $matrix-green-dim;
-  box-shadow: 0 0 20px $matrix-green-glow;
+  background: #101710;
+  border-bottom: 1px solid $border-color;
+  box-shadow: none;
 
   .navbar-brand {
-    color: $matrix-green !important;
-    text-shadow: 0 0 10px $matrix-green-glow;
-    font-weight: bold;
-    letter-spacing: 2px;
-
-    &:hover {
-      color: $matrix-cyan !important;
-      text-shadow: 0 0 20px $matrix-cyan;
-    }
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.045em;
   }
 
-  .nav-link {
-    color: $matrix-text !important;
-    transition: all 0.3s ease;
-
-    &:hover {
-      color: $matrix-green !important;
-      text-shadow: 0 0 10px $matrix-green-glow;
-    }
-  }
+  .nav-link { font-size: 0.875rem; font-weight: 500; }
 }
 
-// ============================================================================
-// SIDEBAR - THE RED PILL MENU
-// ============================================================================
 .td-sidebar {
-  background-color: $matrix-black !important;
-  border-right: 1px solid rgba($matrix-green, 0.3);
+  background: var(--docs-surface);
+  border-right: 1px solid $border-color;
 }
 
 .td-sidebar-nav {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0.5rem 0.75rem 1.5rem;
+
   .td-sidebar-link {
-    color: $matrix-text-dim !important;
-    transition: all 0.2s ease;
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.15rem;
     border-left: 2px solid transparent;
-
-    &:hover {
-      color: $matrix-green !important;
-      background-color: rgba($matrix-green, 0.1);
-      border-left: 2px solid $matrix-green;
-    }
-
-    &.active {
-      color: $matrix-green !important;
-      background-color: rgba($matrix-green, 0.15);
-      border-left: 2px solid $matrix-green;
-      text-shadow: 0 0 5px $matrix-green-glow;
-    }
-  }
-
-  .td-sidebar-link__page {
-    color: $matrix-text-dim !important;
-
-    &:hover, &.active {
-      color: $matrix-green !important;
-    }
-  }
-}
-
-// Section headers in sidebar
-.td-sidebar-nav__section-title {
-  color: $matrix-pink !important;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-size: 0.75rem;
-}
-
-// ============================================================================
-// HEADINGS - THERE IS NO SPOON
-// ============================================================================
-h1, h2, h3, h4, h5, h6 {
-  color: $matrix-green !important;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-h1 {
-  text-shadow: 0 0 20px $matrix-green-glow;
-  border-bottom: 1px solid rgba($matrix-green, 0.3);
-  padding-bottom: 0.5rem;
-}
-
-h2 {
-  color: $matrix-cyan !important;
-  text-shadow: 0 0 10px rgba($matrix-cyan, 0.5);
-
-  &::before {
-    content: ">> ";
-    color: $matrix-green;
-    opacity: 0.7;
-  }
-}
-
-h3 {
-  color: $matrix-pink !important;
-}
-
-// ============================================================================
-// LINKS - NEURAL CONNECTIONS
-// ============================================================================
-a {
-  color: $matrix-cyan !important;
-  text-decoration: none;
-  transition: all 0.2s ease;
-
-  &:hover {
-    color: $matrix-green !important;
-    text-shadow: 0 0 8px $matrix-green-glow;
+    border-radius: 0 0.3rem 0.3rem 0;
+    color: #b7c2ae;
+    font-weight: 400;
     text-decoration: none;
-  }
-}
 
-// ============================================================================
-// CODE BLOCKS - THE CONSTRUCT
-// ============================================================================
-pre, code {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-}
-
-code {
-  background-color: rgba($matrix-green, 0.1) !important;
-  color: $matrix-green !important;
-  border: 1px solid rgba($matrix-green, 0.3);
-  border-radius: 3px;
-  padding: 0.1rem 0.4rem;
-}
-
-pre {
-  background-color: $matrix-black !important;
-  border: 1px solid rgba($matrix-green, 0.4) !important;
-  border-radius: 8px;
-  box-shadow: 0 0 15px rgba($matrix-green, 0.2), inset 0 0 30px rgba(0, 0, 0, 0.5);
-
-  code {
-    background-color: transparent !important;
-    border: none;
-    color: $matrix-green !important;
-    text-shadow: 0 0 2px $matrix-green-glow;
-  }
-}
-
-// Syntax highlighting overrides
-.highlight {
-  background-color: $matrix-black !important;
-
-  .c, .c1, .cm { color: $matrix-text-dim !important; } // Comments
-  .k, .kd, .kn { color: $matrix-pink !important; }     // Keywords
-  .s, .s1, .s2 { color: $matrix-cyan !important; }     // Strings
-  .n, .na, .nb { color: $matrix-green !important; }    // Names
-  .o { color: $matrix-text !important; }               // Operators
-  .m, .mi, .mf { color: $matrix-purple !important; }   // Numbers
-}
-
-// ============================================================================
-// TABLES - DATA STREAMS
-// ============================================================================
-table {
-  background-color: rgba($matrix-black, 0.8) !important;
-  border: 1px solid rgba($matrix-green, 0.3) !important;
-
-  th {
-    background-color: rgba($matrix-green, 0.15) !important;
-    color: $matrix-green !important;
-    border-bottom: 2px solid $matrix-green !important;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-size: 0.85rem;
-  }
-
-  td {
-    border-color: rgba($matrix-green, 0.2) !important;
-    color: $matrix-text !important;
-  }
-
-  tr:hover td {
-    background-color: rgba($matrix-green, 0.05) !important;
-  }
-}
-
-// ============================================================================
-// BLOCKQUOTES - PROPHECIES
-// ============================================================================
-blockquote {
-  background-color: rgba($matrix-pink, 0.1) !important;
-  border-left: 4px solid $matrix-pink !important;
-  color: $matrix-text !important;
-  font-style: italic;
-
-  &::before {
-    content: '"';
-    font-size: 3rem;
-    color: $matrix-pink;
-    opacity: 0.3;
-    position: absolute;
-    left: 0.5rem;
-    top: -0.5rem;
-  }
-}
-
-// ============================================================================
-// ALERTS & CALLOUTS - SYSTEM MESSAGES
-// ============================================================================
-.alert {
-  border-radius: 8px;
-  border: 1px solid;
-
-  &.alert-info {
-    background-color: rgba($matrix-cyan, 0.1) !important;
-    border-color: $matrix-cyan !important;
-    color: $matrix-text !important;
-  }
-
-  &.alert-warning {
-    background-color: rgba(255, 193, 7, 0.1) !important;
-    border-color: #ffc107 !important;
-  }
-
-  &.alert-danger {
-    background-color: rgba(220, 53, 69, 0.1) !important;
-    border-color: #dc3545 !important;
-  }
-
-  &.alert-success {
-    background-color: rgba($matrix-green, 0.1) !important;
-    border-color: $matrix-green !important;
-  }
-}
-
-// ============================================================================
-// FOOTER - END OF LINE
-// ============================================================================
-.td-footer {
-  background-color: $matrix-black !important;
-  border-top: 1px solid rgba($matrix-green, 0.3);
-
-  a {
-    color: $matrix-text-dim !important;
-
-    &:hover {
-      color: $matrix-green !important;
-    }
-  }
-}
-
-// ============================================================================
-// SEARCH - FIND THE ONE
-// ============================================================================
-.td-search-input {
-  background-color: $matrix-black !important;
-  border: 1px solid rgba($matrix-green, 0.4) !important;
-  color: $matrix-green !important;
-
-  &::placeholder {
-    color: $matrix-text-dim !important;
-  }
-
-  &:focus {
-    box-shadow: 0 0 15px $matrix-green-glow !important;
-    border-color: $matrix-green !important;
-  }
-}
-
-// ============================================================================
-// BREADCRUMBS - THE PATH
-// ============================================================================
-.td-breadcrumbs {
-  background-color: transparent;
-
-  .breadcrumb-item {
-    color: $matrix-text-dim;
-
-    a {
-      color: $matrix-text-dim !important;
-
-      &:hover {
-        color: $matrix-green !important;
-      }
-    }
-
+    &:hover { background: #202b1d; color: $headings-color; }
     &.active {
-      color: $matrix-green;
-    }
-
-    &::before {
-      color: $matrix-green !important;
-      content: ">" !important;
-    }
-  }
-}
-
-// ============================================================================
-// TOC - TABLE OF CONSCIOUSNESS
-// ============================================================================
-.td-toc {
-  border-left: 1px solid rgba($matrix-green, 0.2);
-
-  a {
-    color: $matrix-text-dim !important;
-
-    &:hover {
-      color: $matrix-green !important;
+      background: #25341f;
+      border-left-color: $primary;
+      color: $primary;
+      font-weight: 600;
     }
   }
 
-  .td-toc__toggle {
-    color: $matrix-text-dim;
+  // Docsy applies this class to every section link, not just group headings.
+  &__section-title { font-size: inherit; letter-spacing: normal; }
+  .td-sidebar-link.tree-root { margin-bottom: 0.65rem; font-weight: 600; }
+}
+
+.td-search__input {
+  background: var(--docs-panel);
+  border: 1px solid #46513f;
+  border-radius: 0.375rem;
+  color: $body-color;
+  font-size: 0.875rem;
+  min-height: 2.5rem;
+
+  &::placeholder { color: var(--docs-muted); opacity: 1; }
+  &:focus {
+    color: $headings-color;
+    background: var(--docs-panel);
+    border-color: $primary;
+    box-shadow: $input-focus-box-shadow;
   }
 }
 
-// ============================================================================
-// SCROLLBAR - THE DIGITAL SPINE
-// ============================================================================
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.td-search__icon { color: var(--docs-muted); }
+.popover { line-height: 1.6; }
+.popover a { text-decoration: underline; }
+
+.td-breadcrumbs {
+  font-size: 0.8rem;
+  margin-bottom: 1.5rem;
+  a { color: var(--docs-muted); text-decoration: none; }
+  a:hover { color: $primary; }
+  .breadcrumb-item.active { color: #d0dac5; }
 }
 
-::-webkit-scrollbar-track {
-  background: $matrix-black;
-}
+.td-main main { min-width: 0; }
 
-::-webkit-scrollbar-thumb {
-  background: rgba($matrix-green, 0.4);
-  border-radius: 4px;
+.td-content {
+  max-width: 74ch;
+  font-size: 1.0625rem;
+  line-height: 1.8;
+  padding-bottom: 3rem;
+  overflow-wrap: break-word;
 
-  &:hover {
-    background: $matrix-green;
-  }
-}
-
-// ============================================================================
-// SPECIAL EFFECTS - GLITCH IN THE MATRIX
-// ============================================================================
-
-// Glow effect for important elements
-.glow {
-  text-shadow: 0 0 10px $matrix-green-glow, 0 0 20px $matrix-green-glow, 0 0 30px $matrix-green-glow;
-}
-
-// Matrix rain animation (can be added to specific elements)
-@keyframes matrix-rain {
-  0% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(100px); }
-}
-
-// Scanline effect for retro feel
-.scanlines::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.15),
-    rgba(0, 0, 0, 0.15) 1px,
-    transparent 1px,
-    transparent 2px
-  );
-  pointer-events: none;
-}
-
-// Typing cursor effect
-.cursor::after {
-  content: "█";
-  animation: blink 1s step-end infinite;
-  color: $matrix-green;
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
-// ============================================================================
-// ASCII ART BLOCKS - PRESERVE THE ART
-// ============================================================================
-.ascii-art, pre.ascii {
-  font-family: 'Courier New', monospace !important;
-  font-size: 0.75rem;
-  line-height: 1.2;
-  color: $matrix-green !important;
-  text-shadow: 0 0 5px $matrix-green-glow;
-  overflow-x: auto;
-  white-space: pre;
-
-  // Ensure proper character alignment
-  letter-spacing: 0;
-  tab-size: 4;
-}
-
-// ============================================================================
-// RESPONSIVE - ALL REALITIES
-// ============================================================================
-@media (max-width: 768px) {
-  h1 {
-    font-size: 1.75rem;
+  // The article already has a readable measure. Avoid Docsy's additional
+  // percentage limit shrinking paragraphs inside that measure a second time.
+  > p, > .lead, > h1, > h2, > ul, > ol, > blockquote,
+  > .alert, > .highlight, > pre, > table, > dl dd {
+    max-width: 100%;
   }
 
-  h2::before {
-    content: "> ";
+  > h1 {
+    font-size: clamp(2rem, 3.2vw, 3rem);
+    line-height: 1.15;
+    letter-spacing: -0.045em;
+    font-weight: 650;
+    margin-bottom: 1.25rem;
+  }
+
+  > .lead {
+    color: #b7c2ae;
+    font-size: 1.2rem;
+    line-height: 1.65;
+    font-weight: 400;
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid $border-color;
+  }
+
+  h2, h3, h4, h5, h6 {
+    color: $headings-color;
+    line-height: 1.3;
+    letter-spacing: -0.025em;
+    scroll-margin-top: 1rem;
+  }
+
+  // Native scroll padding handles the fixed header; retire Docsy's spacer.
+  h2[id]::before, h3[id]::before, h4[id]::before, h5[id]::before {
+    content: none;
+  }
+
+  > h2:not(:first-child) {
+    margin-top: 3.25rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid $border-color;
+  }
+
+  h2 { font-size: 1.75rem; }
+  h3 { font-size: 1.35rem; }
+  h4 { font-size: 1.125rem; }
+  > p, > ul, > ol { margin-bottom: 1.3rem; }
+  li { padding-left: 0.2rem; }
+  ul li, ol li { margin-bottom: 0.5rem; }
+  li > ul, li > ol { margin-top: 0.5rem; }
+  strong { color: $headings-color; font-weight: 600; }
+  a:not(.td-heading-self-link):not(.btn) { text-decoration: underline; }
+
+  .td-heading-self-link {
+    font-weight: 400;
+    &:focus-visible { visibility: visible; }
+  }
+
+  // Preserve syntax highlighting: do not paint every token the accent color.
+  code {
+    font-family: $font-family-monospace;
+    font-size: 0.85em;
+    color: #d0e6b6;
+    background: #202c1e;
+    border: 1px solid #344031;
+    border-radius: 0.25rem;
+    padding: 0.12em 0.3em;
+    overflow-wrap: anywhere;
   }
 
   pre {
-    font-size: 0.8rem;
+    background: #0c120d;
+    color: #dbe1d5;
+    padding: 1.25rem 1.4rem;
+    border: 1px solid #344031;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    margin-block: 1.5rem;
+    max-width: 100%;
+    overflow-x: auto;
+    tab-size: 4;
+
+    code {
+      color: inherit;
+      font-size: inherit;
+      background: transparent;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      white-space: pre;
+      overflow-wrap: normal;
+      font-variant-ligatures: none;
+    }
+  }
+
+  .highlight { max-width: 100%; margin-block: 1.5rem; }
+  .highlight pre { margin: 0; }
+
+  table:not(.td-initial) {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    border: 1px solid $border-color;
+    border-radius: 0.4rem;
+    margin-block: 1.5rem 2rem;
+
+    > :not(caption) > * > * {
+      padding: 0.85rem 1rem;
+      border-color: $border-color;
+      vertical-align: top;
+      min-width: 7rem;
+    }
+    > :not(caption) > * > th {
+      background: #202b1d;
+      color: $headings-color;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    td { color: $body-color; }
+    tbody tr:nth-child(even) { background: #ffffff03; }
+    tbody tr:last-child td { border-bottom: 0; }
+    code { font-size: 0.9em; }
+  }
+
+  blockquote {
+    position: static;
+    padding: 1rem 1.25rem;
+    margin-block: 1.75rem;
+    color: #dbe1d5;
+    background: #1b2719;
+    border-left: 3px solid #95b970;
+    border-radius: 0 0.4rem 0.4rem 0;
+    font-style: normal;
+    p:last-child { margin-bottom: 0; }
+  }
+
+  .alert {
+    border-radius: 0.4rem;
+    border-width: 1px;
+    padding: 1.25rem;
+    color: $body-color;
+    .alert-heading { color: inherit; }
+  }
+  .alert-info { background: #192b2b; border-color: #426662; }
+  .alert-warning { background: #30291a; border-color: #77623b; }
+  .alert-danger { background: #301f1d; border-color: #805650; }
+  .alert-success { background: #1d2c1b; border-color: #4d7041; }
+
+  hr { color: $border-color; opacity: 1; margin-block: 2.5rem; }
+}
+
+.td-sidebar-toc {
+  font-size: 0.8rem;
+  padding-inline: 1.25rem;
+  border-color: $border-color;
+
+  .td-page-meta { margin-bottom: 2rem; }
+  .td-page-meta a { color: var(--docs-muted); font-weight: 400; margin-bottom: 0.5rem; }
+  .td-page-meta a:hover { color: $primary; }
+}
+
+.td-toc {
+  &__title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: $headings-color;
+    letter-spacing: 0.04em;
+    margin-bottom: 1rem;
+  }
+
+  #TableOfContents a {
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--docs-muted);
+    border-left: 1px solid $border-color;
+    padding: 0.35rem 0 0.35rem 0.75rem;
+    &:hover, &:focus { color: $primary; border-left-color: $primary; }
   }
 }
 
-// ============================================================================
-// PRINT - HARDCOPY FROM THE MATRIX (why would you?)
-// ============================================================================
+.td-footer {
+  background: $body-bg;
+  border-top: 1px solid $border-color;
+  min-height: auto;
+  padding-block: 2rem;
+  font-size: 0.8rem;
+  a { color: var(--docs-muted); }
+  a:hover { color: $primary; }
+}
+
+@media (min-width: 1200px) {
+  .td-main main { padding-inline-end: 3rem; }
+}
+
+@media (max-width: 767.98px) {
+  html { scroll-padding-top: 2rem; }
+  .td-navbar .navbar-brand { font-size: 1.2rem; }
+  .td-sidebar { border-right: 0; border-bottom: 1px solid $border-color; }
+  .td-sidebar-nav { padding-bottom: 0.75rem; }
+  .td-main main { padding-inline: 1.25rem; padding-top: 1.5rem; }
+  .td-content {
+    font-size: 1rem;
+    line-height: 1.75;
+    > .lead { font-size: 1.1rem; }
+    h2 { font-size: 1.5rem; }
+    h3 { font-size: 1.2rem; }
+    pre { font-size: 0.75rem; padding: 1rem; }
+    table { font-size: 0.8125rem; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+}
+
 @media print {
-  body {
-    background-color: white !important;
-    color: black !important;
+  :root { color-scheme: light; }
+  .td-navbar, .td-footer, .td-breadcrumbs, .td-heading-self-link, .td-click-to-copy {
+    display: none !important;
   }
-
-  h1, h2, h3, h4, h5, h6 {
-    color: black !important;
-    text-shadow: none !important;
-  }
-
-  pre, code {
-    background-color: #f5f5f5 !important;
-    color: black !important;
-    border-color: #ccc !important;
+  body, .td-main main, .td-content { background: #fff !important; color: #111 !important; }
+  .td-content {
+    max-width: none;
+    font-size: 11pt;
+    h1, h2, h3, h4, h5, h6, strong, .lead, a { color: #111 !important; }
+    pre, code, table, th, td, blockquote, .alert {
+      background: #f5f5f5 !important;
+      color: #111 !important;
+      border-color: #bbb !important;
+      box-shadow: none;
+    }
+    pre { white-space: pre-wrap; }
+    pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre span { color: #111 !important; }
+    table { display: table; font-size: 9pt; }
+    th { white-space: normal; }
+    table:not(.td-initial) > :not(caption) > * > * {
+      min-width: 0;
+      padding: 0.4rem;
+    }
+    a { text-decoration: underline; }
   }
 }
