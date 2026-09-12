@@ -114,3 +114,16 @@ docs/
 
 The configuration-volume website builder is a future feature. The landing page
 links to today's local cidata instructions and does not collect files or secrets.
+
+## Documentation appearance
+
+The Docsy pages use the welcome page's dark green palette with a system sans-serif
+font for prose and monospace for code. Theme variables live in
+`assets/scss/_variables_project.scss`; reading layout, navigation, tables,
+callouts, mobile, and print styles live in `assets/scss/_styles_project.scss`.
+The `partials/toc.html` override adds an “On this page” label. Keep content edits
+separate from these visual overrides.
+
+The head hook provides the shared favicon and theme color. The body-end hook
+intentionally adds no ambient animation or floating voice controls to the
+reading surface. Docsy's search, mobile navigation, and code-copy behavior remain.

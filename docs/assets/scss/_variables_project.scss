@@ -1,115 +1,71 @@
-// MiladyOS Matrix Theme Variables
-// Override Docsy default variables for the Matrix aesthetic
+// Shared palette with the MiladyOS welcome page. System fonts keep reading fast
+// and avoid a font download or layout shift before the article is usable.
+$primary: #c4f57a;
+$secondary: #a8b3a1;
+$success: #a7d995;
+$info: #9ed4d2;
+$warning: #e5c580;
+$danger: #e7a29a;
+$light: #f0f0df;
+$dark: #101710;
 
-// ============================================================================
-// MATRIX COLOR DEFINITIONS
-// ============================================================================
-$matrix-black: #0a0a0a;
-$matrix-dark: #0d1117;
-$matrix-green: #00ff41;
-$matrix-green-dim: #00cc33;
-$matrix-green-glow: rgba(0, 255, 65, 0.5);
-$matrix-cyan: #00d4ff;
-$matrix-pink: #ff6b9d;
-$matrix-purple: #c44569;
-$matrix-text: #c9d1d9;
-$matrix-text-dim: #8b949e;
-
-// ============================================================================
-// BOOTSTRAP/DOCSY COLOR OVERRIDES
-// ============================================================================
-
-// Primary colors - Matrix Green
-$primary: $matrix-green;
-$secondary: $matrix-cyan;
-$success: $matrix-green;
-$info: $matrix-cyan;
-$warning: #ffc107;
-$danger: #dc3545;
-$light: $matrix-text;
-$dark: $matrix-dark;
-
-// Body
-$body-bg: $matrix-dark;
-$body-color: $matrix-text;
-
-// Links
-$link-color: $matrix-cyan;
-$link-hover-color: $matrix-green;
-
-// ============================================================================
-// TYPOGRAPHY
-// ============================================================================
-
-// Use monospace fonts for that terminal feel
-$font-family-sans-serif: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
-$font-family-monospace: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+$td-enable-google-fonts: false;
+$font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+$font-family-monospace: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 $font-family-base: $font-family-sans-serif;
+$headings-font-family: $font-family-sans-serif;
+$headings-color: #f0f0df;
+$headings-font-weight: 600;
+$font-weight-body-text: 400;
+$line-height-base: 1.75;
 
-$headings-font-family: $font-family-monospace;
-$headings-color: $matrix-green;
+$body-bg: #101710;
+$body-color: #dbe1d5;
+$body-secondary-color: #a8b3a1;
+$body-tertiary-bg: #182119;
+$emphasis-color: #f0f0df;
+$link-color: #c4f57a;
+$link-hover-color: #d7ff9d;
+$border-color: #344031;
+$border-radius: 0.375rem;
+$border-radius-sm: 0.25rem;
+$border-radius-lg: 0.5rem;
+$box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+$box-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.12);
+$box-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.24);
 
-// ============================================================================
-// NAVBAR
-// ============================================================================
-$navbar-dark-color: $matrix-text;
-$navbar-dark-hover-color: $matrix-green;
-$navbar-dark-active-color: $matrix-green;
-$navbar-dark-brand-color: $matrix-green;
-$navbar-dark-brand-hover-color: $matrix-cyan;
+$navbar-dark-color: #c3cdbb;
+$navbar-dark-hover-color: #c4f57a;
+$navbar-dark-active-color: #f0f0df;
+$navbar-dark-brand-color: #f0f0df;
+$navbar-dark-brand-hover-color: #c4f57a;
+$td-sidebar-bg-color: #141c14;
+$td-sidebar-border-color: #344031;
+$td-footer-bg-color: #101710;
+$td-search-input-color: #dbe1d5;
 
-// ============================================================================
-// CODE BLOCKS
-// ============================================================================
-$code-color: $matrix-green;
-$code-bg: rgba($matrix-green, 0.1);
-
-$pre-color: $matrix-green;
-$pre-bg: $matrix-black;
-
-// ============================================================================
-// TABLES
-// ============================================================================
-$table-color: $matrix-text;
-$table-bg: rgba($matrix-black, 0.8);
-$table-border-color: rgba($matrix-green, 0.3);
-$table-striped-bg: rgba($matrix-green, 0.05);
-$table-hover-bg: rgba($matrix-green, 0.1);
-
-// ============================================================================
-// BORDERS & SHADOWS
-// ============================================================================
-$border-color: rgba($matrix-green, 0.3);
-$border-radius: 8px;
-$border-radius-sm: 4px;
-$border-radius-lg: 12px;
-
-$box-shadow: 0 0 20px $matrix-green-glow;
-$box-shadow-sm: 0 0 10px $matrix-green-glow;
-$box-shadow-lg: 0 0 30px $matrix-green-glow;
-
-// ============================================================================
-// DOCSY SPECIFIC OVERRIDES
-// ============================================================================
-
-// Sidebar
-$td-sidebar-bg-color: $matrix-black;
-$td-sidebar-border-color: rgba($matrix-green, 0.3);
-
-// Footer
-$td-footer-bg-color: $matrix-black;
-
-// Search
-$td-search-input-color: $matrix-green;
-
-// ============================================================================
-// CUSTOM PROPERTIES FOR CSS VARIABLES
-// ============================================================================
-:root {
-  --matrix-green: #{$matrix-green};
-  --matrix-green-glow: #{$matrix-green-glow};
-  --matrix-cyan: #{$matrix-cyan};
-  --matrix-pink: #{$matrix-pink};
-  --matrix-dark: #{$matrix-dark};
-  --matrix-black: #{$matrix-black};
-}
+$code-color: #d0e6b6;
+$pre-color: #dbe1d5;
+$pre-bg: #0c120d;
+$table-color: #dbe1d5;
+$table-bg: transparent;
+$table-border-color: #344031;
+$table-striped-bg: rgba(196, 245, 122, 0.025);
+$table-hover-bg: rgba(196, 245, 122, 0.04);
+$input-bg: #182119;
+$input-color: #dbe1d5;
+$input-border-color: #46513f;
+$input-placeholder-color: #a8b3a1;
+$input-focus-border-color: #c4f57a;
+$input-focus-box-shadow: 0 0 0 3px rgba(196, 245, 122, 0.12);
+$popover-bg: #182119;
+$popover-body-color: #dbe1d5;
+$popover-header-bg: #202c1e;
+$popover-header-color: #f0f0df;
+$popover-border-color: #46513f;
+$dropdown-bg: #182119;
+$dropdown-link-color: #dbe1d5;
+$dropdown-link-hover-color: #f0f0df;
+$dropdown-link-hover-bg: #263322;
+$breadcrumb-divider-color: #84917b;
+$breadcrumb-active-color: #a8b3a1;
