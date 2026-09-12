@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="{{ .Site.Language.LanguageCode | default "en" }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  <meta name="description" content="{{ .Description }}">
+  <meta name="theme-color" content="#101710">
+  <link rel="canonical" href="{{ .Permalink }}">
+  <meta property="og:title" content="{{ .Title }}">
+  <meta property="og:description" content="{{ .Description }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ .Permalink }}">
+  <meta property="og:image" content="{{ "images/miladyos-wallpaper.jpg" | absURL }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101710'/%3E%3Ctext x='9' y='48' font-family='monospace' font-size='46' fill='%23c4f57a'%3Em%3C/text%3E%3C/svg%3E">
+  {{ $css := resources.Get "css/welcome.css" | minify | fingerprint }}
+  <link rel="stylesheet" href="{{ $css.RelPermalink }}" integrity="{{ $css.Data.Integrity }}">
+  {{ $js := resources.Get "js/welcome.js" | minify | fingerprint }}
+  <script defer src="{{ $js.RelPermalink }}" integrity="{{ $js.Data.Integrity }}"></script>
+</head>
+<body>
+  {{ $iso := .Site.Data.iso }}
+  {{ $guide := "docs/iso/" | relURL }}
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="wordmark" href="{{ .Site.Home.RelPermalink }}" aria-label="MiladyOS home"><span class="brand-mark" aria-hidden="true">m<span>✳</span></span> MiladyOS</a>
+    <nav aria-label="Main navigation">
+      <a href="#explore">Explore</a><a href="{{ "docs/" | relURL }}">Documentation <span aria-hidden="true">↗</span></a><a class="nav-source" href="{{ .Site.Params.github_repo }}">Source <span aria-hidden="true">↗</span></a><a class="nav-download" href="#download">Get MiladyOS <span aria-hidden="true">↓</span></a>
+    </nav>
+  </header>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot"></span> Independent machines. Shared possibility.</p>
+        <h1 id="hero-title">Your machine.<br>Part of something<br><em>bigger.</em><span class="hero-star" aria-hidden="true">✳</span></h1>
+        <p class="hero-description">A home for your compute. A playground for your agents.<br class="wide-only"> A Debian-based OS that grows from one machine to a mesh.</p>
+        <div class="actions"><a class="button primary" href="#download">Get MiladyOS <span aria-hidden="true">↓</span></a><a class="text-link" href="#explore">Find your place in the mesh <span aria-hidden="true">↗</span></a></div>
+        <p class="hero-meta">Open source <span>·</span> Debian 13 <span>·</span> Yours to change</p>
+      </div>
+      <div class="signal" aria-hidden="true">
+        <div class="signal-top"><span>MILADY / NETWORK SPIRITUALITY</span><span>001</span></div>
+        <div class="orb"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="orb-equator"></div><span class="orb-core">m<span>✳</span></span><span class="satellite satellite-one"></span><span class="satellite satellite-two"></span></div>
+        <div class="signal-bottom"><span>ONE NODE IS A BEGINNING.</span><span>∞</span></div>
+      </div>
+    </section>
+    <div class="foundation"><div class="wrap"><span>GOOD FOUNDATIONS. STRANGE POSSIBILITIES.</span><span>Debian</span><span>Docker</span><span>K3s</span><span>MCP</span><span>Sway<small>in source</small></span></div></div>
+    <section id="explore" class="section wrap" aria-labelledby="explore-title">
+      <div class="section-heading"><p class="eyebrow">01 / Make yourself at home</p><h2 id="explore-title">One OS.<br>Choose your own orbit.</h2><p>A personal machine. A home lab. A growing fleet.<br>Choose a role during installation, and take it from there.</p></div>
+      <div class="roles">
+        <article><span class="role-icon" aria-hidden="true">⌘</span><p class="eyebrow">For the human</p><h3>Desktop</h3><p>Your own standalone space. The latest source adds a minimal Sway desktop, a terminal, and room to make it yours.</p><a href="{{ $guide }}#desktop">Meet the desktop <span aria-hidden="true">↗</span></a><span class="small-label">Sway session · newer than download</span></article>
+        <article><span class="role-icon" aria-hidden="true">✳</span><p class="eyebrow">For the first node</p><h3>Server</h3><p>Start your cluster. K3s and Docker provide the foundation for orchestrating workloads and connecting more machines.</p><a href="{{ $guide }}#server">Start something bigger <span aria-hidden="true">↗</span></a><span class="small-label">Control plane · headless</span></article>
+        <article><span class="role-icon" aria-hidden="true">⤨</span><p class="eyebrow">For the growing mesh</p><h3>Agent</h3><p>Bring another machine into the fold. Discover a server on your LAN and join with a token to add a worker to your cluster.</p><a href="{{ $guide }}#agent">Bring your compute <span aria-hidden="true">↗</span></a><span class="small-label">Worker node · join token required</span></article>
+      </div>
+    </section>
+    <section class="desktop-section wrap" aria-labelledby="desktop-title">
+      <div class="desktop-frame">
+        <div class="window-bar"><span><i></i><i></i><i></i></span><span>milady@home: ~</span><span>01</span></div>
+        <img src="{{ "images/miladyos-wallpaper.jpg" | relURL }}" width="1920" height="1080" alt="MiladyOS wallpaper with the Milady character and wordmark on a dark violet background" loading="lazy">
+        <div class="terminal-note"><span class="terminal-comment"># latest source · desktop role</span><br><span class="prompt">milady@home</span> ~ $ startx<br><span class="terminal-comment">a little space to make your own.</span><span class="cursor" aria-hidden="true">▌</span></div>
+      </div>
+      <div class="desktop-caption"><p class="eyebrow">A familiar face. A fresh start.</p><h2 id="desktop-title">Less ceremony.<br>More possibility.</h2><p>A console when you need focus. A light Wayland session when you want a desktop. The actual wallpaper from the ISO source, with a little hello from us.</p><a class="text-link" href="{{ $guide }}#desktop">Explore the desktop setup <span aria-hidden="true">↗</span></a></div>
+    </section>
+    <section id="download" class="section download-section" aria-labelledby="download-title">
+      <div class="wrap download-grid">
+        <div><p class="eyebrow">02 / Welcome aboard</p><h2 id="download-title">It starts with<br>a single <em>boot.</em></h2><p>Download the ISO. Pick a role.<br>Give that machine a new purpose.</p><a class="text-link" href="{{ $guide }}">Read the installation guide <span aria-hidden="true">↗</span></a></div>
+        <div class="download-card">
+          <div class="release-heading"><span class="eyebrow"><span class="status-dot"></span> Public ISO</span><span class="small-label">{{ $iso.architecture }} / BIOS + UEFI</span></div>
+          <h3>MiladyOS <span>{{ $iso.version }}</span></h3><p class="release-meta">{{ $iso.size }} <span>·</span> {{ $iso.date }} <span>·</span> Live installer</p>
+          <a class="button primary download-button" href="{{ $iso.url }}">Download ISO <span aria-hidden="true">↓</span></a>
+          <p class="download-note">{{ $iso.note }}</p>
+          <div class="release-links"><a href="{{ $iso.release_url }}">Release notes ↗</a><a href="{{ $guide }}#verify-your-download">How to verify ↗</a></div>
+          <details class="checksum"><summary>SHA-256 checksum</summary><code id="iso-checksum">{{ $iso.sha256 }}</code><button class="copy-button" type="button" data-copy="iso-checksum" hidden>Copy checksum</button><span class="copy-status" role="status"></span></details>
+        </div>
+      </div>
+      <ol class="steps wrap"><li><span>01</span><div><h3>Make room.</h3><p>Use an x86_64 machine or VM. Back up the target disk: installation erases it.</p></div></li><li><span>02</span><div><h3>Boot it up.</h3><p>Write the ISO to a USB drive, or attach it to a VM. Open the text installer.</p></div></li><li><span>03</span><div><h3>Find your role.</h3><p>Choose desktop, server, or agent. Set up your account, confirm, and reboot.</p></div></li></ol>
+    </section>
+    <section class="section wrap future-section" aria-labelledby="future-title">
+      <div><p class="eyebrow">03 / The next possibility <span class="planned">Planned</span></p><h2 id="future-title">Your configuration.<br>Your own MiladyOS.</h2><p>Imagine downloading a system that already knows its role, your SSH keys, and where it belongs. We’re working toward a personal setup volume, bundled with the base ISO.</p><p class="muted">The foundation exists: unattended installs with a <code>cidata</code> volume. The website builder and combined ISO are a future step.</p><a class="text-link" href="{{ $guide }}#unattended-installs">Explore today’s unattended setup <span aria-hidden="true">↗</span></a></div>
+      <div class="seed-diagram" aria-label="Planned flow: base MiladyOS ISO plus your configuration becomes your preconfigured machine"><div><span class="file-symbol" aria-hidden="true">▧</span><strong>MiladyOS.iso</strong><small>The shared foundation</small></div><span class="diagram-plus" aria-hidden="true">+</span><div><span class="file-symbol" aria-hidden="true">⌁</span><strong>Your config</strong><small>The personal part</small></div><p>↓<br><span>Your machine. Ready to belong.</span></p></div>
+    </section>
+    <section class="section wrap faq-section" aria-labelledby="faq-title">
+      <div><p class="eyebrow">A few things before you land</p><h2 id="faq-title">Good questions.</h2></div>
+      <div class="faqs">
+        <details><summary>Is this a desktop OS or a server OS?</summary><p>Both start from the same ISO, with a role selected in the installer. Server and agent roles run the cluster services. Desktop is standalone. The Sway graphical session is in the latest source and is not included in the public {{ $iso.version }} download.</p></details>
+        <details><summary>Can I try it in a virtual machine?</summary><p>Yes. Use an x86_64 VM with its own disposable disk and attach the ISO as boot media. The installer erases its selected target. The <a href="{{ $guide }}#try-in-a-vm">ISO guide</a> includes the repository’s QEMU workflow.</p></details>
+        <details><summary>Does it need an internet connection?</summary><p>The public ISO has no embedded MiladyOS container payload. Server and agent setups need network access to fetch it. Locally built ISOs can embed the payload; GPU drivers and other downloads may still need a connection.</p></details>
+        <details><summary>Can I keep my current operating system?</summary><p>The current installer uses the entire selected disk. It does not provide a guided dual-boot setup. Use a VM or a separate disk, and back up anything you want to keep.</p></details>
+        <details><summary>Can I upload my configuration here?</summary><p>Not yet. You can already prepare a local <code>cidata</code> volume for unattended installation. A web builder and a combined personalized ISO are planned. See the <a href="{{ $guide }}#unattended-installs">current setup instructions</a>.</p></details>
+      </div>
+    </section>
+    <section class="closing wrap"><span class="closing-star" aria-hidden="true">✳</span><p>We are all Milady.</p><h2>Welcome to the mesh.</h2><a class="button primary" href="#download">Find your beginning <span aria-hidden="true">↓</span></a></section>
+  </main>
+  <footer class="wrap"><a class="wordmark" href="{{ .Site.Home.RelPermalink }}">MiladyOS</a><p>Independent machines. Coordinated nonsense. <span>Always have been.</span></p><nav aria-label="Footer navigation"><a href="{{ "docs/" | relURL }}">Docs</a><a href="{{ .Site.Params.github_repo }}">GitHub ↗</a><a href="{{ .Site.Params.github_repo }}/issues">Get help ↗</a></nav></footer>
+</body>
+</html>
