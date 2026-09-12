@@ -6,6 +6,9 @@ description: >
   Your journey into distributed consciousness begins here
 ---
 
+
+**Installing on a new machine?** Start with the [ISO installation guide]({{< relref "/docs/iso" >}}). This page covers container and development deployments.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                                                             │

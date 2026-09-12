@@ -1,0 +1,5 @@
+{{ $iso := .Site.Data.iso }}
+<p>Release <strong>{{ $iso.version }}</strong>:</p>
+{{ highlight (printf "sha256sum %s" $iso.filename) "sh" "" }}
+<p>Expected SHA-256:</p>
+<pre><code>{{ $iso.sha256 }}</code></pre>

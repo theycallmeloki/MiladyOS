@@ -1,5 +1,5 @@
 baseURL = "https://docs.miladyos.net"
-title = "MiladyOS Documentation"
+title = "MiladyOS"
 
 # Language settings
 contentDir = "content/en"
@@ -57,8 +57,8 @@ anchor = "smart"
 
 [languages]
 [languages.en]
-title = "MiladyOS Documentation"
-description = "Distributed AI Infrastructure for Hardware Management"
+title = "MiladyOS"
+description = "Your machine. Part of something bigger. A Debian-based OS for desktops, AI workloads, and the mesh."
 languageName ="English"
 # Weight used for sorting.
 weight = 1
@@ -82,7 +82,8 @@ time_format_blog = "02.01.2006"
 
 # Comment out if you don't want the "print entire section" link enabled.
 [outputs]
-home = ["HTML", "RSS", "JSON"]
+# Docsy builds its search index as an asset, not a home JSON output.
+home = ["HTML", "RSS"]
 section = ["HTML", "print", "RSS"]
 
 [params]
@@ -166,36 +167,20 @@ enable = false
 [params.links]
 # End user relevant links. These will show up on left side of footer and in the community page if you have one.
 [[params.links.user]]
-	name = "User mailing list"
-	url = "https://example.org/mail"
-	icon = "fa fa-envelope"
-        desc = "Discussion and help from your fellow users"
-[[params.links.user]]
-	name ="Twitter"
-	url = "https://example.org/twitter"
-	icon = "fab fa-twitter"
-        desc = "Follow us on Twitter to get the latest news!"
-[[params.links.user]]
-	name = "Stack Overflow"
-	url = "https://example.org/stack"
-	icon = "fab fa-stack-overflow"
-        desc = "Practical questions and curated answers"
-# Developer relevant links. These will show up on right side of footer and in the community page if you have one.
+    name = "Get help"
+    url = "https://github.com/theycallmeloki/MiladyOS/issues"
+    icon = "fab fa-github"
+    desc = "Report an issue or ask for help"
 [[params.links.developer]]
-	name = "GitHub"
-	url = "https://github.com/theycallmeloki/MiladyOS"
-	icon = "fab fa-github"
-        desc = "Development takes place here!"
-[[params.links.developer]]
-	name = "Slack"
-	url = "https://example.org/slack"
-	icon = "fab fa-slack"
-        desc = "Chat with other project developers"
-[[params.links.developer]]
-	name = "Developer mailing list"
-	url = "https://example.org/mail"
-	icon = "fa fa-envelope"
-        desc = "Discuss development issues around the project"
+    name = "GitHub"
+    url = "https://github.com/theycallmeloki/MiladyOS"
+    icon = "fab fa-github"
+    desc = "Explore the source and contribute"
+
+[[menu.main]]
+    name = "Get MiladyOS"
+    url = "/#download"
+    weight = 5
 
 # hugo module configuration
 

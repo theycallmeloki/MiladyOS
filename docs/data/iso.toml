@@ -1,0 +1,11 @@
+# Update these together after verifying a public ISO release. Do not use
+# releases/latest: this repository also publishes unrelated CLI releases.
+version = "0.0.0.0.722"
+date = "10 September 2026"
+filename = "miladyos-0.0.0.0.722.iso"
+size = "1.14 GB"
+architecture = "x86_64"
+url = "https://github.com/theycallmeloki/MiladyOS/releases/download/miladyos-0.0.0.0.722/miladyos-0.0.0.0.722.iso"
+release_url = "https://github.com/theycallmeloki/MiladyOS/releases/tag/miladyos-0.0.0.0.722"
+sha256 = "5951c707a6de4b2f9c3d773cee2f6f64f33eecb49e451e3b70f59dd4ee79d9cb"
+note = "Network required for the container payload. This release predates the Sway desktop session now available in source."

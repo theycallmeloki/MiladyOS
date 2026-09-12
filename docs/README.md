@@ -1,13 +1,17 @@
-# MiladyOS Documentation
+# MiladyOS Website & Documentation
 
-This is the Hugo Docsy documentation site for MiladyOS.
+The homepage welcomes ISO users; `/docs/` keeps the Hugo Docsy documentation.
+The homepage uses a standalone template and local CSS/JS, without loading the
+Docsy theme, remote fonts, or microphone effects. Documentation retains its
+existing theme and search.
 
 ## Quick Start
 
 ### Prerequisites
-- [Hugo extended](https://gohugo.io/installation/) (v0.110.0 or later)
+- [Hugo extended](https://gohugo.io/installation/) (v0.146.0 or later)
 - [Go](https://golang.org/doc/install) (v1.21 or later)
 - [Git](https://git-scm.com/)
+- Node.js and npm (for the locked PostCSS dependencies)
 
 ### Installation
 
@@ -31,13 +35,12 @@ This is the Hugo Docsy documentation site for MiladyOS.
 2. **Initialize Hugo modules**
    ```bash
    cd docs
-   hugo mod init github.com/theycallmeloki/MiladyOS/docs
-   hugo mod get github.com/google/docsy@v0.8.0
+   hugo mod get
    ```
 
 3. **Install dependencies**
    ```bash
-   hugo mod get
+   npm ci
    ```
 
 ### Running Locally
@@ -83,3 +86,31 @@ docs/
 2. Use Markdown with Hugo front matter
 3. Test locally with `hugo server`
 4. Submit pull request
+
+## Welcome page
+
+- `layouts/index.html`: homepage structure and copy.
+- `assets/css/welcome.css`: responsive landing-page styles.
+- `assets/js/welcome.js`: optional checksum clipboard enhancement.
+- `data/iso.toml`: verified public release URL, filename, version, size, date,
+  checksum, and payload/desktop availability note.
+- `content/en/docs/iso/_index.md`: installation and first-boot guide.
+- `static/images/miladyos-wallpaper.jpg`: existing ISO wallpaper, copied from
+  `ISO/desktop/wallpaper.jpg`. Keep these aligned when the brand asset changes.
+
+### Connecting a new ISO
+
+1. Wait for the JIT workflow to finish; inspect the draft release and test the
+   artifact. The workflow's draft release is not publicly downloadable yet.
+2. After the release is published, update **all** fields in `data/iso.toml`
+   from that release, including the exact asset SHA-256 and payload status.
+   Do not point to `releases/latest`: CLI releases share the repository.
+3. Update the desktop availability copy in `layouts/index.html` when the public
+   ISO contains Sway. The current page deliberately distinguishes the older
+   public download from the newer source preview.
+4. Build Hugo and check download, release notes, checksum, guide anchors, and
+   the existing docs navigation on desktop and mobile. Release data is rendered
+   at build time, so the homepage needs no GitHub API call at runtime.
+
+The configuration-volume website builder is a future feature. The landing page
+links to today's local cidata instructions and does not collect files or secrets.
