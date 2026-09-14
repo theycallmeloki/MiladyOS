@@ -294,7 +294,21 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
    container-up on live boot needs the MILADY_DOCKER scratch disk.
 4. Agent join on a second VM (Avahi discover + token) — prove workers insist
    on joining the existing master, and `role-switch.sh` flips a node both
-   ways without corrupting state.
+   ways without corrupting state. **DONE (0.0.0.755)** via the `milady`
+   binary — see Dev loop tooling; the live-ISO `role-switch` path is dead
+   (below).
+5. **Drive the bring-up from the `milady` binary alone** — `milady k3s
+   master` on one node, `milady k3s join` on another (Avahi discovery, no
+   `--master`). **DONE/VERIFIED (0.0.0.755)**: `qemu-milady-cluster.sh`
+   installs two nodes unattended, boots them, and forms the cluster with
+   the binary; both nodes `Ready`, docker runtime.
+6. **Long-term (north star): the MCP drives host ops.** The operator should
+   eventually be able to tell the MiladyOS MCP "add this node to the
+   cluster" and have the agent run `milady k3s join --token …` (and the
+   lifecycle around it) on the host itself — the `milady` CLI is the tool
+   surface, the MCP is the caller. Not built yet; see `docs/AGENT-FIRST.md`
+   §2.3 ("Host operations as MCP tools") for the contract we are designing
+   toward.
 
 ## 5. Risks
 
@@ -318,12 +332,41 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
 
 - `qemu-dev.sh [iso]` — single dev VM: slirp user-net, SSH host:2222→guest,
   serial telnet :5555 (root autologin, dev-only hook). Fastest iteration.
-- `qemu-dev-2vm.sh [iso]` — 2-VM k3s formation test: host tap bridge
+- `qemu-dev-2vm.sh [iso]` — 2-VM dev/inspection rig: host tap bridge
   `br-milady` (172.20.0.0/24, multicast on — slirp has NO multicast, so the
   D4 Avahi join path is untestable there), fixed MAC→IP dnsmasq leases
   (server 172.20.0.10, agent 172.20.0.11), NAT for registry pulls.
-  sudo-based host setup, idempotent, cleaned up on exit.
-- 2-VM test flow (VERIFIED 0.0.0.579, fully automatic except the token):
+  sudo-based host setup, idempotent, cleaned up on exit. **Note:** the live
+  ISO runs the text installer on ttyS0, which Conflicts with the serial
+  getty, so there is no shell on the serial console — the old "telnet in and
+  run `role-switch`" flow no longer applies. Use this script to watch the
+  installer/live session; use `qemu-milady-cluster.sh` to form a cluster.
+- `qemu-milady-cluster.sh [iso]` — **the milady-binary bring-up test.**
+  Phase 1 installs both nodes unattended (a `cidata` volume per VM), phase 2
+  boots the installed disks, phase 3 runs `milady k3s master` on VM1 and
+  `milady k3s join --token` on VM2. `SKIP_INSTALL=1` reuses installed disks;
+  `KEEP_RUNNING=1` leaves the rig up on exit for inspection.
+- **milady-binary cluster formation VERIFIED (0.0.0.755)** — the Tier-A goal:
+  the binary alone pairs two machines. VM1 `milady k3s master` publishes the
+  Avahi advert and prints the pairing invite (token + QR); VM2 `milady k3s
+  join --token …` **Avahi-discovers the master itself** (no `--master`), writes
+  the `k3s-agent.service.d` drop-in, and starts the agent. Result: two nodes
+  `Ready`, `k3s v1.36.4+k3s1`, docker runtime. The token value is the only
+  thing that crosses between nodes — by design (PLAN §Join-token secrecy).
+  Bugs this test flushed out (all fixed in the rigs): cidata drive path lost
+  its `cidata/` prefix (basename) → qemu exited at once; a default-deny
+  firewall (ufw) dropped guest DHCP DISCOVER on INPUT → guests fell back to
+  169.254.x.x and SSH never came up; `dnsmasq` was an unchecked prerequisite;
+  `SSH_KEY` resolved to `/root/.ssh` under sudo; serial socket/log paths must
+  live under `/tmp`; and disk order must be cidata(vda)/scratch(vdb,
+  MILADY_DOCKER)/target(vdc) or `persist-docker` formats the install target.
+- **Live-ISO `role-switch` path retired as a test flow.** `role-detect.sh`
+  still exists and still runs on first boot of an *installed* node, but the
+  live session boots `milady-install` on ttyS0 (Conflicts=serial-getty), so
+  there is no console shell to type `milady-role-switch` into. Cluster
+  bring-up is done by the `milady` binary on installed nodes (above), not by
+  console role-switch.
+- 2-VM role-detect flow (VERIFIED 0.0.0.579, historical):
   VM1 boots → `role-switch server` → VM2 boots fresh → role-detect
   Avahi-discovers VM1 → join drop-in written → agent joins. Both nodes
   Ready, docker runtime, distinct IPs. Found + fixed by this test:
@@ -332,8 +375,7 @@ Blocking: **D1–D4 RULED** — foundation unblocked. D5–D12 defaults stand as
   -t cold-cache race (now retried), and duplicate hostnames (every node
   boots "debian"; k3s rejects the second registration) — RULED: random
   hostname `milady-<10001..99999>` at first boot (1..10000 reserved for
-  NFT identity mapping). Token stays operator-mediated by design
-  (secrecy); the only manual step.
+  NFT identity mapping).
 - **Container-up milestone VERIFIED (0.0.0.593)** — first "done" item of
   the plan (§4.3): Docker up, image loaded, container up, k3s server
   ready, all on one ISO. `miladyos` container Up on both nodes of the

@@ -11,7 +11,7 @@
 | D1 | ISO base | Debian 13 `live-build` | VERIFIED |
 | D2 | Delivery | live + text installer (`milady-install`) | VERIFIED |
 | D3 | k3s runtime | `--docker` (one runtime) | VERIFIED |
-| D4 | Role election | manual (`server\|agent\|desktop`) + clean role-switch; agents Avahi-discover and insist on joining | VERIFIED |
+| D4 | Role election | manual (`server\|agent\|desktop`) + clean role-switch; agents Avahi-discover and insist on joining | VERIFIED (via `milady k3s master`/`join`, 0.0.0.755 — live-console role-switch retired) |
 | D5 | k3s version | latest stable from `get.k3s.io`; `K3S_VERSION` honored if exported | VERIFIED |
 | D6 | Topology | single server first → 3-server embedded-etcd behind keepalived VIP | RULED |
 | D7 | Image source | embedded payload, registry as override | IMPLEMENTED, **not boot-verified** |
@@ -69,10 +69,53 @@ screen.
 (stop k3s + container, reset `/var/lib/rancher/k3s`, restore enablement) so a
 switch never leaves a half-formed datastore. Server→agent backups land in
 `/var/lib/rancher/k3s-role-switch-backup`. Both directions were verified live in
-the 2-VM bridge rig (0.0.0.579).
+the 2-VM bridge rig (0.0.0.579) — **but that flow is no longer reachable from a
+live boot** (below).
+
+**Update (0.0.0.755) — the `milady` binary is the bring-up path.** The live ISO
+runs `milady-install` on ttyS0, and that unit `Conflicts=serial-getty@ttyS0`,
+so a live session has **no console shell** to type `milady-role-switch` into. So
+the supported bring-up is: install to disk, boot, then drive role from the
+binary — `milady k3s master` / `milady k3s join` (see “Drive the bring-up from
+the `milady` binary” below). `role-detect.sh` still runs on first boot of an
+installed node and still honours the same role inputs; the binary is the
+operator-facing equivalent for a running node.
 
 HA direction: agents point at a keepalived VIP so they don't care how many
 masters sit behind it.
+
+## D4 status — VERIFIED (binary path, 0.0.0.755)
+
+The role model is unchanged; the *mechanism* that is verified is now the binary
+(above). `qemu-milady-cluster.sh` proves it end to end: two unattended installs,
+boot, `milady k3s master` (server + Avahi advert + pairing invite) and
+`milady k3s join --token` (agent Avahi-discovers the master with no `--master`).
+Both nodes reach `Ready` on the docker runtime.
+
+## Drive the bring-up from the `milady` binary (VERIFIED 0.0.0.755)
+
+`milady` is the host companion CLI (`milady/`, Go) and the tool surface for
+cluster operations. The roles map to subcommands:
+
+| subcommand | effect |
+|---|---|
+| `milady k3s master` (aliases `server`, `init`) | purge any agent state, publish the Avahi `_kubernetes._tcp` advert, enable+start `k3s.service`, persist `ROLE=server`, wait for the node-token, print the pairing invite (token + QR). |
+| `milady k3s join` (alias `agent`) | Avahi-discover the master (or `--master`), write `k3s-agent.service.d/milady-join.conf` (`K3S_URL` + `K3S_TOKEN`), persist `ROLE=agent`, enable+start `k3s-agent.service`. |
+| `milady k3s pair` | the operator handshake: on a master, print the invite; on an agent, consume `--invite`/`--token`/prompt. |
+| `milady k3s status` | show this host's role, unit state and token presence. |
+
+**The token is the one thing that must cross between nodes** (PLAN §Join-token
+secrecy), so it is read from `--token`, `/etc/milady/join-token`, or the prompt —
+never copied automatically. The *mechanism* of the join is 100% the binary.
+
+**North star (not built): the MCP drives these host ops.** Today an operator (or
+a test harness) runs the subcommand. The intended end state is that the MiladyOS
+MCP can run host commands itself — an agent asked to “add this node to the
+cluster” calls `milady k3s join --token …` on the host and reports back. The
+`milady` CLI is deliberately the tool surface that makes that possible; see
+`docs/AGENT-FIRST.md` §2.3. Planning assumption: every host op we need the agent
+to perform should have a `milady` subcommand and a non-interactive
+(`--token`/`--json`/`--dry-run`) form it can be driven from.
 
 ## D5 — k3s version (RULED)
 
