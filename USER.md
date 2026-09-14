@@ -4,7 +4,7 @@
 
 - **Name:** Loki San
 - **What to call them:** Loki, or operator
-- **Handle:** @ogmilady (theycallmeloki on GitHub)
+- **Handle:** @chillgates_ (on X) (theycallmeloki on GitHub)
 - **Notes:** Builder of MiladyOS - a distributed consciousness computing framework
 
 ## Context
