@@ -15,12 +15,15 @@
 #       server 02:00:00:00:00:01 -> 172.20.0.10
 #       agent  02:00:00:00:00:02 -> 172.20.0.11
 #
-# Guests (both boot ROLE=agent by default — D4 manual selection):
-#   VM1 (server):  telnet localhost 5555 -> milady-role-switch server
-#                  (k3s server + Avahi advert; node-token on console)
-#   VM2 (agent):   telnet localhost 5556 -> boots, Avahi-discovers VM1,
-#                  joins as agent with the token
-#   ssh root@172.20.0.10 / root@172.20.0.11 (host is on the bridge)
+# Guests (both boot the INSTALLER on ttyS0, not a shell — see note below):
+#   The live ISO runs the text installer (milady-install) on ttyS0, and that
+#   unit Conflicts=serial-getty@ttyS0 — so there is NO shell on the serial
+#   console and `milady-role-switch` cannot be typed in a live session.
+#   To form a cluster you must INSTALL to disk (via cidata or the TUI) and then
+#   run `milady k3s master` / `milady k3s join` on the installed nodes. See
+#   qemu-milady-cluster.sh for the fully automated milady-driven path, or
+#   qemu-install-test.sh for the install half.
+#   This script remains useful for interactive install/dev inspection.
 set -euo pipefail
 
 ISO="${1:-out/miladyos-$(bash version.sh).iso}"
@@ -56,6 +59,21 @@ cleanup() {
 trap cleanup EXIT
 
 setup() {
+    # --- preflight: the rig needs these or the guests get no network/accel ---
+    local missing=0
+    for tool in dnsmasq; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            echo "ERROR: '$tool' not found — the guests will get no DHCP and no" >&2
+            echo "       address, so SSH/telnet will fail. Install it first:" >&2
+            echo "         sudo pacman -S dnsmasq      # (Arch/Omarchy)" >&2
+            echo "         sudo apt install dnsmasq    # (Debian/Ubuntu)" >&2
+            missing=1
+        fi
+    done
+    [ -e /dev/kvm ]     || { echo "ERROR: /dev/kvm missing (no KVM acceleration)" >&2; missing=1; }
+    [ -e /dev/net/tun ] || { echo "ERROR: /dev/net/tun missing (tap devices unavailable)" >&2; missing=1; }
+    [ "$missing" -eq 0 ] || exit 1
+
     sudo ip link add dev "$BR" type bridge 2>/dev/null || true
     sudo ip link set dev "$BR" type bridge mcast_snooping 0 2>/dev/null || true
     sudo ip addr replace "$GW/24" dev "$BR" 2>/dev/null || true
@@ -75,6 +93,15 @@ setup() {
     # docker may set the FORWARD policy to DROP — let bridge traffic through
     sudo nft add rule ip filter FORWARD iifname "$BR" accept 2>/dev/null || true
     sudo nft add rule ip filter FORWARD oifname "$BR" accept 2>/dev/null || true
+    # INPUT: DHCP from the guests goes to the host (255.255.255.255:67), so a
+    # default-deny firewall (ufw active) drops it and the guests never get a
+    # lease. Accept bridge traffic. Idempotent.
+    if ! sudo nft list chain ip filter INPUT 2>/dev/null | grep -q 'iifname "br-milady"'; then
+        sudo nft insert rule ip filter INPUT iifname "$BR" accept 2>/dev/null || true
+    fi
+    # DNS/DHCP also arrive on UDP 67/68 — accept explicitly in case the bridge
+    # rule is shadowed by an earlier drop rule.
+    sudo nft add rule ip filter INPUT udp dport '{ 67, 68 }' accept 2>/dev/null || true
 }
 
 start_dhcp() {
@@ -106,21 +133,33 @@ start_dhcp() {
             --dhcp-host=02:00:00:00:00:02,172.20.0.11 \
             --dhcp-leasefile=/run/milady-dhcp.leases \
             --pid-file=/run/milady-dhcp.pid >/dev/null 2>&1 &
-        sleep 1
-        DHCP_PID=$(sudo cat /run/milady-dhcp.pid 2>/dev/null || true)
-        echo "dnsmasq: own instance pid $DHCP_PID (DHCP+DNS)"
+        # poll for the pid file instead of a fixed sleep (the old sleep 1 raced
+        # the daemon and left DHCP_PID empty, so cleanup could not stop it)
+        for _ in $(seq 1 20); do
+            DHCP_PID=$(sudo cat /run/milady-dhcp.pid 2>/dev/null || true)
+            [ -n "$DHCP_PID" ] && break
+            sleep 0.5
+        done
+        if [ -n "$DHCP_PID" ] && sudo kill -0 "$DHCP_PID" 2>/dev/null; then
+            echo "dnsmasq: own instance pid $DHCP_PID (DHCP+DNS)"
+        else
+            echo "ERROR: dnsmasq failed to start — guests will get no DHCP" >&2
+            exit 1
+        fi
     fi
 }
 
-echo "=== MiladyOS 2-VM k3s formation test ==="
+echo "=== MiladyOS 2-VM rig (interactive dev inspection) ==="
 echo "ISO:       $ISO"
 echo "bridge:    $BR $GW/24 (multicast on)"
 echo "server VM: telnet localhost 5555 | ssh root@$SERVER_IP"
 echo "agent VM:  telnet localhost 5556 | ssh root@$AGENT_IP"
 echo
-echo "1. VM1 console:  milady-role-switch server   (wait for node-token)"
-echo "2. boot VM2 fresh -> it Avahi-discovers VM1 and joins as agent"
-echo "3. VM1: k3s kubectl get nodes   (both Ready)"
+echo "NOTE: the live ISO runs the text installer on ttyS0 (no shell there)."
+echo "      To form a cluster, install to disk then run the milady binary:"
+echo "        milady k3s master          (on the server node)"
+echo "        milady k3s join --token T  (on each agent)"
+echo "      For the fully automated path use: qemu-milady-cluster.sh"
 echo
 
 setup
