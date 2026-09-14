@@ -399,7 +399,10 @@ owns the operations that must run on the real host and installs to
 |---|---|
 | `milady ask [prompt]` | drive the container's MCP (OpenAI-compatible + function calling) |
 | `milady slurp <path> [--push url]` | package a host folder as a build context (git/.dockerignore-aware) |
-| `milady k3s join` | discover a peer master + join the cluster (stub) |
+| `milady k3s master` | make this host the k3s control plane (server) + print the pairing invite |
+| `milady k3s join` | discover a peer master + join the cluster as an agent (`agent` alias) |
+| `milady k3s pair` | the operator pairing step: print the invite on a master, consume it on an agent |
+| `milady k3s status` | show this host's role + k3s unit/advert/token state |
 | `milady update [--check]` | self-update from the `milady-<os>-<arch>` release assets |
 | `milady version` | build/version banner |
 

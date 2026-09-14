@@ -32,7 +32,12 @@ func newK3sCmd() *cobra.Command {
 		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 
-	cmd.AddCommand(newK3sJoinCmd())
+	cmd.AddCommand(
+		newK3sMasterCmd(),
+		newK3sJoinCmd(),
+		newK3sPairCmd(),
+		newK3sStatusCmd(),
+	)
 
 	return cmd
 }
@@ -55,77 +60,35 @@ func newK3sJoinCmd() *cobra.Command {
 	var dryRun bool
 
 	cmd := &cobra.Command{
-		Use:   "join",
-		Short: "Join this host to a k3s cluster (token discovery + registration)",
+		Use:     "join",
+		Aliases: []string{"agent"},
+		Short:   "Join this host to a k3s cluster (token discovery + registration)",
 		Long: "Join this host to a k3s cluster as an agent.\n\n" +
 			"The master is discovered over Avahi (_kubernetes._tcp) unless --master\n" +
 			"is given; the join token comes from " + joinTokenFile + " unless --token\n" +
-			"is given. Requires root (writes a systemd drop-in and drives systemd).",
+			"is given. Requires root (writes a systemd drop-in and drives systemd).\n\n" +
+			"For the operator-mediated handshake use `milady k3s pair`.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			out := cmd.OutOrStdout()
-
-			if os.Geteuid() != 0 {
-				return fmt.Errorf("k3s join must run as root (writes %s and drives systemd)", agentDropIn)
+			if err := requireRoot("k3s join"); err != nil {
+				return err
 			}
-			if _, err := os.Stat(discoverHelper); err != nil {
-				return fmt.Errorf("not a MiladyOS node: %s not found", discoverHelper)
+			if err := requireMiladyOSNode(); err != nil {
+				return err
 			}
 
 			if master == "" {
-				b, err := exec.Command(discoverHelper).Output()
-				master = strings.TrimSpace(string(b))
-				if err != nil || master == "" {
-					return fmt.Errorf("no k3s master discovered on the LAN " +
-						"(is a server node advertising _kubernetes._tcp?) — pass --master to override")
-				}
-			}
-
-			if token == "" {
-				if b, err := os.ReadFile(joinTokenFile); err == nil {
-					token = firstLine(string(b))
-				}
-			}
-
-			dropIn := "[Service]\n" +
-				fmt.Sprintf("Environment=\"K3S_URL=https://%s:6443\"\n", master)
-			if token != "" {
-				dropIn += fmt.Sprintf("Environment=\"K3S_TOKEN=%s\"\n", token)
-			} else {
-				fmt.Fprintf(out, "warning: no join token found (%s or --token); "+
-					"the server may reject this agent\n", joinTokenFile)
-			}
-
-			fmt.Fprintf(out, "master: %s\ntoken:  %s\n", master, redact(token))
-
-			if dryRun {
-				fmt.Fprintf(out, "\n--dry-run: would write %s:\n%s", agentDropIn, dropIn)
-				return nil
-			}
-
-			if err := os.MkdirAll(agentDropInDir, 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(agentDropIn, []byte(dropIn), 0o644); err != nil {
-				return err
-			}
-			// Persist the role so the next boot rejoins instead of re-deciding.
-			if err := persistRole("agent"); err != nil {
-				return err
-			}
-
-			for _, args := range [][]string{
-				{"daemon-reload"},
-				{"enable", agentUnit},
-				{"--no-block", "start", agentUnit},
-			} {
-				if err := runSystemctl(out, args...); err != nil {
+				var err error
+				master, err = discoverMaster()
+				if err != nil {
 					return err
 				}
 			}
-
-			fmt.Fprintf(out, "k3s-agent configured for https://%s:6443\n", master)
-			return nil
+			if token == "" {
+				token = tokenFromFiles()
+			}
+			return joinAgent(out, master, token, dryRun)
 		},
 	}
 
