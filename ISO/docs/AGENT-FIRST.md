@@ -121,6 +121,62 @@ sense or affect flows through it: pipeline/CI tools, file ops, evolution,
 grounded retrieval, oracle. Its surface is curated and evolved like a shell's —
 not appended to casually.
 
+### 2.3 Host operations as MCP tools (goal — not built)
+
+> Status: **GOAL / DESIGN**. Today host ops are run by an operator or a test
+> harness. The end state is that **milady runs them herself**, via MCP.
+
+The fleet bring-up is the first concrete case. Forming a cluster already works
+through the `milady` host CLI (`milady k3s master|join|pair|status`), which is
+verified end to end on the 2-VM rig (0.0.0.755) and documented in
+`docs/DECISIONS.md`. But the operator still types the command. The thesis of
+this OS says that is backwards: *milady is the user.* So the target is:
+
+```
+human/agent:  "add milady-agent to the cluster"
+      -> MCP :6000  tool: host.run  /  k3s.join
+      -> milady k3s join --token <t> --json      (on the host, as root)
+      -> structured result back through MCP
+```
+
+The container already reaches the host — it is `--privileged --net=host` with
+`/var/run/docker.sock` mounted — so the missing piece is **not** connectivity,
+it is a *curated, safe tool surface* over the host companion CLI. The design
+contract, so this can be built without re-plumbing:
+
+1. **Every host op is a `milady` subcommand.** The CLI is the single tool
+   surface; MCP wraps it rather than re-implementing it. New capability is added
+   as a subcommand first.
+2. **Subcommands are non-interactive-drivable.** Every op that an agent may run
+   has flags that make it scriptable and inspectable: `--json` (machine output),
+   `--dry-run` (plan without mutating), and explicit inputs instead of prompts
+   (e.g. `--token`, `--master`) — with the interactive prompt only as a fallback.
+   `milady k3s join`/`master`/`status` already follow this shape.
+3. **Secrets stay out of the agent's argv where they can.** The join token is
+   read from `/etc/milady/join-token` (or a cidata volume) rather than being
+   pasted onto a command line that lands in `/proc` — the same rule as PLAN
+   §Join-token secrecy. An MCP tool should pass secrets by file/handle, not by
+   argument.
+4. **Idempotent + reported.** A tool call must be safe to retry (`join` is
+   already idempotent: it rewrites the drop-in and restarts the unit) and return
+   structured state (`role`, unit `ActiveState`, token presence) so the agent can
+   reason about the result instead of parsing prose.
+5. **Privilege is explicit.** Host ops need root; the MCP tool surface should
+   make that legible (which tools require elevation) rather than smuggling it.
+
+Near-term stepping stones toward this:
+
+- `milady k3s status --json` — the readable state an MCP tool would return.
+- An MCP tool that runs a **whitelisted** set of `milady` subcommands on the
+  host (start with read-only: `status`, `version`) and only later the mutating
+  ones (`k3s join`, `k3s master`).
+- The operator-mediated `pair` handshake stays the default for secrets; MCP
+  automation of `join` presupposes a token already staged on the node
+  (`/etc/milady/join-token`), which is the same trust boundary as today.
+
+This is the agent-first path to the fleet: not a human running `kubectl`, but
+milady running `milady`.
+
 ---
 
 ## 3. The self-improvement loop (the differentiator)
@@ -272,6 +328,15 @@ Severity: 🔴 blocking / 🟠 high / 🟡 medium / 🟢 low. Update status as r
 - **D5 · 🟡 Minimum-footprint goal.** nano ~2 GB; real target: the whole stack
   (brain + minimal control loop + retrieval) runs on a 4 GB machine and below, and
   smaller generations extend it to tiny/SBC targets. Footprint is a feature.
+- **D6 · 🟠 Host ops as MCP tools.** The fleet bring-up already works through the
+  `milady` host CLI (`k3s master|join|pair|status`, verified 0.0.0.755), but an
+  operator runs it. Goal: the MCP runs host ops itself, so “add this node to the
+  cluster” becomes an agent action. Contract in **§2.3**: every host op is a
+  `milady` subcommand, driven non-interactively (`--json`/`--dry-run`, secrets via
+  file not argv), idempotent and reported. Start read-only (`k3s status`) and
+  whitelisted; only then allow mutating tools. Prereq for `join` automation: the
+  token is already staged at `/etc/milady/join-token` (same trust boundary as
+  today).
 
 ### E — Evolution & long horizon
 
