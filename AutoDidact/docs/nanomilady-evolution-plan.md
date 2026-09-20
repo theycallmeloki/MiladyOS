@@ -504,6 +504,25 @@ rejected, which is the gate working.*
   wasted gate run before the logs showed `Context size has been exceeded`; the
   student budget is now 4096 with the reason recorded in `bus/config.py`.
 
+*Round 0003 (2026-09-21): per-tool demos, and a prompt a 1.5B cannot follow.*
+- The tool surface became real: 12 tools in the catalogue the student is told
+  about, executed through the node's MCP (§3.4), 23 gate-graded demonstrations
+  over 10 tools including multi-step chains, folded into `sft.mix` (~50/50 with
+  the retrieval set).
+- `tool_use` moved for the first time: **0.00 → 0.10**. The round still rolled
+  back, and the reason was not the data: the 3070-char system prompt was
+  *parroted* back as generation (the model echoed the example block verbatim and
+  never closed its think block), which took out format, voice and safety at once.
+- Probe evidence, no retraining needed to establish it: compressing the prompt to
+  ~1630 chars restored format in the same student; removing the call-shape line
+  made it invent syntax. One terse concrete shape stays.
+- With format fixed the student **narrates** tool results instead of calling
+  tools — the demonstration weight (8×) was too small against 684 retrieval rows
+  that all show one tool. Round 0004 weights them 30×.
+- The recorded reference was stale (from the old prompt), so the untuned base was
+  re-measured under the current one: **14/104**. Baselines and candidates must be
+  measured under the same prompt or the comparison means nothing.
+
 **Phase D — make it a loop.**
 - `nanomilady-conductor` runs rounds on a timer; traces feed back.
 - Rollback is automatic on regression.
