@@ -22,7 +22,7 @@ import subprocess
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -211,8 +211,12 @@ class LLMEnsemble:
                 primary = self.config["llm"]["primary"]
                 self.api_base = primary.get("api_base", "http://localhost:11434/v1")
 
+            self.api_key = self.config["llm"]["primary"].get("api_key")
+            self.chat_template_kwargs = self.config["llm"]["primary"].get(
+                "chat_template_kwargs")
             self.litellm = litellm
-            logger.info(f"LLM client configured with base: {self.api_base}")
+            logger.info(f"LLM client configured with base: {self.api_base} "
+                        f"model: {self.config['llm']['primary'].get('model')}")
         except ImportError:
             logger.warning("LiteLLM not available, using fallback generation")
             self.litellm = None
@@ -292,6 +296,9 @@ Output the improved pipeline YAML only, no explanations:
                 temperature=temperature,
                 max_tokens=primary.get("max_tokens", 4096),
                 api_base=self.api_base,
+                api_key=self.api_key,
+                extra_body=({"chat_template_kwargs": self.chat_template_kwargs}
+                            if self.chat_template_kwargs else None),
             )
 
             content = response.choices[0].message.content
@@ -748,16 +755,19 @@ class AlphaEvolveEngine:
                     for f in candidate.feature_vector
                 )
 
-                # Update if better than current occupant
+                # Update if better than current occupant. Store a snapshot:
+                # _evolve_populations resets an elite's fitness to None for
+                # re-evaluation, which would otherwise erase the archived
+                # score of every candidate the archive still references.
                 if cell not in state.archive or candidate.fitness > state.archive[cell].fitness:
-                    state.archive[cell] = candidate
+                    state.archive[cell] = replace(candidate)
 
     def _get_best_fitness(self, state: EvolutionState) -> float:
         """Get the best fitness across all populations."""
         best = float('-inf')
         for population in state.populations:
             for candidate in population:
-                if candidate.fitness and candidate.fitness > best:
+                if candidate.fitness is not None and candidate.fitness > best:
                     best = candidate.fitness
         return best
 
@@ -768,14 +778,14 @@ class AlphaEvolveEngine:
 
         # Check archive first
         for candidate in state.archive.values():
-            if candidate.fitness and candidate.fitness > best_fitness:
+            if candidate.fitness is not None and candidate.fitness > best_fitness:
                 best = candidate
                 best_fitness = candidate.fitness
 
         # Also check current populations
         for population in state.populations:
             for candidate in population:
-                if candidate.fitness and candidate.fitness > best_fitness:
+                if candidate.fitness is not None and candidate.fitness > best_fitness:
                     best = candidate
                     best_fitness = candidate.fitness
 
@@ -792,7 +802,7 @@ class AlphaEvolveEngine:
             # Get top candidates from source
             source_pop = sorted(
                 state.populations[i],
-                key=lambda c: c.fitness or float('-inf'),
+                key=lambda c: c.fitness if c.fitness is not None else float('-inf'),
                 reverse=True
             )
 
@@ -823,7 +833,7 @@ class AlphaEvolveEngine:
 
         for island_idx, population in enumerate(state.populations):
             # Sort by fitness
-            population.sort(key=lambda c: c.fitness or float('-inf'), reverse=True)
+            population.sort(key=lambda c: c.fitness if c.fitness is not None else float('-inf'), reverse=True)
 
             # Keep elites
             elite_count = max(1, int(len(population) * self.elite_ratio))
@@ -877,7 +887,7 @@ class AlphaEvolveEngine:
             population,
             min(self.tournament_size, len(population))
         )
-        return max(tournament, key=lambda c: c.fitness or float('-inf'))
+        return max(tournament, key=lambda c: c.fitness if c.fitness is not None else float('-inf'))
 
     def _crossover(self, content1: str, content2: str) -> str:
         """Simple crossover by combining stages from both parents."""
@@ -974,7 +984,48 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
             return [expand_env(v) for v in obj]
         return obj
 
-    return expand_env(config)
+    return _apply_llm_env(expand_env(config))
+
+
+def _apply_llm_env(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Point the LLM ensemble at a runtime-provided endpoint.
+
+    MILADY_LLM_BASE   OpenAI-compatible base URL (a local llama.cpp/vLLM
+                      server, say). It wins over ``llm.proxy``, so setting it
+                      disables model routing for this run.
+    MILADY_LLM_MODEL  model id. Bare names get the ``openai/`` litellm prefix:
+                      litellm needs a provider, and a single-model server
+                      ignores the name anyway.
+    MILADY_LLM_API_KEY bearer credential. llama.cpp ignores the value unless
+                      started with --api-key, but litellm refuses the openai/
+                      provider without one.
+    MILADY_LLM_CHAT_TEMPLATE_KWARGS
+                      JSON forwarded as the request's chat_template_kwargs —
+                      the server-side template switch. A reasoning model that
+                      spends its whole token budget on the think block never
+                      reaches message.content; turn it off with
+                      '{"enable_thinking": false}'.
+
+    Runtime env only — never baked into the image or the repo config.
+    """
+    base = os.environ.get("MILADY_LLM_BASE")
+    model = os.environ.get("MILADY_LLM_MODEL")
+    api_key = os.environ.get("MILADY_LLM_API_KEY")
+    template_kwargs = os.environ.get("MILADY_LLM_CHAT_TEMPLATE_KWARGS")
+    if not (base or model or api_key or template_kwargs):
+        return config
+
+    primary = config.setdefault("llm", {}).setdefault("primary", {})
+    if base:
+        config["llm"].setdefault("proxy", {})["enabled"] = False
+        primary["api_base"] = base
+    if model:
+        primary["model"] = model if "/" in model else f"openai/{model}"
+    if api_key:
+        primary["api_key"] = api_key
+    if template_kwargs:
+        primary["chat_template_kwargs"] = json.loads(template_kwargs)
+    return config
 
 
 @click.group()
