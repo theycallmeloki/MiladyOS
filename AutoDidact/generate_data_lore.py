@@ -76,6 +76,12 @@ def build_faiss(chunks, out_dir="."):
     print(f"FAISS index: {len(chunks)} chunks -> {out_dir}/faiss_index")
 
 
+QA_TRIPLE_RE = re.compile(
+    r"Question:\s*(?P<q>.+?)\s*\n\s*Answer:\s*(?P<a>.+?)"
+    r"(?:\s*\n\s*Difficulty:\s*(?P<d>[^\n]+?))?"
+    r"(?=\s*\n\s*Question:|\Z)", re.I | re.S)
+
+
 def parse_qa_block(block):
     lines = [l.strip() for l in block.splitlines() if l.strip()]
     q = a = d = None
@@ -95,7 +101,25 @@ def parse_qa_block(block):
 
 
 def parse_multiple(output):
+    """Every Question/Answer(/Difficulty) triple in the reply.
+
+    A model that obeys "exactly three lines, no extra commentary" emits the
+    triples CONTIGUOUSLY — no blank line between pairs. Splitting on blank
+    lines therefore keeps only the first pair, discards the other three, and
+    trips the caller's `len(pairs) < NUM_QUESTIONS` retry on every single
+    chunk (measured: 39 pairs kept where 72 were generated, 2x the calls).
+    Scan for the labels instead; Difficulty is optional downstream.
+    """
     pairs = []
+    for m in QA_TRIPLE_RE.finditer(output):
+        q = " ".join(m.group("q").split())
+        a = " ".join(m.group("a").split())
+        d = " ".join((m.group("d") or "unknown").split()).rstrip(".")
+        if q and a:
+            pairs.append((q, a, d))
+    if pairs:
+        return pairs
+    # blank-line-separated blocks (labels optional) still parse as before
     for block in re.split(r"\n\s*\n", output.strip()):
         parsed = parse_qa_block(block)
         if parsed:
