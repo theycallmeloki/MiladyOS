@@ -109,8 +109,29 @@ def parse_qa_block(block):
     return None
 
 
+QA_TRIPLE_RE = re.compile(
+    r"Question:\s*(?P<q>.+?)\s*\n\s*Answer:\s*(?P<a>.+?)"
+    r"(?:\s*\n\s*Difficulty:\s*(?P<d>[^\n]+?))?"
+    r"(?=\s*\n\s*Question:|\Z)", re.I | re.S)
+
+
 def parse(output):
+    """Every Question/Answer(/Difficulty) triple in the reply.
+
+    Contiguous triples (no blank line between pairs — what a model does when
+    told to emit no extra commentary) must all be kept: splitting on blank
+    lines keeps only the first, which silently halves the pass via the
+    `len(pairs) < per_pass // 2` retry. Difficulty is optional here.
+    """
     pairs = []
+    for m in QA_TRIPLE_RE.finditer(output):
+        q = " ".join(m.group("q").split())
+        a = " ".join(m.group("a").split())
+        d = " ".join((m.group("d") or "unknown").split()).rstrip(".")
+        if q and a:
+            pairs.append((q, a, d))
+    if pairs:
+        return pairs
     for block in re.split(r"\n\s*\n", output.strip()):
         parsed = parse_qa_block(block)
         if parsed:
