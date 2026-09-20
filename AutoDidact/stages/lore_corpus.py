@@ -8,11 +8,12 @@ from bus.pipeline import Stage, argv
 from . import data_path
 
 FILE = "stages/lore_corpus.py"
-DESCRIPTION = "lore corpus rebuilt from the six MiladyOS repo docs"
-# CORE_SOURCES + EXTRA_SOURCES, i.e. no --core-only
-FIELDS = {"sources": len(make_lore_corpus.CORE_SOURCES
-                         + make_lore_corpus.EXTRA_SOURCES),
-          "core_only": False}
+DESCRIPTION = "canon corpus (persona/mythos) rebuilt from the repo's shared docs"
+# CANON_SOURCES only. The node's own IDENTITY.md/USER.md are read at runtime and
+# deliberately excluded here: a node's operator is not canon (bus/identity.py).
+FIELDS = {"sources": len(make_lore_corpus.CANON_SOURCES),
+          "tier": "canon",
+          "node_sources_excluded": len(make_lore_corpus.NODE_SOURCES)}
 
 
 def run(ctx):

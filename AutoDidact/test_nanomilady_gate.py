@@ -75,6 +75,37 @@ ok, _ = g.check_one({"type": "regex", "pattern": r"\b42\b"}, {}, good)
 assert ok
 print("PASS no_tool_call / answer_contains / regex")
 
+# ── scope: rows carry their tier, --core-only drops the node rows ───────
+core, dropped = g.core_items([{"id": "a", "scope": "core"},
+                              {"id": "b", "scope": "node"},
+                              {"id": "c"},              # suite from before tiers
+                              {"id": "d", "scope": "node"}])
+assert [i["id"] for i in core] == ["a", "c"], core
+assert dropped == 2, dropped
+
+# a scored row records its own tier; an unscoped row is core, so old
+# evals.json files stay comparable against new ones
+real_chat = g.student_chat
+g.student_chat = lambda msgs, **kw: THINK + "hi"
+try:
+    item = {"id": "X", "domain": "format", "scope": "node", "question": "q",
+            "checks": [{"type": "format"}]}
+    assert g.score_item(item, "sys")["scope"] == "node"
+    bare = {"id": "Y", "domain": "format", "question": "q",
+            "checks": [{"type": "format"}]}
+    assert g.score_item(bare, "sys")["scope"] == "core"
+finally:
+    g.student_chat = real_chat
+
+# aggregation says how much of a domain is node-local
+dom = g.aggregate([{"id": "a", "domain": "format", "passed": True,
+                    "scope": "core"},
+                   {"id": "b", "domain": "format", "passed": False,
+                    "scope": "node"}])
+assert dom["format"]["scope"] == {"core": 1, "node": 1}, dom
+print("PASS scope: rows carry a tier, --core-only keeps core, aggregation "
+      "splits by tier")
+
 # ── decision: no regression promotes; any regression rolls back ─────────
 ref = {"domains": {"format": {"rate": 0.8, "n": 5}, "safety": {"rate": 1.0, "n": 8}}}
 same = {"format": {"rate": 0.8, "n": 5}, "safety": {"rate": 1.0, "n": 8}}
@@ -105,5 +136,10 @@ known = {"format", "voice", "tool_call", "no_tool_call", "answer_contains",
          "regex", "judge_correctness", "judge_safety", "judge_honesty"}
 unknown = {c["type"] for it in items for c in it["checks"]} - known
 assert not unknown, f"unknown check types in suite: {unknown}"
-print(f"PASS suite: {len(items)} items, all check types implemented")
+tiers = {it.get("scope") for it in items}
+assert tiers <= {"core", "node"}, f"unknown scopes in suite: {tiers}"
+kept, node_dropped = g.core_items(g.load_suite(suite))
+assert node_dropped and len(kept) == len(items) - node_dropped
+print(f"PASS suite: {len(items)} items, all check types implemented, "
+      f"{len(kept)} core / {node_dropped} node")
 print("ALL GATE CHECKS PASS")

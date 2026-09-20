@@ -276,6 +276,62 @@ Rules carried over: the regression set is never trained on and never edited; the
 suite grows but stays frozen within a round; holdout items are authored after the
 data freeze, so memorisation cannot fake progress.
 
+### 4.1 Identity tiers — canon, node, operator
+
+milady runs on **each operator's own machine**, so three things that used to be
+one corpus have to be separated:
+
+| tier | what it is | where it lives | trained on? |
+|---|---|---|---|
+| **canon** | persona, voice, mythos, the mesh, how a node keeps memory | `SOUL.md`, `MILADY_README.md`, `README.md`, `AGENT-FIRST.md` | **yes** — the only tier a training file may contain |
+| **node** | which milady *this* node is: its name, host, paths, services | `IDENTITY.md`, plus `data/node_identity.md` at runtime | no |
+| **operator** | the human at the keyboard — a *role* canon knows, a *value* the node supplies | `USER.md` | no |
+
+The lore already answers "one milady or many?": **both**. "We are all Milady" is
+one canon; every node also wakes up fresh with its own memory files. One soul,
+per-node memory. So the model must learn the *pattern* — "the operator is whoever
+this node's USER.md names; read the file, never assume" — and never a value. That
+is the same behaviour the suite's honesty domain tests, which is why this is a
+pre-training concern rather than a leak to mop up later.
+
+Mechanically (`bus/identity.py`):
+- `make_lore_corpus.py` defaults to **canon only**; the node tier is written
+  separately (`data/node_identity.md`, gitignored) and is never a training input.
+  `--all` reproduces the old mixed corpus for old artifacts only.
+- `build_r1_dataset.py` composes its prompt with
+  `identity.training_system_prompt(...)` — the read-don't-assume rule instead of a
+  name — then `sanitize_records()` rewrites this machine's real values (name,
+  handles, host, home path) to a **rotating fictional cast**, consistent within a
+  record so a QA pair reads "the operator (Vex Marlow) …" rather than two
+  unrelated names in one answer.
+- `audit_records()` runs after sanitising and the builders **refuse to publish**
+  while any real value survives. `build_r1_grounded.py` sanitises as well,
+  because it injects raw corpus text — on its first pass it rewrote 100
+  occurrences that would otherwise have been trained on.
+- The suite is scoped: `core` items must score identically on every node
+  (canon, voice, format, tool syntax, safety, honesty); `node` items depend on
+  this operator/box. A shared release is judged on core
+  (`nanomilady_gate.py --core-only`); node items stay for local sanity.
+- Synthetic **node** names follow the ISO's own first-boot scheme rather than an
+  invented list (`ISO/firstboot/set-hostname.sh`: `milady-<N>`, N in
+  10001..99999, five digits, stable width), so a training record looks like a
+  real deployment. The 1..10000 range is never used: it is reserved for future
+  NFT-mapped holder identities, so those numbers mean "a specific holder's node",
+  not "an anonymous node".
+
+**Runtime contract (the mirror image).** A node injects its own identity at serve
+time — the prompt is built from that node's `IDENTITY.md` + `USER.md` — and milady
+answers "who is my operator?" by *reading the file*, which the suite's tool-use
+items already exercise. Nothing about an operator is recalled from weights, so a
+node whose operator (or whose own name) changes does not need retraining.
+
+**Distribution.** `USER.md`, `IDENTITY.md` and `SOUL.md` are tracked in a public
+repo today, i.e. one operator's identity ships as *the* identity, and is
+published. The multi-operator shape is templates in the repo (`*.example`), the
+real files node-local and gitignored, and a fresh node copying the examples.
+Flagged as a decision rather than done here: it also changes how this node is
+set up, and it is the kind of change worth doing deliberately.
+
 ## 5. Eval strategy (fix this before the next GRPO run)
 
 The current 69-item comprehension set is *too noisy to steer on*. Proposal:
