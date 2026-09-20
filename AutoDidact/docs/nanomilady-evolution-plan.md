@@ -29,10 +29,16 @@ lore chatbot, not the brain of MiladyOS.
 ## 1. Where nanomilady actually is today (honest review)
 
 **Working:**
-- `train_r1.py` — GRPO on `unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit`,
-  LoRA r=32, 27B-judge correctness. Produced `r1_training/lora` → `merged-r1c`.
+- `train_grpo.py` + `run_grpo.sh` — GRPO over a **registry dataset** on
+  `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B` (official repo, quantized in-process
+  with bitsandbytes), TRL 1.x + peft, rewards from `r1_rewards`, correctness
+  judged by the sensei. Two real steps ran on the A4000 in 38.5 s; LoRA +
+  `run.json` provenance written. No unsloth, no vendored trainer, no docker.
 - `merge_lora.py` + `make_nanomilady.sh` — a trained LoRA becomes a servable
-  bf16 model.
+  bf16 model (peft merge on the same official base).
+- `bus/` + `stages/` — named, hashed datasets with provenance; `plan` reports
+  freshness transitively (a corpus that changed marks the whole downstream chain
+  STALE). The registry was seeded by adopting the artifacts already on disk.
 - `judge.py` — correctness / entailment / faithfulness / comedy against the
   27B; validated against the bare-metal server.
 - 667 judge-grounded lore QA (`r1_train`), 35 identity QA, a 730-question
@@ -163,19 +169,26 @@ A single long-lived conductor that runs rounds. Each round:
    nanomilady, (d) live agent transcripts. Everything is grounded and
    deduped; nothing enters training unverified.
 2. **SFT cold-start** (when a capability has a 0 % base rate — e.g. tool
-   calls) — `train_r2_sft.py` on demonstration trajectories. Small, short.
-3. **GRPO** — `train_r1.py` with `reward = format + correctness + voice
-   (+ tool-use + retrieval)`. Correctness stays dominant; the others are
-   capped.
-4. **Merge** — `make_nanomilady.sh` → a candidate dir.
-5. **Gate** — the Sensei runs the frozen suite on the candidate. Requires
-   `score ≥ previous` per domain and no regression in safety. Otherwise
-   **roll back** (keep the previous served model).
+   calls) — demonstration trajectories. Queued: the SFT trainer is the last
+   unsloth-shaped file in the tree (`train_r2_sft.py`); it ports to
+   `runtime/venv` + TRL's `SFTTrainer` the same way GRPO just did.
+3. **GRPO** — `train_grpo.py` (ours: TRL 1.x + peft + bitsandbytes, no unsloth,
+   no vendored fork) over a **registry dataset**, judged by the sensei, with
+   `reward = format + correctness + voice (+ tool-use + retrieval)`.
+   Correctness stays dominant; the others are capped. Launched by `run_grpo.sh`,
+   which pins `CUDA_VISIBLE_DEVICES=1` so a round cannot touch the sensei.
+4. **Merge** — `make_nanomilady.sh` → a candidate dir (peft merge on the same
+   official bf16 base the LoRA trained on).
+5. **Gate** — the Sensei runs the frozen suite on the candidate (`nanomilady_gate.py`,
+   104 items, per-domain Wilson CIs). Requires `score ≥ previous` per domain and
+   no regression in safety. Otherwise **roll back**.
 6. **Promote + serve** — swap the served model; new traces feed round N+1.
 
 Guardrails: the A4000 is exclusively the trainer (no other GPU work); the
 3090 is exclusively the Sensei. A round that crashes leaves the previously
-promoted model serving.
+promoted model serving. The trainer writes `run.json` into its output dir
+(dataset id + hash, base model, reward stack, knobs, git sha) so a round's
+provenance does not depend on anyone remembering it.
 
 ### 3.3 The bus — the part that was missing
 
@@ -344,23 +357,28 @@ survey forced.*
 
 **Refactor track (bus migration), interleaved with the phases:**
 
-| step | content | unlocks |
+| step | content | state |
 |---|---|---|
-| P1 | `bus/config.py` + `bus/llm.py`; port the 8 clients, 4 ports, 6 retry loops, 9 parsers onto them | ends the wrong-endpoint / wrong-key / un-normalized-reasoning bug class |
-| P2 | `bus/registry.py` + `pipeline.py`; re-express the verified lore chain as stages; retire the superseded upstream scripts | one writer per dataset; staleness refused, not discovered |
-| P3 | round records (`round.json` / `decision.json` / `champion.json`) + write-side `nanomilady_*` tools | Phase D's unattended rounds |
-| P4 | pinned trainer image for the A4000, HF cache, the missing runner; first GRPO round on `lore.qa.grounded` | Phase C |
-| P5 | style through the bus: fold the screener's private judge into `llm.judge_json`, run the 18-case calibration, regenerate with the 27B teacher + repairer | Phase B's style split |
-| P6 | conductor + leases + trace feedback | Phase D, then E |
+| P1 | `bus/config.py` + `bus/llm.py`; the 8 clients, 4 ports, 6 retry loops, 9 parsers all moved onto them | **done** (10 callers ported; gate reproduces its pre-port result) |
+| P2 | `bus/registry.py` + `pipeline.py` + `stages/`; the verified chain is a DAG of named datasets; upstream demo material quarantined and the dead upstream cluster deleted | **done** (adopt seeded 8 datasets; freshness is transitive) |
+| P4 | trainer runtime: `runtime/venv` (torch/transformers/peft/bnb/trl, locked), `train_grpo.py`, `run_grpo.sh`; the vendored `UnslothGRPOTrainerTemp.py` is gone | **GRPO done** (2 real steps on the A4000); SFT port + the agentic `rollout_func` remain |
+| P3 | round records (`round.json` / `decision.json` / `champion.json`) + write-side `nanomilady_*` tools; the trainer already writes its half (`run.json`) | next |
+| P5 | style through the bus: fold the screener's private judge into `llm.judge_json`, run the 18-case calibration, regenerate with the 27B teacher + repairer | queued |
+| P6 | conductor + resource leases + trace feedback | queued |
 
-Deletions P2 justifies (evidence in the survey): `generate_data.py` (second writer
-of `questions.json`/`chunks.pkl`, superseded), `run_autodidact.sh` (no `set -e`,
-always `exit 0`), `train_lore.py` + `run_autodidact_lore.sh` (dead / inlined),
-`simple_qa.py` (undefined names), `validate_verifier.py` (no invoker),
-`r2_rewards.py` + `build_code_corpus.py` (unwired), `Dockerfile.training` (COPYs a
-file that is not in the tree), the unused upstream Dockerfiles +
-`docker-compose.yml`, and the Apollo-13 corpus / notebook / `train-graph.png`
-(upstream demo material → `vendor/UPSTREAM.md`).
+Deletions executed with P2 (each had no local consumer left, and git history keeps
+them): `generate_data.py` (second writer of `questions.json`/`chunks.pkl`),
+`run_autodidact.sh` (no `set -e`, always `exit 0`), `train_lore.py`,
+`run_autodidact_lore.sh`, `simple_qa.py` (undefined names), `rl_helpers.py` +
+`search_module.py` (the upstream agent loop, superseded by `run_agent.py`),
+`train_r1.py` + `run_r1.sh` (superseded by `train_grpo.py` + `run_grpo.sh`), and
+the four upstream Dockerfiles + `docker-compose.yml` + `requirements.txt`
+(replaced by `runtime/requirements.lock`). Moved to `vendor/upstream/` as
+provenance: `UnslothGRPOTrainerTemp.py`, `README.md`, `autodidact.ipynb`,
+`train-graph.png`, the Apollo-13 corpus. Still to port, deliberately left
+working-as-was: `train_r2_sft.py` (the last unsloth import) and the two unwired
+modules (`r2_rewards.py`, `build_code_corpus.py`) that the tool-use and
+`code_search` capabilities will need.
 
 **Phase B — fix the data.**
 - Regenerate style with the 27B teacher + repairer (§4.2).

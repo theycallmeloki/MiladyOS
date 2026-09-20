@@ -25,7 +25,7 @@ from trl import SFTConfig, SFTTrainer
 from unsloth import FastLanguageModel, is_bfloat16_supported
 
 BASE_MODEL = os.environ.get(
-    "BASE_MODEL", "unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit")
+    "BASE_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B")
 DATA = os.environ.get("DATA", "/app/saved_data/r2_warmup.jsonl")
 OUT = os.environ.get("OUT", "/app/r2_training/sft")
 EPOCHS = float(os.environ.get("EPOCHS", "2"))

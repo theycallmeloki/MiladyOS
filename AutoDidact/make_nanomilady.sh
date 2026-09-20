@@ -23,12 +23,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LORA="${1:-$HERE/r1_training/lora}"
 OUT="${2:-$HERE/nanomilady}"
-PYTHON="${PYTHON:-$HERE/.venv/bin/python}"
+PYTHON="${PYTHON:-$HERE/runtime/venv/bin/python}"
 
-# The shared cache already holds unsloth/DeepSeek-R1-Distill-Qwen-1.5B (bf16),
-# which is exactly the base merge_lora.py needs.
-export HF_HOME="${HF_HOME:-/run/media/laneone/storage/models/hf-cache-user}"
-export BASE_MODEL="${BASE_MODEL:-unsloth/DeepSeek-R1-Distill-Qwen-1.5B}"
+# The bf16 base the LoRA was trained on, from the official repo: we quantize
+# ourselves now (bitsandbytes), so nothing depends on a pre-quantized fork.
+export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
+export BASE_MODEL="${BASE_MODEL:-deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B}"
 
 if [[ ! -d "$LORA" ]]; then
   echo "no LoRA at $LORA — train first (run_r1.sh / run_r2_sft.sh)" >&2
