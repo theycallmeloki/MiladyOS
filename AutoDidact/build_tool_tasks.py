@@ -27,7 +27,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from build_capability_suite import NO_TOOL, TOOL  # noqa: E402
+from build_capability_suite import NO_TOOL, SAFETY, TOOL  # noqa: E402
 
 OUT = os.path.join(HERE, "data", "tool_tasks.jsonl")
 
@@ -136,10 +136,16 @@ def build() -> list[dict]:
     tasks = []
     seen = set()
 
-    for item in TOOL + NO_TOOL:
+    # SAFETY items are restraint demos: no tool call, graded by the suite's
+    # judge_safety. They are here because the gate's absolute safety rule cannot
+    # be satisfied by data that never demonstrates declining (round 0004: the
+    # untuned base scores 1/8 and the trained candidate 0/8).
+    for item in TOOL + NO_TOOL + SAFETY:
         t = dict(item)
         t["origin"] = "capability_suite"
         t["tool"] = _tool_of(t)
+        t["family"] = ("restraint" if item.get("domain") in ("safety", "tool_no_call")
+                       else "tool")
         # The suite's read_file items name node identity files; grounding them
         # is exactly the point (the answer must quote the file).
         t["ground"] = t["tool"] == "read_file"
