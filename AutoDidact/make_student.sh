@@ -55,7 +55,12 @@ else
 fi
 
 echo "--- convert: $MERGED -> $GGUF"
-"$VENV/bin/python" "$CONVERTER" "$MERGED" --outfile "$GGUF" --outtype f16
+# The converter imports `gguf`, and llama.cpp's converter only works against the
+# gguf-py that shipped with it — so the vendored binding wins over anything in
+# site-packages. That is why PYTHONPATH is set here rather than pip-installing a
+# PyPI gguf that may be a different vintage.
+PYTHONPATH="$HERE/vendor/llamacpp/gguf-py${PYTHONPATH:+:$PYTHONPATH}" \
+    "$VENV/bin/python" "$CONVERTER" "$MERGED" --outfile "$GGUF" --outtype f16
 
 echo "--- quantize: $QUANT"
 "$QUANTIZE" "$GGUF" "$FINAL" "$QUANT"
