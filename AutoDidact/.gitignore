@@ -7,8 +7,7 @@ wandb/
 eval/
 data/
 rounds/
-r1_training
-r2_training
+r*_training
 *.bin
 outputs/
 lore_training_1b/
