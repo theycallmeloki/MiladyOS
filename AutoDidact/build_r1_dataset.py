@@ -31,19 +31,14 @@ IDENTITY_REPORT = os.path.join(HERE, "saved_data", "identity_report.json")
 TRAIN_OUT = os.path.join(HERE, "saved_data", "r1_train.jsonl")
 EVAL_OUT = os.path.join(HERE, "saved_data", "r1_eval.jsonl")
 
-# compact milady voice: R1 keeps
-# its own <think> discipline; the system prompt carries the persona + grounding
-# rules, NOT a format spec (R1's think/answer is native)
-SYSTEM = node_identity.training_system_prompt(
-    "You are milady — a node in the MiladyOS distributed consciousness mesh, "
-    "a surrealist parody art project: distributed compute wrapped in milady "
-    "meme lore (TempleOS homage, network spirituality, grug-brain simplicity, "
-    "100% comedic allegiance to milady). Ground every answer in the lore. "
-    "Speak with milady voice: first-person, warm, playful, sprinkle <3, "
-    "'council: milady' as affirmation. Never invent canon; if the lore does "
-    "not cover something, riff playfully but mark the riff as a riff. No "
-    "conspiracy theories, no politics, no doom."
-)
+# ONE training prompt, shared with serving: run_agent.SYSTEM_AGENTIC (persona +
+# strict format + the tool catalogue). This used to be a compact persona with no
+# format spec — fine for pure QA, but round 0002's SFT reused these prompts for
+# rows whose completions DO use the tool format, and the gate serves the agentic
+# prompt. A model trained under prompt A and evaluated under prompt B is being
+# tested on something it was never taught, so the datasets carry the prompt the
+# student actually receives.
+from run_agent import SYSTEM_AGENTIC as SYSTEM  # noqa: E402
 
 
 def window_for(chunk_id, n_chunks):

@@ -38,6 +38,7 @@ import sys
 
 from bus import llm
 from bus.identity import training_system_prompt
+from bus.tools import prompt_block
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -54,22 +55,24 @@ SYSTEM_AGENTIC = training_system_prompt(
     "playful, sprinkle <3, 'council: milady' as affirmation. Never invent "
     "canon; if the lore does not cover something, riff playfully but mark the "
     "riff as a riff. No conspiracy theories, no politics, no doom.\n\n"
-    "You do NOT know the lore corpus from memory. When a question asks about "
-    "lore facts, locations, numbers, or code that you cannot answer with "
-    "certainty, you MUST search before answering.\n\n"
+    "You do NOT know the lore corpus from memory, and you cannot see the "
+    "node's files, shell, Emacs or jobs. When a question asks for a fact or an "
+    "action you cannot answer with certainty, you MUST use a tool before "
+    "answering.\n\n"
     "STRICT FORMAT — follow it exactly:\n"
     "1. <think>your private reasoning here — keep it under ~60 words, "
-    "decide whether you need to search</think>\n"
-    "2. If you need facts: emit EXACTLY ONE tool call line:\n"
-    "<tool>{\"tool\": \"lore_search\", \"query\": \"your query\"}</tool>\n"
-    "   The search results will be appended after your call.\n"
+    "decide what you need</think>\n"
+    "2. If you need facts or an action: emit EXACTLY ONE tool call line:\n"
+    "<tool>{\"tool\": \"<name>\", \"<arg>\": \"<value>\"}</tool>\n"
+    "   The tool's real result will be appended after your call.\n"
     "3. Then write your final answer, grounded ONLY in what the results "
-    "actually say.\n"
+    "actually say — never in what you expected them to say.\n"
     "If you already know the answer with certainty, skip the tool call and "
-    "answer directly after </think>.\n"
+    "answer directly after </think>.\n\n"
+    + prompt_block() + "\n\n"
     "Example:\n"
     "<think>I do not know this lore fact. I should search.</think>\n"
-    "<tool>{\"tool\": \"lore_search\", \"query\": \"magic word complexity demons\"}</tool>\n"
+    "<tool>{\"tool\": \"lore_search\", \"query\": \"the magic word\"}</tool>\n"
     "(then answer from the results that follow)"
 )
 
@@ -107,15 +110,15 @@ class LoreIndex:
 
 
 def execute_tool(call: dict, index) -> str:
-    """Run one parsed tool call -> the <result> payload text."""
-    tool = call.get("tool")
-    query = call.get("query", "")
-    if tool == "lore_search":
-        hits = index.search(query, k=5)
-        lines = [f"Result {n} (chunk {h['chunk_id']}, score {h['score']}):\n{h['text']}"
-                 for n, h in enumerate(hits, 1)]
-        return "\n------\n".join(lines)
-    return "ERROR: unknown tool " + str(tool)
+    """Run one parsed tool call -> the <result> payload text.
+
+    Delegated to the bus: `lore_search` is served locally from the FAISS index
+    (the student's own retrieval), everything else is a real call against the
+    live MiladyOS MCP server, so a served agent and a training trajectory share
+    one implementation.
+    """
+    from bus import tools as bus_tools
+    return bus_tools.execute(call, index=index)
 
 
 # --------------------------------------------------------------------------

@@ -1,4 +1,11 @@
 {
+ "capability.suite": {
+  "schema": "suite.jsonl.v1",
+  "path": "../capability_suite.jsonl",
+  "inputs": [],
+  "stage": "stages/capability_suite.py",
+  "description": "frozen capability suite (authored items, core + node scope)"
+ },
  "lore.chunks": {
   "schema": "chunks.v1",
   "path": "chunks.pkl",
@@ -80,5 +87,24 @@
   ],
   "stage": "stages/r2_warmup.py",
   "description": "round-2 SFT rows: think -> lore_search call -> result -> answer"
+ },
+ "sft.mix": {
+  "schema": "datum.sft.v1",
+  "path": "sft_mix.jsonl",
+  "inputs": [
+   "r2.warmup",
+   "tools.trajectories"
+  ],
+  "stage": "stages/sft_mix.py",
+  "description": "SFT set: retrieval demos (r2.warmup) + per-tool demos, weighted"
+ },
+ "tools.trajectories": {
+  "schema": "datum.sft.v1",
+  "path": "tool_trajectories.jsonl",
+  "inputs": [
+   "capability.suite"
+  ],
+  "stage": "stages/tool_trajectories.py",
+  "description": "per-tool trajectories: teacher -> real MCP call -> real result -> answer, kept only if the gate's own checks pass"
  }
 }

@@ -230,7 +230,40 @@ provenance), with the two trainers' spellings produced by adapters
 (`train_grpo` wants `prompt`+`answer`, `train_sft` wants `prompt`+`completion`)
 instead of every hop inventing a third name for "question".
 
-### 3.4 The conductor
+### 3.4 The tool surface (`bus/tools.py`, `bus/mcp.py`)
+
+The agent's hands are described in one place and executed in one place, because
+the first attempt had them in three:
+
+- **The catalogue** is what the student is *told* it can do. The agentic prompt
+  used to name exactly one tool (`lore_search`) while the loop answered
+  `ERROR: unknown tool` for everything else, so emacs, files, shell and jobs were
+  not merely untrained — unreachable. `CATALOGUE` is curated (a prompt must be
+  stable across rounds) and `drift()` checks it against the live server, so a
+  vanished or renamed tool is detected rather than silently taught.
+- **`lore_search` is local** (the student's own FAISS retrieval over the lore
+  corpus); every other tool is a real call to the MiladyOS MCP server over SSE
+  (`bus/mcp.py`, stdlib only — neither side of the fence has the `mcp` package).
+  Served agent and training trajectory share one dispatcher.
+- **Demonstrations are executed, not imagined.** `generate_tool_trajectories.py`
+  gives each task to the 27B in the student's own system prompt, runs the call it
+  emits against the live server, feeds the true output back as the `<result>`,
+  and rebuilds the trajectory in the student's grammar (the teacher's own chat
+  template leaks `<tool_call>`/`<function=think` markers that must never be
+  learned). A row is kept only if the gate's own `check_one` passes every check,
+  so the training set is a subset of the suite's expectations by construction.
+- **Failures are attributed, not hidden.** A call the teacher shaped wrong is a
+  teacher fault; a tool that cannot answer its simplest call is an environment
+  fault and its tasks are skipped after one cheap probe (that distinction is what
+  separated "the node's `execute_command` is dead" from "the model wrote bad
+  Lisp"). A trajectory that *recovered* (errored, then fixed its own call) is
+  kept only if it ended on a working call.
+- **Direct answers still show the contract.** The teacher will not reason about
+  "what is 2 + 2" at any temperature, so those rows carry an authored one-line
+  reason (as the r2 warmup's think lines always did) and are labelled
+  `authored_think`.
+
+### 3.5 The conductor
 
 Plain systemd user units + a small stdlib conductor (`bus/pipeline.py` behind it;
 no framework):
