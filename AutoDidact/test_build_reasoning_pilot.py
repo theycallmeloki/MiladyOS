@@ -44,7 +44,7 @@ class ReasoningPilotTests(unittest.TestCase):
             def fake(url, payload, **kwargs):
                 text = payload["messages"][0]["content"]
                 calls.append(text)
-                return {"choices": [{"message": {"content": text + " <3"}, "finish_reason": "stop"}]}
+                return {"content": text + " <3", "finish_reason": "stop"}
 
             with patch.object(pilot, "get_json", side_effect=fake), patch("sys.stdout", new_callable=io.StringIO):
                 pilot.generate(path, 2)

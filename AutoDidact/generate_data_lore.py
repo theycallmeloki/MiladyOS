@@ -1,8 +1,9 @@
 """AutoDidact lore self-discovery — adapted for the local rig.
 
 Stage 1 (this script): chunk the lore corpus -> FAISS index (CPU) -> generate
-QA pairs via the local lore-grounded 27B (:18020) instead of a local unsloth
-8B (the 3090 hosts the 27B; the A4000 hosts the 1B). Outputs land in
+QA pairs via the local lore-grounded 27B (the bus's `teacher` role) instead
+of a local unsloth 8B (the 3090 hosts the 27B; the A4000 hosts the 1B).
+Outputs land in
 saved_data/questions.json + saved_data/chunks.pkl + faiss_index/, which
 search_module.py and run_autodidact.sh consume unchanged.
 
@@ -14,9 +15,9 @@ import os
 import pickle
 import re
 import sys
-import urllib.request
 
-API = os.environ.get("API", "http://127.0.0.1:18020/v1/chat/completions")
+from bus import llm
+
 MAX_CHUNKS = int(os.environ.get("MAX_CHUNKS", "200"))
 CHUNK_SIZE = 500
 NUM_QUESTIONS = int(os.environ.get("NUM_QUESTIONS", "4"))
@@ -128,21 +129,22 @@ def parse_multiple(output):
 
 
 def call_api(prompt):
-    body = json.dumps({
-        "messages": [
+    # The `teacher` role supplies url, reasoning_effort=low and timeout=900, and
+    # omits the model field; no temperature goes out, exactly as before.
+    #
+    # `content`, not the inline-normalized `chat()`: this reply is PARSED for
+    # Question/Answer triples, and the model's thinking can sketch triples of
+    # its own. Before the bus the thinking was invisible here (the old client
+    # read the wrong key), so parsing only the answer is also the wire-compatible
+    # choice.
+    return llm.chat_raw(
+        [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": MAX_TOKENS,
-        "stream": False,
-        "reasoning_effort": "low",
-    }).encode()
-    req = urllib.request.Request(API, data=body,
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=900) as r:
-        out = json.loads(r.read().decode())
-    msg = out["choices"][0]["message"]
-    return (msg.get("reasoning") or "") + "\n" + (msg.get("content") or "")
+        role="teacher",
+        max_tokens=MAX_TOKENS,
+    )["content"]
 
 
 def generate_qa(chunks):

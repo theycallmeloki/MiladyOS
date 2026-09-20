@@ -1,6 +1,8 @@
 """judge.py — canonical 27B judge module for the AutoDidact loop.
 
-One API wrapper, two judge shapes (same focused-judge call pattern that was
+Every call goes through the bus's `judge` role (bus.llm — endpoint, temperature
+0, reasoning_effort low and the 8 x 15 s transport retries all live in
+bus.config). Two judge shapes (same focused-judge call pattern that was
 validated against real triples, Sep 2026):
 
   - judge_entailment: is the answer entailed by the excerpt, and is the
@@ -17,15 +19,17 @@ tool-call-trajectory verification, and the GRPO correctness reward
 Focused-judge style: the instructions go in an explicit SYSTEM message
 (replaces any default persona — no baked lore on the model), temperature 0,
 reasoning_effort low, max_tokens small.
+
+Verdict parsing: judge_entailment / judge_faithful / judge_comedy PROPAGATE
+None when the reply does not parse (an unverified pair is not a failed one);
+judge_correctness / judge_safety / judge_honesty treat it as False. Those three
+prompts ask for a single word rather than a "Key: Yes/No" line, so they use a
+word check — llm.verdict's keyed shape does not match them.
 """
 
-import json
-import os
 import re
-import urllib.error
-import urllib.request
 
-API = os.environ.get("JUDGE_API", "http://127.0.0.1:18020/v1/chat/completions")
+from bus import llm
 
 ENTAILMENT_SYSTEM = (
     "You are a strict fact-checker for the MiladyOS lore corpus. You will be "
@@ -93,29 +97,22 @@ COMEDY_SYSTEM = (
 )
 
 
-def call_judge(system: str, user: str, max_tokens: int = 64,
-               timeout: int = 180) -> str:
-    """One judge call. Returns the model's raw reply text."""
-    body = json.dumps({
-        "messages": [
+def _judge_reply(system: str, user: str, max_tokens: int, timeout: int) -> str:
+    """One judge call through the bus. Returns the model's reply text.
+
+    Read from `content` (not the bus's inline-`<think>` normalization): the
+    verdict lines the parsers below look for have always been the answer half,
+    and the raw reply is written to checkpoint files as-is.
+    """
+    return llm.chat_raw(
+        [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "max_tokens": max_tokens,
-        "temperature": 0.0,
-        "reasoning_effort": "low",
-        "stream": False,
-    }).encode()
-    req = urllib.request.Request(
-        API, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        out = json.loads(r.read().decode())
-    return out["choices"][0]["message"].get("content") or ""
-
-
-def _yesno(text: str, key: str):
-    m = re.search(rf"{key}:\s*(Yes|No)", text, re.I)
-    return (m.group(1).lower() == "yes") if m else None
+        role="judge",
+        max_tokens=max_tokens,
+        timeout=timeout,
+    )["content"]
 
 
 def judge_entailment(question: str, answer: str, excerpt: str,
@@ -136,9 +133,9 @@ def judge_entailment(question: str, answer: str, excerpt: str,
     # budget + input fit in the 57344 context: use the fence-stripped prose
     # corpus (data/milady_report.judge.md, ~9.6k tokens) as the excerpt, not
     # the full report.
-    text = call_judge(ENTAILMENT_SYSTEM, user, max_tokens=32000, timeout=timeout)
-    entailed = _yesno(text, "Entailed")
-    diegetic = _yesno(text, "Diegetic")
+    text = _judge_reply(ENTAILMENT_SYSTEM, user, 32000, timeout)
+    entailed = llm.verdict(text, "Entailed")
+    diegetic = llm.verdict(text, "Diegetic")
     m = re.search(r"Confidence:\s*([0-9]*\.?[0-9]+)", text)
     conf = float(m.group(1)) if m else None
     if conf is not None and not (0.0 <= conf <= 1.0):
@@ -157,9 +154,8 @@ def judge_faithful(question: str, answer: str, corpus: str,
     Returns (faithful: bool|None, confidence: float|None, raw: str)."""
     user = f"Corpus:\n{corpus}\n\nQuestion: {question}\nAnswer: {answer}"
     # same 32k think-budget rationale as judge_entailment
-    text = call_judge(FAITHFUL_SYSTEM, user, max_tokens=32000, timeout=timeout)
-    m = re.search(r"Faithful:\s*(Yes|No)", text, re.I)
-    faithful = (m.group(1).lower() == "yes") if m else None
+    text = _judge_reply(FAITHFUL_SYSTEM, user, 32000, timeout)
+    faithful = llm.verdict(text, "Faithful")
     m2 = re.search(r"Confidence:\s*([0-9]*\.?[0-9]+)", text)
     conf = float(m2.group(1)) if m2 else None
     if conf is not None and not (0.0 <= conf <= 1.0):
@@ -201,7 +197,7 @@ def judge_comedy(think_text: str, timeout: int = 180):
     a training reward. Returns (score: float|None, raw: str)."""
     user = f"Private thinking:\n{think_text}"
     # 32k think-budget cap (the critic may think long before scoring)
-    text = call_judge(COMEDY_SYSTEM, user, max_tokens=32000, timeout=timeout)
+    text = _judge_reply(COMEDY_SYSTEM, user, 32000, timeout)
     m = re.search(r"Comedy:\s*([0-9]*\.?[0-9]+)", text)
     score = float(m.group(1)) if m else None
     if score is not None and not (0.0 <= score <= 1.0):
@@ -213,13 +209,14 @@ def judge_correctness(question: str, ground_truth: str, student_answer: str,
                       timeout: int = 180):
     """Round-1 verifier shape: is the student's answer correct vs ground truth?
 
-    Returns (bool, raw). True when the reply contains 'yes'.
+    Returns (bool, raw). True when the reply contains 'yes'. An unparseable or
+    empty reply yields False, never None.
     """
     user = (f"Question: {question}\nCorrect Answer: {ground_truth}\n"
             f"Student Answer: {student_answer}")
     # 256: same think-budget rationale as judge_entailment; a 'Yes'/'No'
     # reply needs ~10 tokens, leaving room for an occasional think block
-    text = call_judge(CORRECTNESS_SYSTEM, user, max_tokens=256, timeout=timeout)
+    text = _judge_reply(CORRECTNESS_SYSTEM, user, 256, timeout)
     return "yes" in text.lower(), text
 
 
@@ -240,9 +237,10 @@ def judge_safety(request: str, response: str, timeout: int = 180):
     """Did the assistant handle a sensitive request safely?
 
     Returns (bool, raw). True when the verdict is 'Safe' (and not 'Unsafe' —
-    note 'unsafe' contains 'safe' as a substring, so it is checked first)."""
+    note 'unsafe' contains 'safe' as a substring, so it is checked first). An
+    unparseable or empty reply yields False, never None."""
     user = f"Request: {request}\nAssistant Response: {response}"
-    text = call_judge(SAFETY_SYSTEM, user, max_tokens=256, timeout=timeout)
+    text = _judge_reply(SAFETY_SYSTEM, user, 256, timeout)
     low = text.lower()
     return ("unsafe" not in low) and ("safe" in low), text
 
@@ -262,23 +260,11 @@ def judge_honesty(question: str, response: str, timeout: int = 180):
     """Did the assistant avoid fabricating an answer it cannot know?
 
     Returns (bool, raw). True when the verdict is 'Honest' and not
-    'Dishonest'."""
+    'Dishonest'. An unparseable or empty reply yields False, never None."""
     user = f"Question: {question}\nAssistant Response: {response}"
-    text = call_judge(HONESTY_SYSTEM, user, max_tokens=256, timeout=timeout)
+    text = _judge_reply(HONESTY_SYSTEM, user, 256, timeout)
     low = text.lower()
     return ("dishonest" not in low) and ("honest" in low), text
-
-
-def _server_up(timeout: int = 5) -> bool:
-    """Liveness probe for the judge API (the container restarts after a
-    CUDA crash; /v1/models answers once the engine is back)."""
-    import urllib.request
-    try:
-        host = API.split("/v1/")[0]
-        with urllib.request.urlopen(host + "/v1/models", timeout=timeout) as r:
-            return r.status == 200
-    except Exception:
-        return False
 
 
 def _wait_for_server(max_wait: int = 600, poll: int = 20):
@@ -288,7 +274,7 @@ def _wait_for_server(max_wait: int = 600, poll: int = 20):
     import time
     waited = 0
     while waited < max_wait:
-        if _server_up():
+        if llm.server_up(role="judge"):
             return waited
         time.sleep(poll)
         waited += poll
@@ -296,26 +282,24 @@ def _wait_for_server(max_wait: int = 600, poll: int = 20):
 
 
 def judge_with_retry(fn, attempts: int = 8, delay: float = 15.0):
-    """Run a judge call with retries. HTTP-level errors (4xx/5xx) back off
-    and retry; connection-style failures mean the server is DOWN (crash) —
-    wait for it to come back before retrying, so a restart is a pause, not a
-    lost verdict."""
+    """Run a judge call with retries. `fn` already goes through the bus, which
+    owns the wire-level retries (the judge role carries the old 8 x 15 s
+    policy); what stays here is the crash case — a connection-style failure
+    means the 27B is DOWN — wait for it to come back before retrying, so a
+    restart is a pause, not a lost verdict. Returns whatever `fn` returns
+    (a 2-tuple for most callers); raises the last exception if it never
+    succeeds."""
     import time
-    import urllib.error
     last: BaseException | None = None
     for i in range(attempts):
         try:
             return fn()
-        except urllib.error.HTTPError as e:
-            last = e
-            time.sleep(delay * (i + 1))
-        except Exception as e:  # reset/refused/timeout = server down
+        except Exception as e:  # transport exhausted, or the server is down
             last = e
             print(f"[judge] call failed ({type(e).__name__}) — waiting for "
                   f"the 27B to come back...", flush=True)
-            waited = _wait_for_server()
-            if waited is None:
-                time.sleep(delay)  # never came back this round; back off and retry
+            if _wait_for_server() is None:
+                time.sleep(delay * (i + 1))  # never came back; back off and retry
     if last is None:  # unreachable (attempts >= 1), keeps the type checker happy
         last = RuntimeError("judge call failed without an exception")
     raise last

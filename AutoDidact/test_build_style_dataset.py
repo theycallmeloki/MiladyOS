@@ -59,8 +59,8 @@ class StyleDatasetTests(unittest.TestCase):
                 if url.endswith("/models"):
                     return {"data": [{"id": "milady"}]}
                 calls.append(payload["messages"][0]["content"])
-                return {"choices": [{"message": {"content": "gm friend!"},
-                                     "finish_reason": "stop" if len(calls) == 1 else "length"}]}
+                return {"content": "gm friend!", "usage": {},
+                        "finish_reason": "stop" if len(calls) == 1 else "length"}
 
             with patch.object(dataset, "get_json", side_effect=fake), patch("sys.stdout", new_callable=io.StringIO):
                 dataset.generate(args)
@@ -112,7 +112,7 @@ class StyleDatasetTests(unittest.TestCase):
                     if text == "input 0":
                         raise ValueError("bad response")
                     time.sleep(0.02)
-                return {"choices": [{"message": {"content": text}, "finish_reason": "stop"}]}
+                return {"content": text, "usage": {}, "finish_reason": "stop"}
 
             with patch.object(dataset, "get_json", side_effect=fake), patch("sys.stdout", new_callable=io.StringIO), patch("sys.stderr", new_callable=io.StringIO):
                 with self.assertRaisesRegex(RuntimeError, "successful responses saved"):

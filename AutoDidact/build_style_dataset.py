@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Prepare short HF JSONL inputs, collect local teacher outputs, export SFT candidates.
 
-Uses only Python's standard library. Run with --help for the three stages.
-Generated files live under saved_data/ (git-ignored); nothing is published.
+Uses only Python's standard library plus the shared bus (bus/llm.py owns the
+model transport; this file's urllib use is the HF JSONL download in prepare).
+Run with --help for the three stages. Generated files live under saved_data/
+(git-ignored); nothing is published.
 """
 
 import argparse
@@ -20,8 +22,9 @@ import sys
 import time
 import unicodedata
 from urllib.parse import quote
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
+
+from bus import llm
 
 
 DEFAULT_DIR = Path(__file__).resolve().parent / "saved_data" / "milady_style"
@@ -67,11 +70,26 @@ def lock(directory):
 
 
 def get_json(url, payload=None, timeout=120):
-    request = Request(url, headers={"Content-Type": "application/json"})
-    if payload is not None:
-        request.data = json.dumps(payload).encode("utf-8")
-    with urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+    """The tree's one JSON seam, shared with build_reasoning_pilot/screen_style_pairs.
+
+    No payload is a plain GET for a data endpoint (the HF datasets API, the
+    /models pre-flight). A payload is a chat completion, and that POST goes
+    through the bus: the explicit url override keeps this caller's endpoint,
+    the `flavour` role supplies nothing it does not override, and retries stay
+    0 because the callers own their own retry loops.
+
+    Returns the bus record for a POST (content / finish_reason / usage / model
+    / url / attempts / seconds) — not a raw OpenAI envelope, which the bus
+    deliberately does not hand out. `content` is the server's own content
+    field, so a caller that wants the raw reply uses it and a caller that
+    wants the inline <think>…</think> shape uses `completion`.
+    """
+    if payload is None:
+        with urlopen(url, timeout=timeout) as response:
+            return json.load(response)
+    fields = {key: value for key, value in payload.items() if key != "messages"}
+    return llm.chat_raw(payload["messages"], role="flavour", url=url, timeout=timeout,
+                        retries=0, **fields)
 
 
 def select_inputs(rows, source, field, min_chars, max_chars, limit, seed):
@@ -240,23 +258,25 @@ def generate(args):
         start = time.monotonic()
         for attempt in range(3):
             try:
-                response = get_json(config["base_url"] + "/chat/completions", payload,
-                                    timeout=getattr(args, "timeout", 300))
+                # get_json POSTs this through the bus; a transport or HTTP
+                # failure surfaces as llm.LLMError.
+                record = get_json(config["base_url"] + "/chat/completions", payload,
+                                  timeout=getattr(args, "timeout", 300))
                 break
-            except (URLError, TimeoutError, ConnectionError) as error:
-                if isinstance(error, HTTPError) and error.code not in (429, 500, 502, 503, 504):
-                    raise
+            except llm.LLMError:
                 if attempt == 2:
                     raise
                 time.sleep(2 ** attempt)
-        choice = response["choices"][0]
-        output = choice["message"].get("content") or ""
-        flags = quality_flags(row["input"], output, choice.get("finish_reason"))
+        output = record["content"] or ""
+        flags = quality_flags(row["input"], output, record["finish_reason"])
         return {**row, "output": output, "generation_id": run_id,
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "response_id": response.get("id"), "server_fingerprint": response.get("system_fingerprint"),
-                "finish_reason": choice.get("finish_reason"), "stop_reason": choice.get("stop_reason"),
-                "usage": response.get("usage"), "seconds": round(time.monotonic() - start, 3),
+                # The bus record does not carry a server response id, a
+                # system fingerprint or a stop_reason; the keys stay so the
+                # row schema downstream review reads does not shift.
+                "response_id": None, "server_fingerprint": None,
+                "finish_reason": record["finish_reason"], "stop_reason": None,
+                "usage": record["usage"], "seconds": round(time.monotonic() - start, 3),
                 "quality_flags": flags, "review_status": "unreviewed"}
 
     remaining = [row for row in inputs if row["id"] not in seen]
