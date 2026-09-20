@@ -25,6 +25,12 @@ A stage module lives in `stages/` and exports STAGE:
 `ctx` carries the run flags (`force`, `dry_run`, `verbose`) so a stage can pass
 them to the code it wraps. Stages keep owning their own resumable loops — this
 layer decides *whether* to run, not *how*.
+
+One contract on those loops: when the pipeline runs a stage whose inputs have
+moved it sets `MILADY_INPUTS_CHANGED=1`, and a stage that caches intermediates
+must honour it by starting over. Resuming across a changed input is how a stage
+ends up recording new input hashes over output derived from old ones — the
+registry then calls stale bytes fresh, which is worse than being slow.
 """
 
 import argparse
@@ -292,7 +298,22 @@ def run(stages, target, ctx, only=False):
             raise SystemExit(f"stage {stage.id} has no run() — it is authored "
                              f"by hand, not produced")
         before = registry.meta(stage.id).get("sha256")
-        stage.run(ctx)
+        # A stage whose inputs moved must not resume from its own cache: otherwise
+        # it re-records the NEW input hashes over output it derived from the OLD
+        # ones, and the registry reports "fresh" for stale bytes. Stages that
+        # cache intermediates read this flag and start over.
+        moved = row["state"] == "stale"
+        previous = os.environ.get("MILADY_INPUTS_CHANGED")
+        if moved:
+            os.environ["MILADY_INPUTS_CHANGED"] = "1"
+        try:
+            stage.run(ctx)
+        finally:
+            if moved:
+                if previous is None:
+                    os.environ.pop("MILADY_INPUTS_CHANGED", None)
+                else:
+                    os.environ["MILADY_INPUTS_CHANGED"] = previous
         after = registry.meta(stage.id).get("sha256")
         if after is None:
             raise SystemExit(

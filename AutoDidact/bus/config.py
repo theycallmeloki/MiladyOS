@@ -122,7 +122,8 @@ _ALIASES = {
 
 for _role in ROLES:
     for _field, _cast in (("MODEL", str), ("MAX_TOKENS", int), ("TIMEOUT", int),
-                          ("TEMPERATURE", float)):
+                          ("TEMPERATURE", float), ("RETRIES", int),
+                          ("RETRY_DELAY", float)):
         _value = _env(f"MILADY_{_role.upper()}_{_field}",
                       *_ALIASES.get((_role, _field.lower()), ()), default=None)
         if _value:

@@ -14,6 +14,8 @@ See docs/nanomilady-evolution-plan.md.
 
 import json
 import os
+import sys
+import urllib.parse
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,9 +24,24 @@ ROUNDS = os.path.join(ROOT, "rounds")
 CHAMPION = os.path.join(ROUNDS, "champion.json")
 SUITE = os.path.join(ROOT, "capability_suite.jsonl")
 STUDENT_ENV = os.path.expanduser("~/.config/nanomilady/student.env")
-STUDENT_HEALTH = os.environ.get("NANOMILADY_HEALTH",
-                                "http://127.0.0.1:8081/health")
-JUDGE_HEALTH = os.environ.get("JUDGE_HEALTH", "http://127.0.0.1:18020/health")
+# Health endpoints come from the bus so the control plane cannot drift from what
+# the pipeline actually talks to (:8081 is the miladyos container's docs server,
+# and the sensei serves the judge role on its own port).
+sys.path.insert(0, os.path.join(HERE, "AutoDidact"))
+from bus import config as _bus_config  # noqa: E402
+
+
+def _health_url(role, env_name, default):
+    override = os.environ.get(env_name)
+    if override:
+        return override
+    # llama.cpp serves /health at the origin, not under /v1
+    parts = urllib.parse.urlsplit(_bus_config.role(role)["url"])
+    return f"{parts.scheme}://{parts.netloc}{default}"
+
+
+STUDENT_HEALTH = _health_url("student", "NANOMILADY_HEALTH", "/health")
+JUDGE_HEALTH = _health_url("judge", "JUDGE_HEALTH", "/health")
 
 
 def _json(path, default=None):
