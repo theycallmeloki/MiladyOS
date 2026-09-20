@@ -76,7 +76,7 @@ def _values_from(path):
     """Names, handles and other identifying values from a node's own files.
 
     Only fields that identify somebody: `Name`, `Handle`, `email`. A handle line
-    like "@chillgates_ (on X) (theycallmeloki on GitHub)" yields the handles and
+    like "@someone (on X) (someoneelse on GitHub)" yields the handles and
     not the platform names — substituting the word "GitHub" would be absurd.
     """
     found = []
@@ -91,7 +91,7 @@ def _values_from(path):
         key = match.group("key").strip().lower()
         value = match.group("value").strip()
         if key in ("name", "operator", "node"):
-            if "," not in value:  # "Loki, or operator" is a nickname list, not a name
+            if "," not in value:  # "Sam, or operator" is a nickname list, not a name
                 found.append(value)
         elif key in ("handle", "email", "github"):
             found.extend(re.findall(r"@[\w.\-]+", value))
