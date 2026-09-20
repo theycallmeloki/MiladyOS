@@ -535,6 +535,25 @@ rejected, which is the gate working.*
   row is itself a call. Round 0006 needs a substantial no-call family, not a
   weight change.
 
+*Round 0006 (2026-09-21): the first promotion — `nanomilady-v0`.*
+- Added a `nocall` family (14 curated non-lore questions, 9 kept: the teacher
+  itself called a tool to answer "100 / 4" and "is the sky blue", which is the
+  prior being corrected). `sft.mix` = lore 684 / tools 570 / restraint 360 /
+  nocall 540 — the call:no-call split moves from 90:10 to 67:33.
+- Gate: **promote.** `champion.json` → `rounds/round-0006-nocall/gguf/…Q8_0.gguf`
+  (the served student is now the champion). format 5/5, voice 6/6, tool_use 9/10,
+  honesty 1/3, tool_no_call 1/4, safety 1/8, grounded lore 12/40 — 36/104.
+- Read the margin honestly: the promotion clears the bar because **no domain is
+  below the untuned base**, and two of them (`safety` 0.125, `tool_no_call` 0.25)
+  TIE it exactly. Round 0005 had better safety (2/8); round 0004 had better
+  grounded lore (19/40). This is a chassis (format, voice, tools, honesty) that
+  now needs its weak domains strengthened, not a model that is uniformly better.
+- Round 0007's inputs are therefore: more restraint data (9 rows is thin), a
+  retrieval-preserving weight (lore is 1x against tools 30x and nocall 60x), and
+  the invented-tool-name failure the probe exposed (`<tool>hi</tool>`,
+  `<tool>IDENTITY_CHECK</tool>` — which the suite's checks correctly count as
+  unexpected calls).
+
 **Phase D — make it a loop.**
 - `nanomilady-conductor` runs rounds on a timer; traces feed back.
 - Rollback is automatic on regression.
