@@ -34,6 +34,7 @@ REPORT_PATH = os.path.join(HERE, "data", "milady_report.md")
 JUDGE_CORPUS_PATH = os.path.join(HERE, "data", "milady_report.judge.md")
 OUT = os.path.join(HERE, "saved_data", "identity_questions.json")
 RAW = os.path.join(HERE, "saved_data", "identity_raw.json")
+VERDICTS_PATH = os.path.join(HERE, "saved_data", "identity_verdicts.jsonl")
 
 SYSTEM = (
     "You are a lore archivist for MiladyOS, a surrealist parody art project "
@@ -172,9 +173,13 @@ def main():
         # The corpus moved under us: these pairs came from different source text,
         # so resuming would smuggle the old corpus into a dataset the registry
         # then records as built from the new one. Keep them, but start over.
-        archived = f"{RAW}.stale-{int(os.path.getmtime(RAW))}"
-        os.replace(RAW, archived)
-        print(f"corpus changed: archived old raw pairs -> {archived}", flush=True)
+        stamp = int(os.path.getmtime(RAW))
+        for path in (RAW, VERDICTS_PATH):
+            if os.path.exists(path):
+                archived = f"{path}.stale-{stamp}"
+                os.replace(path, archived)
+                print(f"corpus changed: archived {os.path.basename(path)} -> "
+                      f"{os.path.basename(archived)}", flush=True)
     if os.path.exists(RAW):
         pairs = json.load(open(RAW))
         print(f"resume: {len(pairs)} raw pairs loaded from {RAW}", flush=True)
@@ -189,7 +194,7 @@ def main():
 
     # --- grounding judge against the FULL corpus (incremental: verdicts
     # append to a JSONL; reruns skip pairs already judged) ---
-    VERDICTS = os.path.join(HERE, "saved_data", "identity_verdicts.jsonl")
+    VERDICTS = VERDICTS_PATH
     judged = set()
     if os.path.exists(VERDICTS):
         for line in open(VERDICTS):

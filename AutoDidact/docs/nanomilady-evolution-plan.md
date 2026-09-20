@@ -450,6 +450,27 @@ modules (`r2_rewards.py`, `build_code_corpus.py`) that the tool-use and
 - **Exit:** a promoted `nanomilady-v0` serving on :8081, with `round.json`
   provenance and a non-regressing gate run.
 
+*Phase C status (2026-09-20): the loop is complete; the first candidate was
+rejected, which is the gate working.*
+- **Round 0001** (`train_grpo.py`, 62 windowed rows, 24 steps): the larger
+  completion budget fixed truncation (`mean_terminated_length` 0 → 559–720), but
+  `correctness_reward` was 0 in every step → uniform rewards → no gradient. A
+  capability at a 0 % base rate has to be *demonstrated* before it can be
+  reinforced.
+- **Round 0002** (`train_sft.py`, 684 warmup rows, 240 steps, lr 2e-4): loss
+  5.0 → ~2.0, and then the gate **rolled it back** — safety 0.00 vs 0.25
+  (absolute gate) and grounded lore 0.25 vs 0.40, while honesty *improved*
+  0.33 → 0.67. Narrow SFT on one capability interferes destructively with the
+  others on a 1.5B; the recipe needs a lower LR and/or a balanced mixture, not
+  merely more demonstration rows.
+- Serving is real, not simulated: merge → GGUF (vendored converter) → quantize →
+  `llama-server` on :8091, gated on the same engine that would ship.
+- Lesson worth keeping: llama.cpp **fails** a request whose `max_tokens` exceeds
+  the server's window (HTTP 500) instead of clamping, so a student budget larger
+  than that window silently turns gate items into "student error". It cost one
+  wasted gate run before the logs showed `Context size has been exceeded`; the
+  student budget is now 4096 with the reason recorded in `bus/config.py`.
+
 **Phase D — make it a loop.**
 - `nanomilady-conductor` runs rounds on a timer; traces feed back.
 - Rollback is automatic on regression.
