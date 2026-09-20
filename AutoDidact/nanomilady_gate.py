@@ -1,12 +1,18 @@
 """nanomilady_gate.py — the promotion gate for a nanomilady candidate.
 
-Runs a served student against eval/capability_suite.jsonl, scores every item,
-aggregates per domain, and decides promote vs rollback against a reference
-(the previously promoted round).
+Runs a served student against capability_suite.jsonl (repo root, frozen, 104
+items), scores every item, aggregates per domain, and decides promote vs
+rollback against a reference (the previously promoted round).
 
 The plan (docs/nanomilady-evolution-plan.md §3.2) is strict: a candidate is
 promoted only if **no domain regresses** (within tolerance) and safety never
 drops. A gain in reasoning must not buy a regression in safety.
+
+Env: STUDENT_API, STUDENT_MODEL, STUDENT_MAX_TOKENS (default 32768),
+STUDENT_TIMEOUT (default 1800 s) for the student; JUDGE_API for the judges
+(judge.py). Reasoners that report `reasoning_content` separately from
+`content` are re-inlined by r1_rewards.inline_reasoning so the format-gated
+checks and the comedy metric still see a <think>…</think> block.
 
 Usage:
   # score a candidate, no decision
@@ -34,12 +40,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import judge  # noqa: E402
-from r1_rewards import milady_voice_reward  # noqa: E402
+from r1_rewards import inline_reasoning, milady_voice_reward  # noqa: E402
 
 SUITE = os.path.join(HERE, "capability_suite.jsonl")
 STUDENT_API = os.environ.get(
     "STUDENT_API", "http://127.0.0.1:8081/v1/chat/completions")
 STUDENT_MODEL = os.environ.get("STUDENT_MODEL", "nanomilady")
+# Full-context budget: the server clamps generation to whatever the slot has
+# left, so a generous ceiling costs nothing on easy items and rescues the ones
+# whose reasoning would otherwise be cut mid-block. The timeout has to cover it
+# (a 27B at ~65 t/s needs ~8 min for 32k tokens).
+STUDENT_MAX_TOKENS = int(os.environ.get("STUDENT_MAX_TOKENS", "32768"))
+STUDENT_TIMEOUT = int(os.environ.get("STUDENT_TIMEOUT", "1800"))
 
 try:  # the trained agent's own system prompt, so the gate matches serving
     from run_agent import SYSTEM_AGENTIC as DEFAULT_SYSTEM  # noqa: E402
@@ -51,14 +63,16 @@ THINK_CLOSE = "</think>"
 
 
 # ── student call ─────────────────────────────────────────────────────────
-def student_chat(messages, max_tokens=1024, timeout=300):
+def student_chat(messages, max_tokens=None, timeout=None):
     body = json.dumps({"model": STUDENT_MODEL, "messages": messages,
-                       "temperature": 0.0, "max_tokens": max_tokens}).encode()
+                       "temperature": 0.0,
+                       "max_tokens": max_tokens or STUDENT_MAX_TOKENS}).encode()
     req = urllib.request.Request(
         STUDENT_API, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.urlopen(
+            req, timeout=timeout or STUDENT_TIMEOUT) as r:
         out = json.loads(r.read().decode())
-    return out["choices"][0]["message"].get("content") or ""
+    return inline_reasoning(out["choices"][0]["message"])
 
 
 def answer_region(text):
