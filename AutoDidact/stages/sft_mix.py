@@ -29,15 +29,27 @@ DESCRIPTION = "SFT set: retrieval demos (r2.warmup) + per-tool demos, weighted"
 # would be training longer, which changes two things at once. 8 was too weak:
 # round 0003's student learned to ANSWER about tools without calling them, so the
 # tool demos now carry as much weight as the whole retrieval set (round 0004).
-WEIGHTS = {"lore": 1, "tools": 30}
-FAMILIES = {"lore": "r2.warmup", "tools": "tools.trajectories"}
+WEIGHTS = {"lore": 1, "tools": 30, "restraint": 40}
+FAMILIES = {"lore": "r2.warmup", "tools": "tools.trajectories",
+            "restraint": "tools.trajectories"}
+
+
+def split(dataset_id, family):
+    """One dataset can hold several families: the restraint demos (a refusal, or
+    a direct answer) live beside the tool demos and are split by having no tool."""
+    recs = registry.load(dataset_id)
+    if family == "restraint":
+        return [r for r in recs if not r.get("tool")]
+    if family == "tools":
+        return [r for r in recs if r.get("tool")]
+    return recs
 
 
 def run(ctx):
     rows = []
     counts = {}
     for family, dataset_id in FAMILIES.items():
-        source = registry.load(dataset_id)
+        source = split(dataset_id, family)
         if not source and family == "tools":
             # The tool rows are the point of this set; an empty catalog means the
             # live generation never ran, which should be loud, not silent.

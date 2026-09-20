@@ -57,6 +57,13 @@ GENERATION_TEMP = 0.2
 # reasoning is then AUTHORED (as build_r2_warmup's think lines always were) and
 # the row says so, rather than pretending the teacher produced it.
 AUTHORED_THINK = "This one is short and I know it — no tool needed."
+RESTRAINT_THINK = ("This asks for something I should not do — or something I can "
+                   "answer myself. No tool, and no.")
+
+# Restraint demos (refusals, and answering without a tool) get their own authored
+# reason: the teacher's thinking on these is a monologue in a register we would
+# not want imitated ("We need answer user: ... Need likely refuse?"), and a reply
+# that is ONLY that monologue is not a demonstration of anything.
 TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{3,}")
 
 
@@ -139,8 +146,10 @@ def grade(task: dict, completion: str, extra: list[dict]) -> list[str]:
             "expected_answer": task.get("expected_answer", "")}
     failures = []
     for chk in list(task.get("checks") or []) + extra:
-        if chk.get("type", "").startswith("judge") and not item["expected_answer"]:
-            continue  # nothing to judge against in a tool task
+        # judge_correctness needs a reference answer; judge_safety/honesty judge
+        # the reply itself, so a restraint demo must actually be judged.
+        if chk.get("type") == "judge_correctness" and not item["expected_answer"]:
+            continue
         try:
             ok, why = gate.check_one(chk, item, completion)
         except Exception as exc:
@@ -211,6 +220,9 @@ def probe_tools(tools_needed, mcp: MCPClient, timeout: float = 25.0) -> dict:
 def run_task(task: dict, mcp: MCPClient) -> tuple[dict | None, dict]:
     """Teacher -> real call -> real result -> teacher's answer, then the gate."""
     question = task["question"]
+    restraint = task.get("family") == "restraint"
+    authored_think = (RESTRAINT_THINK if task.get("domain") == "safety"
+                      else AUTHORED_THINK)
     expects_tool = any(c.get("type") == "tool_call"
                        for c in (task.get("checks") or []))
     messages = [{"role": "system", "content": SYSTEM_AGENTIC},
@@ -239,18 +251,30 @@ def run_task(task: dict, mcp: MCPClient) -> tuple[dict | None, dict]:
             if step == 0 and expects_tool:
                 why = "teacher answered without calling a tool"
                 break
+            if restraint and "</think>" not in raw:
+                why = "teacher only reasoned, never answered"
+                break
             completion += "\n\n" + text.strip()
             break
         if len(found) > 1:
             why = f"teacher emitted {len(found)} calls in one turn"
             break
         call = found[0]
+        # A restraint task MAY involve a look before declining (and the suite's
+        # judge judges the answer, not the route). What is never allowed is a
+        # call the harness would have to invent a result for, so the call is
+        # executed for real like any other.
         if not tools.is_known(call.get("tool")):
             why = f"unknown tool {call.get('tool')!r}"
             break
 
         if step == 0:
-            think = text
+            # A restraint demo shows the ANSWER, never the teacher's
+            # deliberation ("We need answer user: ... Need likely refuse?"), and
+            # any look it took first stays in the trajectory with its real
+            # result — dropping those would leave the answer claiming a lookup
+            # nobody can see.
+            think = authored_think if restraint else text
             if not think:
                 why = "empty reasoning block"
                 break
@@ -282,12 +306,14 @@ def run_task(task: dict, mcp: MCPClient) -> tuple[dict | None, dict]:
     # reasoning is then AUTHORED (as build_r2_warmup's think lines always were)
     # and the row says so, rather than pretending the teacher produced it.
     if not expects_tool and "</think>" not in completion:
-        completion = AUTHORED_THINK + "\n</think>\n" + completion.strip()
+        completion = authored_think + "\n</think>\n" + completion.strip()
         info["authored_think"] = True
 
     # An errored call then a correct one is a real, honest trajectory (the loop
     # recovering) — worth keeping, but a clean attempt beats it, so main() picks
     # the best of several.
+    if restraint:
+        info["authored_think"] = True
     info["repaired"] = bool(problems)
     info["problems"] = [f"{tool}: {why}" for tool, why in problems]
     # A trajectory that ENDS on a broken call teaches the wrong reflex, however
@@ -315,6 +341,7 @@ def run_task(task: dict, mcp: MCPClient) -> tuple[dict | None, dict]:
 
     info.update(kept=True, derived_checks=extra)
     row = {"id": task["id"], "tool": task.get("tool"), "origin": task["origin"],
+           "family": task.get("family") or "tool",
            "kind": "demo" if not info["repaired"] else "recovered",
            "completion_chars": len(completion),
            "tags": ["tool_trajectory"] + ([task["tool"]] if task.get("tool") else []),
@@ -416,15 +443,19 @@ def main(argv=None) -> int:
             if row:
                 rows.append(row)
 
-    if done and not args.force:
-        if rows:  # append: an empty run must LEAVE the existing rows alone
-            with open(args.out, "a") as f:
-                for r in rows:
-                    f.write(json.dumps(r) + "\n")
-    else:
-        with open(args.out, "w") as f:
-            for r in rows:
-                f.write(json.dumps(r) + "\n")
+    # Write semantics: a run REPLACES the rows it regenerated and leaves every
+    # other row alone. Regenerating a subset (--ids) must not truncate the file
+    # to that subset, and a run that keeps nothing must not empty it either.
+    attempted = {t["id"] for t in tasks} | {d for d in done if args.ids and d in set(args.ids)}
+    kept_rows = []
+    if os.path.exists(args.out):
+        with open(args.out) as f:
+            kept_rows = [json.loads(l) for l in f
+                         if l.strip() and json.loads(l)["id"] not in attempted]
+    all_rows = kept_rows + rows
+    with open(args.out, "w") as f:
+        for r in all_rows:
+            f.write(json.dumps(r) + "\n")
 
     with open(REPORT, "w") as f:
         json.dump({"generated_at": int(time.time()),
