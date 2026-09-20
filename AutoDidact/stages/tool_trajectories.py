@@ -23,9 +23,12 @@ DESCRIPTION = ("per-tool trajectories: teacher -> real MCP call -> real result "
 
 
 def run(ctx):
-    build_tool_tasks.main()
+    # Both wrapped scripts own their argparse main(), and `argv` takes the flag
+    # list (splatting a list would pass its characters as separate args).
+    with argv():
+        build_tool_tasks.main()
     flags = ["--force"] if os.environ.get("MILADY_INPUTS_CHANGED") else []
-    with argv(*flags):
+    with argv(flags):
         rc = generate_tool_trajectories.main()
     if rc != 0:
         raise RuntimeError(f"trajectory generation failed (rc={rc})")

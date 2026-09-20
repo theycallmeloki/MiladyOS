@@ -36,57 +36,69 @@ MAX_RESULT_CHARS = 1400
 # entire description a 1.5B gets of its own hands.
 CATALOGUE: dict[str, dict] = {
     "lore_search": {
+        "short": "search the lore corpus",
         "params": ["query"],
         "summary": "Semantic search over the lore corpus. Use for lore facts, "
                    "numbers, places, entities you do not know from memory.",
     },
     "read_file": {
+        "short": "read a workspace file",
         "params": ["path"],
         "summary": "Read a file from the MiladyOS workspace into memory "
                    "(relative paths resolve under /app).",
     },
     "write_file": {
+        "short": "create/overwrite a file",
         "params": ["path", "content"],
         "summary": "Create or overwrite a file in the MiladyOS workspace. Use a "
                    "scratch path under /tmp for anything experimental.",
     },
     "edit_file": {
+        "short": "replace exact text in a file",
         "params": ["path", "old_string", "new_string"],
         "summary": "Replace an exact string in a file with a new one; "
                    "old_string must match exactly once.",
     },
     "execute_command": {
+        "short": "run a shell command",
         "params": ["command"],
         "summary": "Run a shell command in the MiladyOS workspace and get its "
                    "output. Use for system facts (kernel, disk, processes).",
     },
     "emacs_ping": {
+        "short": "is the Emacs daemon alive",
         "params": [],
         "summary": "Check whether the in-container Emacs daemon is alive "
                    "(returns its version).",
     },
     "emacs_eval": {
+        "short": "evaluate Emacs Lisp",
         "params": ["code"],
         "summary": "Evaluate Emacs Lisp in the live Emacs daemon. Use to "
                    "compute, inspect Emacs state, or drive buffers.",
     },
     "job_list": {
+        "short": "list a CI job's runs",
         "params": ["name"],
         "summary": "List recent runs of a MiladyOS CI job.",
     },
     "job_status": {
+        "short": "status of one job run",
         "params": ["name", "number"],
         "summary": "Status of one job run.",
     },
     "job_run": {
+        "short": "trigger a CI job",
         "params": ["name"],
         "summary": "Trigger a MiladyOS CI job and return its run number.",
     },
     "get_milady_time": {
+        "short": "current node time",
         "params": [],
         "summary": "The current time inside MiladyOS.",
     },
     "get_divine_rng": {
+        "short": "random number",
         "params": [],
         "summary": "Ask the temple for a random number.",
     },
@@ -123,13 +135,23 @@ OMITTED: dict[str, str] = {
 
 
 def prompt_block() -> str:
-    """The catalogue as the student reads it, for the system prompt."""
-    lines = ["TOOLS — emit exactly one call as "
-             '<tool>{"tool": "<name>", "<arg>": <value>, ...}</tool>']
+    """The catalogue as the student reads it, for the system prompt.
+
+    Deliberately terse. A 1.5B given a 3 KB specification does not follow it —
+    it *parrots* it (measured: the worked example and the numbered format rules
+    came back verbatim as generation, with the think block left unclosed, which
+    cost round 0003 its whole format domain). One short line per tool, the call
+    shape stated once, no example block.
+    """
+    # No worked example and no literal call template: a 1.5B copies both back
+    # out as its own generation. The demonstrations carry the syntax.
+    lines = ["TOOLS — to use one, emit one call on its own line, like:",
+             '  <tool>{"tool": "emacs_eval", "code": "(+ 40 2)"}</tool>']
     for name, meta in CATALOGUE.items():
-        args = ", ".join(meta["params"]) if meta["params"] else "no arguments"
-        lines.append(f"  {name}({args}) — {meta['summary']}")
-    lines.append("Arguments must use exactly these names; never invent a tool.")
+        args = ",".join(meta["params"])
+        lines.append(f"  {name}({args}): {meta['short']}")
+    lines.append("Then the tool's result appears; answer from it, else answer "
+                 "directly if you already know.")
     return "\n".join(lines)
 
 
