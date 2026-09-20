@@ -45,9 +45,21 @@ fi
 # Phase B. Add the host docker group so the wp agent / kaniko / scratch-build
 # reach the docker socket.
 DOCKER_GID="$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 981)"
-echo ">> launching miladyos"
+# LLM backend for the model-backed tools (alpha_evolve's evolve_template,
+# ...): point it at any OpenAI-compatible server on the host, e.g.
+#     MILADY_LLM_BASE=http://127.0.0.1:17890/v1 MILADY_LLM_MODEL=bonsai \
+#     MILADY_LLM_API_KEY=sk-noop \
+#     MILADY_LLM_CHAT_TEMPLATE_KWARGS='{"enable_thinking": false}' \
+#     ./scripts/builder.sh
+# Runtime env only — never baked into the public image.
+LLM_ENV=()
+for v in MILADY_LLM_BASE MILADY_LLM_MODEL MILADY_LLM_API_KEY MILADY_LLM_CHAT_TEMPLATE_KWARGS; do
+  [ -n "${!v:-}" ] && LLM_ENV+=(--env "$v=${!v}")
+done
+echo ">> launching miladyos (llm env: ${LLM_ENV[*]:-none})"
 docker run -d --name miladyos --privileged --restart=unless-stopped --net=host \
   --group-add "$DOCKER_GID" \
+  "${LLM_ENV[@]}" \
   --env MILADY_ADMIN_ID=milady --env MILADY_ADMIN_PASSWORD=milady \
   --env MILADY_KUBECONFIG_CONTENT="$(cat "${KUBECONFIG:-$HOME/.kube/config}" 2>/dev/null || true)" \
   -v /var/run/docker.sock:/var/run/docker.sock "$IMAGE"
