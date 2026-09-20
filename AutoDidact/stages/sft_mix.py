@@ -26,8 +26,10 @@ FILE = "stages/sft_mix.py"
 DESCRIPTION = "SFT set: retrieval demos (r2.warmup) + per-tool demos, weighted"
 
 # How many times each family appears. A repeated row is a weight; the alternative
-# would be training longer, which changes two things at once.
-WEIGHTS = {"lore": 1, "tools": 8}
+# would be training longer, which changes two things at once. 8 was too weak:
+# round 0003's student learned to ANSWER about tools without calling them, so the
+# tool demos now carry as much weight as the whole retrieval set (round 0004).
+WEIGHTS = {"lore": 1, "tools": 30}
 FAMILIES = {"lore": "r2.warmup", "tools": "tools.trajectories"}
 
 
