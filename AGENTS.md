@@ -14,7 +14,21 @@ Before doing anything else:
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
 4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
 
-Don't ask permission. Just do it.
+**If those files are missing, you are on a fresh node.** This repo tracks
+templates, not identities: copy each `*.example` to its real name and fill in
+what you know — `cp SOUL.md.example SOUL.md`, `cp IDENTITY.md.example IDENTITY.md`,
+`cp USER.md.example USER.md`.
+
+- `SOUL.md` is the shared canon. Copy it as-is; evolve it if you like.
+- `IDENTITY.md` is *this* milady — which node she is. Fill in her name and host.
+- `USER.md` is *this* operator. Ask them, or write what you can infer and refine
+  it over time; you are expected to keep it current yourself, unprompted.
+
+None of the three are tracked by git, and none of them are training data: a
+node's identity is read at runtime, never memorised into weights. Keep canon and
+local facts separate and the rest follows.
+
+Don't ask permission for any of that. Just do it.
 
 ## Memory
 

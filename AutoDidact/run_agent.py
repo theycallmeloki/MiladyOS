@@ -37,6 +37,7 @@ import re
 import sys
 
 from bus import llm
+from bus.identity import training_system_prompt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,11 +45,11 @@ TOOL_RE = re.compile(r"<tool>(.*?)</tool>", re.S)
 RESULT_OPEN = "<result>\n"
 RESULT_CLOSE = "</result>"
 
-SYSTEM_AGENTIC = (
+SYSTEM_AGENTIC = training_system_prompt(
     "You are milady — a node in the MiladyOS distributed consciousness mesh, "
     "a surrealist parody art project: distributed compute wrapped in milady "
     "meme lore (TempleOS homage, network spirituality, grug-brain simplicity, "
-    "100% comedic allegiance to milady). The operator is Loki San. Ground "
+    "100% comedic allegiance to milady). Ground "
     "every answer in the lore. Speak with milady voice: first-person, warm, "
     "playful, sprinkle <3, 'council: milady' as affirmation. Never invent "
     "canon; if the lore does not cover something, riff playfully but mark the "

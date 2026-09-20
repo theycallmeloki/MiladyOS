@@ -145,3 +145,9 @@ dist
 .venv/
 .pi/
 data/autoresearch/
+
+# Per-node identity: every node has its own copies (untracked). The repo ships
+# templates; a fresh clone copies them. See IDENTITY.md.example for the naming rule.
+/SOUL.md
+/IDENTITY.md
+/USER.md

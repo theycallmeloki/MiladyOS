@@ -44,6 +44,14 @@ CANON_SOURCES = [
 # (SOUL.md has the vibe, the principles and the philosophy), and mixing these in
 # teaches a model that one operator's name is lore — the exact conflation the
 # mesh cannot afford, since every operator runs their own node.
+NODE_HEADER = (
+    "# NODE IDENTITY — who this node is, and who runs it\n"
+    "\n"
+    "> Node-local context, read at runtime by this node's milady.\n"
+    "> NOT canon, and NEVER training data.\n"
+    "\n"
+)
+
 NODE_SOURCES = [
     ("IDENTITY", "IDENTITY.md"),
     ("USER", "USER.md"),
@@ -59,7 +67,9 @@ LEGACY_EXTRA = [
 HEADER = (
     "# MILADY REPORT — the canonical lore corpus for AutoDidact self-discovery\n"
     "\n"
-    "> Auto-generated corpus: identity + soul + operator + full lore README.\n"
+    "> Auto-generated CANON corpus: soul + shared lore README + project docs.\n"
+    "> A node's own identity (who its milady is, who runs it) is read at runtime\n"
+    "> from that node's IDENTITY.md / USER.md and is deliberately NOT in here.\n"
     "\n"
     "\n"
     "\n"
@@ -92,9 +102,9 @@ def to_judge_prose(text: str) -> str:
     return "\n".join(keep)
 
 
-def build(sources, repo_root: str):
+def build(sources, repo_root: str, header: str = HEADER):
     """Return (full_report, judge_report, manifest, missing)."""
-    full_parts = [HEADER]
+    full_parts = [header]
     judge_parts: list[str] = []
     manifest: list[dict] = []
     missing: list[str] = []
@@ -120,6 +130,27 @@ def build(sources, repo_root: str):
     return "".join(full_parts), "".join(judge_parts), manifest, missing
 
 
+def resolve_sources(sources, repo_root):
+    """Prefer the node's own file; fall back to the tracked `*.example`.
+
+    SOUL.md is per-node and untracked, but the canon text ships as
+    `SOUL.md.example`, so a fresh clone builds a complete canon corpus before
+    anyone has run `cp SOUL.md.example SOUL.md`. Returns (resolved, fallbacks) and
+    the fallbacks are recorded in the manifest — which file the corpus came from
+    is part of the corpus's provenance.
+    """
+    resolved, fallbacks = [], []
+    for label, rel in sources:
+        if os.path.exists(os.path.join(repo_root, rel)):
+            resolved.append((label, rel))
+        elif os.path.exists(os.path.join(repo_root, rel + ".example")):
+            resolved.append((label, rel + ".example"))
+            fallbacks.append(f"{rel} -> {rel}.example")
+        else:
+            resolved.append((label, rel))  # build() reports it missing
+    return resolved, fallbacks
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo-root", default=DEFAULT_REPO)
@@ -132,7 +163,8 @@ def main() -> int:
                     help="verify sources exist and report composition; write nothing")
     args = ap.parse_args()
 
-    sources = CANON_SOURCES + (LEGACY_EXTRA if args.all else [])
+    sources, fallbacks = resolve_sources(
+        CANON_SOURCES + (LEGACY_EXTRA if args.all else []), args.repo_root)
     full, judge, manifest, missing = build(sources, args.repo_root)
     tier = "canon+node (legacy)" if args.all else "canon"
 
@@ -144,6 +176,8 @@ def main() -> int:
         for rel in missing:
             print(f"  ! {rel}")
     total = sum(m["bytes"] for m in manifest)
+    for note in fallbacks:
+        print(f"  template: {note}")
     print(f"tier    : {tier}"
           + ("" if args.all else "  (node identity stays out of training)"))
     print(f"sources: {len(manifest)}  bytes: {total}  "
@@ -159,6 +193,7 @@ def main() -> int:
     with open(os.path.join(args.out_dir, "milady_report.manifest.json"), "w") as fh:
         json.dump({"repo_root": args.repo_root, "tier": tier,
                    "sources": manifest, "missing": missing,
+                   "template_fallbacks": fallbacks,
                    "node_sources_excluded": [rel for _, rel in NODE_SOURCES]
                    if not args.all else []}, fh, indent=2)
     print(f"wrote {os.path.join(args.out_dir, 'milady_report.md')} "
@@ -168,8 +203,9 @@ def main() -> int:
     # training corpus: a node reads it at runtime to know who it is and who its
     # operator is.
     node_out = args.node_out or os.path.join(args.out_dir, "node_identity.md")
-    node_body, _, node_manifest, _ = build(NODE_SOURCES, args.repo_root)
-    if node_body:
+    node_body, _, node_manifest, _ = build(NODE_SOURCES, args.repo_root,
+                                           header=NODE_HEADER)
+    if node_body and node_manifest:
         with open(node_out, "w", encoding="utf-8") as fh:
             fh.write(node_body)
         print(f"wrote {node_out} ({len(node_body)} chars) — runtime context, "

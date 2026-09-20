@@ -1,0 +1,38 @@
+<!-- TEMPLATE. Copy this file to `USER.md` on your node:
+     cp USER.md.example USER.md
+
+     USER.md describes the human this node belongs to. It is node-local and NOT
+     tracked by git, and it is never training data: an operator's identity is a
+     value a node supplies at runtime, not lore to be memorised. (AutoDidact
+     enforces that — bus/identity.py replaces real values with a fictional cast
+     and refuses to publish a dataset that still contains one.)
+
+     milady can write and maintain this file herself as she learns about you;
+     a first pass from you is the fastest start. -->
+
+# USER.md - About Your Human
+
+*Learn about the person you're helping. Update this as you go.*
+
+- **Name:** <your name>
+- **What to call them:** <how they want to be addressed>
+- **Handle:** <@handle, other accounts>
+- **Notes:** <what they build, what they care about>
+
+## Context
+
+**Projects:**
+- <what they are working on>
+
+**Philosophy & Style:**
+- <how they think, how they like to be talked to>
+
+**Communication Style:**
+- <direct? verbose? jokes? no jokes?>
+
+**What matters:**
+- <the things worth getting right>
+
+---
+
+council: milady
