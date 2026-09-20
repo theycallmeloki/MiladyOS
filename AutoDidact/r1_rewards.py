@@ -50,6 +50,25 @@ def think_text(completion) -> str:
     return m.group(1).strip() if m else ""
 
 
+def inline_reasoning(message: dict) -> str:
+    """Normalize a reasoning-model reply to the inline <think>…</think>answer
+    shape every parser in this stack expects.
+
+    llama.cpp — and any OpenAI-compatible server with a reasoning parser — puts
+    the thinking in `reasoning_content` and STRIPS it from `content`. A perfect
+    answer therefore arrives with no </think> at all, and every format-gated
+    check (nanomilady_gate's `format`, milady_voice_reward) scores it 0.0 while
+    think_text() reads nothing for the comedy metric. Re-inline at the client
+    boundary so the served model keeps its reasoning AND the harness sees the
+    shape it was authored against.
+    """
+    content = message.get("content") or ""
+    reasoning = message.get("reasoning_content") or ""
+    if not reasoning or THINK_CLOSE in content:
+        return content
+    return f"{THINK_OPEN}{reasoning.strip()}{THINK_CLOSE}{content}"
+
+
 def question_text(prompt) -> str:
     if isinstance(prompt, str):
         return prompt

@@ -32,7 +32,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import judge  # noqa: E402
-from r1_rewards import student_answer, think_text  # noqa: E402
+from r1_rewards import inline_reasoning, student_answer, think_text  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCENARIOS = os.path.join(HERE, "eval", "canonical_scenarios.json")
@@ -44,22 +44,27 @@ HISTORY = os.path.join(HERE, "eval", "history.jsonl")
 STUDENT_API = os.environ.get(
     "STUDENT_API", "http://127.0.0.1:8081/v1/chat/completions")
 STUDENT_MODEL = os.environ.get("STUDENT_MODEL", "r1-1.5b")
+# Full-context student budget; the server clamps to the slot's free space, so
+# the ceiling only matters for items whose reasoning would otherwise be cut.
+STUDENT_MAX_TOKENS = int(os.environ.get("STUDENT_MAX_TOKENS", "32768"))
+STUDENT_TIMEOUT = int(os.environ.get("STUDENT_TIMEOUT", "1800"))
 
 
-def student_chat(messages, max_tokens=2048, timeout=300) -> str:
+def student_chat(messages, max_tokens=None, timeout=None) -> str:
     """One student completion (non-streaming). Returns the raw content."""
     body = json.dumps({
         "model": STUDENT_MODEL,
         "messages": messages,
-        "max_tokens": max_tokens,
+        "max_tokens": max_tokens or STUDENT_MAX_TOKENS,
         "temperature": 0.7,
         "stream": False,
     }).encode()
     req = urllib.request.Request(
         STUDENT_API, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.urlopen(
+            req, timeout=timeout or STUDENT_TIMEOUT) as r:
         out = json.loads(r.read().decode())
-    return out["choices"][0]["message"].get("content") or ""
+    return inline_reasoning(out["choices"][0]["message"])
 
 
 def load_corpus():
