@@ -11,6 +11,7 @@ Env resolution, first match wins:
   sensei URL    MILADY_SENSEI_URL | JUDGE_API | API      (teacher/judge/repairer)
   student URL   MILADY_STUDENT_URL | STUDENT_API          (served candidate)
   flavour URL   MILADY_FLAVOUR_URL                        (optional 7B stylist)
+  MCP URL       MILADY_MCP_URL                             (tool environment)
   per-role      MILADY_<ROLE>_MODEL, _MAX_TOKENS, _TIMEOUT, _TEMPERATURE,
                 _TEMPLATE_KWARGS (JSON)
   tracing       MILADY_TRACES=0 disables runs/…/llm.jsonl tracing
@@ -39,6 +40,9 @@ DEFAULT_SENSEI = "http://127.0.0.1:17890/v1/chat/completions"
 # answers /v1/models with a 404 while looking alive. Use a free port.
 DEFAULT_STUDENT = "http://127.0.0.1:8091/v1/chat/completions"
 DEFAULT_FLAVOUR = "http://127.0.0.1:18030/v1/chat/completions"
+# The live MiladyOS MCP server (SSE). Tool trajectories are only worth training
+# on if the tool actually ran, so this is the environment, not a model role.
+DEFAULT_MCP = "http://127.0.0.1:6000"
 
 
 def _env(*names, default=None):
@@ -63,6 +67,14 @@ def _json_env(role, field):
 SENSEI_URL = _env("MILADY_SENSEI_URL", "JUDGE_API", "API", default=DEFAULT_SENSEI)
 STUDENT_URL = _env("MILADY_STUDENT_URL", "STUDENT_API", default=DEFAULT_STUDENT)
 FLAVOUR_URL = _env("MILADY_FLAVOUR_URL", default=DEFAULT_FLAVOUR)
+
+# Non-LLM endpoints: the environment the agent acts on. Kept out of ROLES
+# because ROLES is the chat/message model (decoding params, retries) and
+# `llm.for_role(...)` must not be handed a tool server.
+SERVICES = {
+    # The MiladyOS MCP server the tool trajectories execute against.
+    "mcp": {"url": _env("MILADY_MCP_URL", default=DEFAULT_MCP)},
+}
 
 # One row per role: url, model (None = omit the field entirely), decoding
 # defaults, and a transport retry policy that is OFF unless a caller asks.
@@ -150,6 +162,14 @@ PATHS = {
     "traces": AUTODIDACT / "saved_data" / "traces" / "llm.jsonl",
 }
 TRACE_ENABLED = _env("MILADY_TRACES", default="1") != "0"
+
+
+def service(name):
+    """A non-LLM endpoint (currently just the MCP tool server)."""
+    if name not in SERVICES:
+        raise KeyError(
+            f"unknown service {name!r}; known: {', '.join(sorted(SERVICES))}")
+    return dict(SERVICES[name])
 
 
 def role(name):
