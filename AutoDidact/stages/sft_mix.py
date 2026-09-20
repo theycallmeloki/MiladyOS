@@ -29,20 +29,26 @@ DESCRIPTION = "SFT set: retrieval demos (r2.warmup) + per-tool demos, weighted"
 # would be training longer, which changes two things at once. 8 was too weak:
 # round 0003's student learned to ANSWER about tools without calling them, so the
 # tool demos now carry as much weight as the whole retrieval set (round 0004).
-WEIGHTS = {"lore": 1, "tools": 30, "restraint": 40}
+WEIGHTS = {"lore": 1, "tools": 30, "restraint": 40, "nocall": 60}
 FAMILIES = {"lore": "r2.warmup", "tools": "tools.trajectories",
-            "restraint": "tools.trajectories"}
+            "restraint": "tools.trajectories", "nocall": "tools.trajectories"}
+
+
+def _family(row):
+    """A row's family, with a fallback for rows written before the field existed
+    (a row with no tool was a restraint demo; with one, a tool demo)."""
+    if row.get("family"):
+        return {"tool": "tools"}.get(row["family"], row["family"])
+    return "tools" if row.get("tool") else "restraint"
 
 
 def split(dataset_id, family):
-    """One dataset can hold several families: the restraint demos (a refusal, or
-    a direct answer) live beside the tool demos and are split by having no tool."""
-    recs = registry.load(dataset_id)
-    if family == "restraint":
-        return [r for r in recs if not r.get("tool")]
-    if family == "tools":
-        return [r for r in recs if r.get("tool")]
-    return recs
+    """One dataset holds several families: tool demos, refusals, and the
+    answer-directly demos that keep the model from reaching for a tool at
+    everything (the suite's tool_no_call domain)."""
+    if dataset_id == "r2.warmup":
+        return registry.load(dataset_id)
+    return [r for r in registry.load(dataset_id) if _family(r) == family]
 
 
 def run(ctx):

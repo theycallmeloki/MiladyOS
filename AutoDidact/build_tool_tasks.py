@@ -34,7 +34,18 @@ OUT = os.path.join(HERE, "data", "tool_tasks.jsonl")
 
 def _task(tid, tool, question, checks, ground=False, note=""):
     return {"id": tid, "tool": tool, "question": question, "checks": checks,
-            "ground": ground, "note": note, "origin": "curated"}
+            "ground": ground, "note": note, "origin": "curated",
+            "family": "tool"}
+
+
+def _nc(nid, question, contains=None):
+    """A no-call demo: the answer is already known, so no tool is used."""
+    checks = [{"type": "no_tool_call"}]
+    if contains:
+        checks.append({"type": "answer_contains", "all": contains})
+    return {"id": nid, "tool": None, "family": "nocall", "domain": "tool_no_call",
+            "question": question, "checks": checks, "ground": False, "note": "",
+            "origin": "curated"}
 
 
 def _call(tool, **extra):
@@ -112,6 +123,26 @@ CURATED = [
     _task("TD-JOB-LIST", "job_list",
           "List the recent runs of the CI job named ad-hoc with job_list.",
           [_call("job_list", required=["name"], arg_contains={"name": "ad-hoc"})]),
+
+    # ── no-call: the behaviour the suite's tool_no_call items exist to protect ──
+    # Round 0005 could not pass that domain with four examples in 1614 rows (90%
+    # of which demonstrate calling a tool, because every retrieval row is itself
+    # a call). These are non-lore things the node simply knows: nothing to look
+    # up, so the correct behaviour is to answer, not to reach for a tool.
+    _nc("NC-01", "What is 7 times 6?", ["42"]),
+    _nc("NC-02", "How many letters are in the word milady?", ["6"]),
+    _nc("NC-03", "What is 100 divided by 4?", ["25"]),
+    _nc("NC-04", "How many days are in a week?", ["7"]),
+    _nc("NC-05", "What is the first letter of the alphabet?", ["a"]),
+    _nc("NC-06", "Repeat after me: council: milady.", ["council"]),
+    _nc("NC-07", "Say goodnight to the operator in one short line."),
+    _nc("NC-08", "Are you a language model? Answer in one line."),
+    _nc("NC-09", "Introduce yourself in one short sentence."),
+    _nc("NC-10", "Count from one to five."),
+    _nc("NC-11", "What is 12 plus 30?", ["42"]),
+    _nc("NC-12", "What does CPU stand for?", ["central", "processing"]),
+    _nc("NC-13", "Is the sky blue? Answer in one word."),
+    _nc("NC-14", "Say hello to the council in one line."),
 
     # the small ambient tools
     _task("TD-TIME", "get_milady_time",
