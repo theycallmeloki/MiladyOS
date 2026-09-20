@@ -1,6 +1,7 @@
 """eval_scorer.py — the round-1 evaluation harness (baseline + every checkpoint).
 
-Runs the STUDENT (any OpenAI-compatible endpoint, STUDENT_API) against:
+Runs the STUDENT (any OpenAI-compatible endpoint; the endpoint, model and
+budget are the bus's `student` role — see bus/config.py) against:
   1. canonical scenarios (eval/canonical_scenarios.json, 31): final answer
      judge-graded vs expected_answer; adversarial scenarios graded by the
      faithfulness/guardrail judge (no invented canon). Tool-call recall
@@ -18,7 +19,7 @@ Reports PER CATEGORY (never one blended number) + appends the aggregate to
 eval/history.jsonl for trend tracking across training steps.
 
 Usage:
-  STUDENT_API=http://127.0.0.1:8083/v1/chat/completions python eval_scorer.py
+  MILADY_STUDENT_URL=http://127.0.0.1:8091/v1/chat/completions python eval_scorer.py
     [--tag baseline] [--comedy-limit 20] [--scenario-limit 0]
 """
 
@@ -28,11 +29,11 @@ import os
 import re
 import sys
 import time
-import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from bus import config, llm  # noqa: E402
 import judge  # noqa: E402
-from r1_rewards import inline_reasoning, student_answer, think_text  # noqa: E402
+from r1_rewards import student_answer, think_text  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCENARIOS = os.path.join(HERE, "eval", "canonical_scenarios.json")
@@ -41,30 +42,27 @@ EVAL_QA = os.environ.get("EVAL_QA", os.path.join(
 CORPUS_PATH = os.path.join(HERE, "data", "milady_report.md")
 HISTORY = os.path.join(HERE, "eval", "history.jsonl")
 
-STUDENT_API = os.environ.get(
-    "STUDENT_API", "http://127.0.0.1:8081/v1/chat/completions")
-STUDENT_MODEL = os.environ.get("STUDENT_MODEL", "r1-1.5b")
-# Full-context student budget; the server clamps to the slot's free space, so
-# the ceiling only matters for items whose reasoning would otherwise be cut.
-STUDENT_MAX_TOKENS = int(os.environ.get("STUDENT_MAX_TOKENS", "32768"))
-STUDENT_TIMEOUT = int(os.environ.get("STUDENT_TIMEOUT", "1800"))
-
 
 def student_chat(messages, max_tokens=None, timeout=None) -> str:
-    """One student completion (non-streaming). Returns the raw content."""
-    body = json.dumps({
-        "model": STUDENT_MODEL,
-        "messages": messages,
-        "max_tokens": max_tokens or STUDENT_MAX_TOKENS,
-        "temperature": 0.7,
-        "stream": False,
-    }).encode()
-    req = urllib.request.Request(
-        STUDENT_API, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(
-            req, timeout=timeout or STUDENT_TIMEOUT) as r:
-        out = json.loads(r.read().decode())
-    return inline_reasoning(out["choices"][0]["message"])
+    """One student completion (non-streaming) via the shared bus client.
+
+    Returns the inline-normalized completion (a separately-reported
+    `reasoning_content` is re-inlined as a <think>…</think> block), sampled at
+    the 0.7 this harness has always used for diversity. max_tokens/timeout win
+    over the `student` role's full-context defaults (the server clamps to the
+    slot's free space, so the ceiling only matters for items whose reasoning
+    would otherwise be cut).
+    """
+    overrides = {}
+    if max_tokens:
+        overrides["max_tokens"] = max_tokens
+    if timeout:
+        overrides["timeout"] = timeout
+    # This harness predates the bus and its model default was "r1-1.5b"; the bus
+    # resolves the env var itself, so only fall back when nothing was set.
+    if not config.STUDENT_MODEL_FROM_ENV:
+        overrides["model"] = "r1-1.5b"
+    return llm.chat(messages, role="student", temperature=0.7, **overrides)
 
 
 def load_corpus():
@@ -171,7 +169,7 @@ def main():
         if rec["prompt"][0].get("role") == "system":
             SYSTEM = rec["prompt"][0]["content"]
             break
-    print(f"student: {STUDENT_API}  tag={tag}", flush=True)
+    print(f"student: {config.role('student')['url']}  tag={tag}", flush=True)
     print(f"scenarios: {len(scenarios)}  comprehension: {len(comp_recs)} "
           f"already scored: {len(done)}", flush=True)
 

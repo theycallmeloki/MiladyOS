@@ -15,7 +15,9 @@ Syntax (taught via the system prompt, kept dead simple):
   <tool>{"tool": "lore_search", "query": "..."}</tool>
 
 Transport seam: `AgentBackend.generate(messages, stop, max_tokens)`.
-  - OpenAIBackend: HTTP against any vllm/OpenAI serve (probes + eval)
+  - OpenAIBackend: the bus, role="student" with this runner's --api url
+    (probes + eval); it returns the bus-normalized text, so reasoning that the
+    server reports separately arrives inline as <think>…</think>
   - (training wires the same loop into UnslothGRPOTrainerTemp.py with an
     in-process vllm backend)
 
@@ -33,6 +35,8 @@ import os
 import pickle
 import re
 import sys
+
+from bus import llm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -147,20 +151,27 @@ def think_block(text: str) -> str:
 # Transport
 # --------------------------------------------------------------------------
 class OpenAIBackend:
+    """The served student, over the bus.
+
+    `api` is this runner's own endpoint (the `--api` flag, default the round-2
+    local :8083 serve); it is passed to the bus as an explicit url override
+    because everything else that speaks to the student role is addressed by
+    MILADY_STUDENT_URL instead. The bus normalizes the reply, so a served
+    model whose thinking arrives in `reasoning_content` reaches the loop as an
+    inline <think>…</think> block instead of silently losing it.
+    """
+
     def __init__(self, api, model="r1-1.5b"):
-        import requests
-        self.requests = requests
         self.api = api
         self.model = model
 
     def generate(self, messages, stop=None, max_tokens=1024, temperature=0.7):
-        payload = {"model": self.model, "messages": messages,
-                   "max_tokens": max_tokens, "temperature": temperature}
-        if stop:
-            payload["stop"] = stop
-        r = self.requests.post(self.api, json=payload, timeout=240)
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        # Same body as the hand-rolled call: model, max_tokens, temperature,
+        # stop when there is one, and the 240 s socket timeout. `stop=None` is
+        # omitted, exactly as it was.
+        return llm.chat(messages, role="student", url=self.api, model=self.model,
+                        max_tokens=max_tokens, temperature=temperature,
+                        stop=stop, timeout=240)
 
 
 # --------------------------------------------------------------------------
@@ -206,7 +217,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--question", default=None)
     ap.add_argument("--eval-row", default=None, help="saved_data/r1_eval.jsonl:IDX")
-    ap.add_argument("--api", default="http://127.0.0.1:8083/v1/chat/completions")
+    ap.add_argument("--api", default="http://127.0.0.1:8083/v1/chat/completions",
+                    help="the round-2 local student serve; the bus sends it as an "
+                         "explicit url override for role=student")
     ap.add_argument("--max-answers", type=int, default=3, help="answer steps to try")
     args = ap.parse_args()
 

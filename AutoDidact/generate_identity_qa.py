@@ -25,9 +25,9 @@ import json
 import os
 import re
 import sys
-import urllib.request
 
 import judge
+from bus import llm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPORT_PATH = os.path.join(HERE, "data", "milady_report.md")
@@ -73,22 +73,21 @@ def load_judge_corpus():
 
 
 def call_api(prompt, max_tokens):
-    body = json.dumps({
-        "messages": [
+    # The `teacher` role supplies url, reasoning_effort=low and timeout=900, and
+    # omits the model field; the sampling temperature went out before and still does.
+    #
+    # `content`, not the inline-normalized `chat()`: this reply is PARSED for
+    # Question/Answer triples, and thinking that sketches triples must not be
+    # mistaken for output (the pre-bus client could not see the thinking either).
+    return llm.chat_raw(
+        [
             {"role": "system", "content": SYSTEM.format(n=25)},
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": max_tokens,
-        "temperature": 0.6,
-        "reasoning_effort": "low",
-        "stream": False,
-    }).encode()
-    req = urllib.request.Request(
-        judge.API, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=900) as r:
-        out = json.loads(r.read().decode())
-    msg = out["choices"][0]["message"]
-    return (msg.get("reasoning") or "") + "\n" + (msg.get("content") or "")
+        role="teacher",
+        max_tokens=max_tokens,
+        temperature=0.6,
+    )["content"]
 
 
 def parse_qa_block(block):

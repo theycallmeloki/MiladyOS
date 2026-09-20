@@ -15,10 +15,15 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from build_style_dataset import digest, dump, get_json, lock, normalize, quality_flags, read_rows, write_row
+from bus import config
 
 DATASET = "kaist-ai/CoT-Collection"
 REVISION = "c9d352cdc119df4a4f7526d100e4acb4a72a7a5c"
 DEFAULT = Path(__file__).resolve().parent / "saved_data" / "milady_reasoning_pilot"
+# The flavour endpoint, as the bus resolves it (MILADY_FLAVOUR_URL wins). The
+# manifest records this base, so a resumed run still proves which server
+# produced the pairs, and its default is the endpoint this pilot used before.
+FLAVOUR_BASE = config.FLAVOUR_URL.rsplit("/chat/completions", 1)[0]
 ABBREVIATIONS = re.compile(r"\b(?:Mr|Mrs|Ms|Dr|Prof|St|Jr|Sr|vs|etc|e\.g|i\.e)\.$", re.I)
 
 
@@ -140,9 +145,9 @@ def literal_text(text):
 
 def generate(directory, concurrency):
     rows = list(read_rows(directory / "inputs.jsonl"))
-    config = {"model": "milady", "max_tokens": 160, "temperature": 0.5,
-              "top_p": 0.95, "repetition_penalty": 1.25, "seed": 42, "stop": ["\n", "\r"]}
-    manifest = {"request": config, "base_url": "http://127.0.0.1:18030/v1",
+    request = {"model": "milady", "max_tokens": 160, "temperature": 0.5,
+               "top_p": 0.95, "repetition_penalty": 1.25, "seed": 42, "stop": ["\n", "\r"]}
+    manifest = {"request": request, "base_url": FLAVOUR_BASE,
                 "inputs_sha256": hashlib.sha256((directory / "inputs.jsonl").read_bytes()).hexdigest(),
                 "prompt_policy": "raw chunk/reference answer as one user message; teacher template adds style instruction"}
     path = directory / "generation.json"
@@ -169,14 +174,15 @@ def generate(directory, concurrency):
             saved[item["id"]] = item
 
     def infer(key, text):
-        payload = {**config, "messages": [{"role": "user", "content": text}]}
+        payload = {**request, "messages": [{"role": "user", "content": text}]}
         start = time.monotonic()
-        response = get_json(manifest["base_url"] + "/chat/completions", payload, timeout=240)
-        choice = response["choices"][0]
-        output = choice["message"].get("content") or ""
-        return {"id": key, "input": text, "output": output, "response": response,
+        # get_json POSTs this through the bus; the record's `content` is the
+        # server's own content field, exactly what this pilot stored before.
+        record = get_json(manifest["base_url"] + "/chat/completions", payload, timeout=240)
+        output = record["content"] or ""
+        return {"id": key, "input": text, "output": output, "response": record,
                 "seconds": round(time.monotonic() - start, 3),
-                "flags": flags_for(text, output, choice["finish_reason"])}
+                "flags": flags_for(text, output, record["finish_reason"])}
 
     errors = []
     # Small pilot: finite queue of at most 400 tasks, bounded active requests.

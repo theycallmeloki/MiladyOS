@@ -48,7 +48,7 @@ class JudgmentTests(unittest.TestCase):
                 calls.append(source)
                 judgment = {"verdict": labels.get((source, rewrite), "reject" if source == "bad" else "accept"),
                             "style_present": source != "plain", "reason": "test judgment"}
-                return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(judgment)}}]}
+                return {"content": json.dumps(judgment), "finish_reason": "stop"}
 
             def run(phase, *extra):
                 with patch("sys.argv", ["screen", phase, "--directory", tmp, *extra]):
