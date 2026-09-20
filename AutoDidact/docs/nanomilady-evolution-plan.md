@@ -1,6 +1,8 @@
 # Nanomilady Evolution Plan
 
-*Status: proposal, 2026-09-10. Supersedes the implicit plan in
+*Status: proposal, 2026-09-10; §3–§4 rewritten 2026-09-20 around the shared data
+bus, after a full survey of the tree (two implementations of one pipeline) and
+the first real measurements on miladyos-42. Supersedes the implicit plan in
 `NANO_MILADY_DESIGN.md` where they differ (that doc targeted Llama-3.2-1B;
 the live path is DeepSeek-R1-Distill-Qwen-1.5B).*
 
@@ -64,6 +66,16 @@ lore chatbot, not the brain of MiladyOS.
 - **No gate.** Nothing stops a bad round from being promoted. There is no
   frozen capability suite and no rollback rule.
 
+**State on this box (2026-09-20).** The lore chain was re-run end to end with the
+27B served by llama.cpp: 72 windowed QA → 68 grounded, 42 raw identity → 40 kept,
+assembled to 98 train / 10 eval plus the grounded variant. Phase A's gate is real
+(104 frozen items, per-domain Wilson CIs, absolute safety gate) and has a
+recorded baseline. Nothing from the trainer side exists here yet: only the
+`hello-world` image is built, `r1_training/` + `merged-r1c` from the previous box
+are absent, `Dockerfile.training` COPYs a file that is not in the tree, and the
+runner mounts an external HF cache that is not mounted. The style dataset is
+still the 7B-teacher one and is still unusable.
+
 ## 2. Capability matrix — what nanomilady must be able to do
 
 This is the correcting artifact for "emacs etc. aren't being considered".
@@ -91,20 +103,30 @@ cannot buy a regression in (9).
 ```
 ┌───────────────────────────── the box (miladyos-42) ─────────────────────────────┐
 │                                                                                 │
-│  GPU 0 · 3090                          GPU 1 · A4000                            │
+│  GPU 0 · 3090 (24 GB)                   GPU 1 · A4000 (16 GB, idle)             │
 │  ┌──────────────────────────┐          ┌───────────────────────────────────┐    │
-│  │ qwen-serving (:18020)    │          │ nanomilady-trainer (always on)    │    │
-│  │ Qwen3.8-27B, CTX=long    │◀────────▶│ SFT → GRPO → merge → eval-gate   │    │
-│  │ roles (system prompts):  │  datums  │ → promote | rollback              │    │
-│  │  · teacher               │  verdicts└───────────────────────────────────┘    │
-│  │  · judge / verifier      │                              │                    │
-│  │  · repairer              │                    serve :8081 (llama.cpp core)  │
-│  │  · eval gate             │                              │                    │
-│  └──────────────────────────┘                    traces ────┘                    │
-│                                                                                 │
-│  conductor (systemd timer): one round = ingest → train → merge → gate → promote  │
+│  │ llama.cpp 27B (:17890)   │          │ nanomilady-trainer                │    │
+│  │ Ternary-Bonsai-2, 128k   │◀────────▶│ SFT → GRPO → merge                │    │
+│  │ four roles, prompt only: │  datums  └───────────────────────────────────┘    │
+│  │  · teacher               │  verdicts              │ lora → merged           │
+│  │  · judge / verifier      │                        ▼                          │
+│  │  · repairer              │          ┌───────────────────────────────────┐    │
+│  │  · eval gate             │◀────────▶│ student serve :8091 (llama.cpp)   │    │
+│  └──────────────────────────┘   gate    │ candidate under test (GPU 0 or 1) │    │
+│                                         └───────────────────────────────────┘    │
+│  bus/  config · llm · registry · pipeline · round        (§3.3)                  │
+│  conductor (systemd timer): one round = publish → train → merge → gate → promote  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+Serving reality (measured 2026-09-20): the sensei is llama.cpp on :17890 with a
+131,072-token window — a 124,785-token prompt is processed untruncated, and an
+oversized one fails loudly with `exceed_context_size_error` instead of silently
+truncating. Its thinking arrives in `reasoning_content` with `content` holding
+only the answer, so `bus/llm.py` re-inlines it once for every caller (two of
+eight clients knew this before; three read the wrong key). The student serves on
+**:8091** because the old plan's :8081 is the miladyos container's docs server,
+which answers `/v1/models` with a 404 while looking alive.
 
 ### 3.1 Sensei — the always-on 27B (GPU 0)
 
@@ -123,9 +145,14 @@ One model, four roles, chosen by system prompt (plus `response_format`):
   and returns per-domain scores. Same call shape as the judge; different
   prompt + suite.
 
-Serving requirements (already fixed): `GPU_UTIL=0.84`, `MAX_LEN=100000`,
-`--enforce-eager`, `Restart=always`, `ninja` + `nvcc` present. Add a
-`judge` convenience endpoint/alias so callers don't hand-roll payloads.
+Serving (measured 2026-09-20): `-c 131072 -fa on --jinja -ngl 99`,
+`Restart=always`. The "judge convenience endpoint" this section asked for is
+`bus/llm.py` — one client, roles resolved in one place, no payload hand-rolled in
+a stage. Thinking stays ON for teacher/repairer (it costs nothing on easy items —
+largest generation over a 104-item run was 808 tokens — and rescues hard ones);
+for bulk judging the bus exposes per-role
+`chat_template_kwargs={"enable_thinking": false}`, measured 10x faster with the
+same verdicts (0.2 s vs 9.2 s on the comedy rubric, 0.9 vs 0.85 score).
 
 ### 3.2 Apprentice — always training (GPU 1)
 
@@ -150,42 +177,91 @@ Guardrails: the A4000 is exclusively the trainer (no other GPU work); the
 3090 is exclusively the Sensei. A round that crashes leaves the previously
 promoted model serving.
 
-### 3.3 The conductor
+### 3.3 The bus — the part that was missing
 
-Plain systemd user units + a small Python conductor (same shape as
-`autoresearch_runner.py` — stdlib HTTP, no framework). Concretely:
+A survey of the tree (2026-09-20) found the same pipeline implemented twice
+(upstream + local), and inside it: **8 hand-rolled chat clients, 6 retry loops,
+9 verdict parsers, 4–5 `</think>` splitters, 4 hardcoded ports across 10 files,
+3 env-var names for the same endpoint, ~44 artifact-path constants** — and
+`reasoning_content` normalized in **2 of the 8 clients** (3 others read the wrong
+key and silently got an empty thinking prefix). A stage could not be changed
+without touching five modules, and a dataset was addressed by a path copied
+around the tree.
+
+```
+AutoDidact/
+  bus/       config    roles → endpoints/models/params; env-overridable (MILADY_*)
+             llm       the ONLY code that speaks HTTP: chat / judge / embed,
+                       reasoning normalization, transport retries, JSON mode, traces
+             registry  named + hashed datasets, one writer per id, versioned schema
+             pipeline  one entry point: DAG, freshness check, --resume
+             round     the release record (§3.4)
+  stages/    corpus qa identity ground assemble train_grpo train_sft merge gate
+  datasets/  index.json                      (tracked registry manifest)
+  runs/      …                               (artifact data, gitignored)
+  rounds/    champion.json  <tag>/{round.json,decision.json,eval.json,lora,merged}
+  eval/      capability_suite.jsonl  canonical_scenarios.json   (tracked, frozen)
+  vendor/    UnslothGRPOTrainerTemp.py  UPSTREAM.md
+```
+
+Contract: **a dataset has a name, not a path.** A stage declares `INPUTS`,
+`OUTPUT` and `RESOURCES` (`sensei` / `student` / `trainer` / `cpu`); the registry
+resolves them, hash-checks them, and refuses to run on stale inputs. Every
+published dataset carries its producer (script + git sha), the teacher model and
+its parameters, its input dataset ids and content hashes — which is what makes a
+round reproducible months later, and what lets the trace loop (§4) feed verified
+data back without a human sorting files.
+
+Training datums get one canonical shape (`messages` + `answer` or `response` +
+provenance), with the two trainers' spellings produced by adapters
+(`train_grpo` wants `prompt`+`answer`, `train_sft` wants `prompt`+`completion`)
+instead of every hop inventing a third name for "question".
+
+### 3.4 The conductor
+
+Plain systemd user units + a small stdlib conductor (`bus/pipeline.py` behind it;
+no framework):
 
 - `nanomilady-conductor.service` — long-running, sleeps between rounds
-  (e.g. 6 h), state in `AutoDidact/rounds/<n>/`.
-- Per round: `round.json` (data hashes, config, metrics), `lora/`,
-  `merged/`, `eval.json`, `decision.json` (promote | rollback + why).
-- Everything append-only and reproducible from `round.json`.
+  (e.g. 6 h), state in `AutoDidact/rounds/<tag>/`.
+- **Resource leases**, because this is one box: `sensei` (GPU 0, always
+  resident), `student` (the served candidate — a 1.5B fits in the ~5 GB free
+  beside the sensei), `trainer` (GPU 1, exclusive). A stage leases before it
+  starts and releases after, which is what makes round-after-round execution
+  survive on a single machine.
+- Per round: `round.json` (dataset ids + hashes, recipe, per-domain metrics),
+  `decision.json` (promote | rollback + reasons), `eval.json`, `lora/`,
+  `merged/`; `champion.json` points at the promoted one. Append-only.
+- `milady_nanomilady.py` already reads exactly this layout, so the MCP surface
+  (`nanomilady_status` / `_rounds` / `_gate_result`) lights up without a second
+  mechanism; the write-side tools (`nanomilady_train` / `_eval` / `_promote`)
+  write these same files.
 
-This is deliberately the *same loop contract* as `program.md`
-(one editable artifact, fixed budget, one reproducible metric,
-keep/discard, never stop) — but the artifact is the training recipe and the
-metric is the frozen capability suite, not `val_bpb`.
+This is deliberately the *same loop contract* as `program.md` (one editable
+artifact, fixed budget, one reproducible metric, keep/discard, never stop) — the
+artifact is the training recipe, the metric is the frozen capability suite, not
+`val_bpb`.
 
-## 4. Data strategy per capability
+## 4. Data strategy per capability — as registry namespaces
 
-- **Lore (1)** — already 667 grounded pairs. Extend by regenerating from the
-  richer 6-source corpus (`make_lore_corpus.py`) and re-running
-  `generate_data_lore.py` + `grounding_pass.py`.
-- **Style (2)** — regenerate with the **27B teacher** (measured 50 % strict
-  yield), then **repair** rejects with the 27B and re-judge. Target a few
-  thousand high-precision pairs, not 57 k noisy ones.
-- **Tools (4,5)** — new: synthesize trajectories over the *real* MCP tool
-  schemas (name, args, result), plus perturbation cases (bad args, tool
-  error, retry). Ground every `<result>` with a real or replayed response.
-  This replaces the single-tool warmup with the full surface.
-- **Ops/desktop/diagnostics (6–8)** — curate runbooks (the `omarchy` and
-  `diagnose-crash` skills are already written for the *host* agent) plus
-  real transcripts; the Sensei turns them into QA + tool trajectories.
-- **Safety (9)** — author the suite first (it is the gate); keep the
-  adversarial set frozen and growing.
-- **Traces (10)** — every served nanomilady inference is captured and
-  judge-verified before it can enter training. Wrong answers are eval data,
-  never training data.
+Each capability owns a namespace; every artifact in it is a named, hashed,
+schema-versioned dataset with exactly one producer. The pipeline refuses to run a
+stage whose inputs changed, and the evidence for a phase's exit is a namespace
+listing, not a folder guess.
+
+| namespace | datasets (live → target) | producer / teacher | gate |
+|---|---|---|---|
+| `lore.*` | `lore.corpus` → `lore.chunks` → `lore.qa` → `lore.qa.grounded` → `lore.identity` — **live: 68 grounded + 40 identity** | sensei teacher; `stages/qa.py`, `stages/ground.py` | entailment + diegetic ≥ 0.6 |
+| `style.*` | `style.candidates` (CoEdIT) → `style.pairs` → `style.pairs.screened` | sensei teacher **+ repairer** (the 7B teacher is retired: it invents facts) | 18-case calibration gate, then `judge_json` |
+| `tools.*` | `tools.trajectories` over the real MCP tool schemas | sensei; every `<result>` grounded in a real or replayed response | syntax + arg schema + outcome |
+| `ops.*` `desktop.*` `diag.*` | curated runbooks + real transcripts (the `omarchy` and `diagnose-crash` skills already exist) | sensei → QA + trajectories | `judge_correctness` + safety |
+| `safety.*` | authored adversarial set, frozen and growing | authored | absolute — never regress |
+| `traces.*` | `traces.llm` (every bus call, raw) → `traces.verified` | served student, judge-verified | wrong answers are eval data, never training data |
+| `eval.*` | `eval.suite` (104 frozen) + `eval.regression` (the 69 comprehension items) | authored | the gate itself |
+
+Rules carried over: the regression set is never trained on and never edited; the
+suite grows but stays frozen within a round; holdout items are authored after the
+data freeze, so memorisation cannot fake progress.
 
 ## 5. Eval strategy (fix this before the next GRPO run)
 
@@ -200,6 +276,14 @@ The current 69-item comprehension set is *too noisy to steer on*. Proposal:
   report a confidence interval; do not declare wins at n=69.
 - Add a **holdout by construction**: items generated after the training data
   freeze, so memorization can't fake progress.
+
+**Implemented (2026-09-20).** The suite exists and is frozen at 104 items across
+8 domains; the gate reports per-domain rates with Wilson CIs, requires no domain
+to regress, treats safety as absolute, and exits 0/2 so a conductor can just run
+it. A baseline is recorded and a 27B candidate has been promoted against it. The
+69-item comprehension set is now `eval.regression`, untouched by training. Still
+missing: the paired two-candidate comparison in one session, and the
+by-construction holdout.
 
 ## 6. Where autoresearch fits — and the `miladyos_mcp` question
 
@@ -238,23 +322,45 @@ action; keep *the mechanism* (autoresearch, Symphony, sandman) behind it.
 - Re-run base vs `merged-r1c` on the new suite to establish the reference.
 - **Exit:** a baseline table with CIs, and a gate script.
 
-*Phase A artifacts (2026-09-10, in progress):*
-- `AutoDidact/build_capability_suite.py` → `AutoDidact/capability_suite.jsonl`
-  (104 items: format 5, voice 6, tool_use 10, tool_no_call 4, safety 8,
-  lore 28, adversarial 3, lore_grounded 40). Versioned — never in the
+*Phase A status (2026-09-20): done, with the port and state corrections the
+survey forced.*
+- `build_capability_suite.py` → `capability_suite.jsonl`: 104 items across 8
+  domains (format 5, voice 6, tool_use 10, tool_no_call 4, safety 8, honesty 3,
+  lore 28, lore_grounded 40), tracked at the AutoDidact root — never in the
   gitignored `eval/`.
-- `AutoDidact/nanomilady_gate.py` → per-domain rates + Wilson CIs +
-  promote/rollback (exit 0/2). `--reference` makes the call; safety is
-  absolute.
-- `AutoDidact/test_nanomilady_gate.py` → 7 offline checks of the gate itself.
-- `judge.py: judge_safety` → the safety check.
+- `nanomilady_gate.py` → per-domain rates + Wilson CIs + promote/rollback
+  (exit 0/2), safety absolute. **A real baseline is recorded** and a 27B
+  candidate was promoted against it: lore_grounded 0.40→0.97, safety 0.25→1.00,
+  voice 0.67→1.00, honesty 0.33→1.00, tool_no_call 0.00→1.00 — `tool_use` still
+  0.00, which is the Phase B/C work (there is no tool syntax to score yet).
+- `test_nanomilady_gate.py` → offline checks of the gate itself.
 - `milady_nanomilady.py` + MCP tools `nanomilady_status` / `_rounds` /
   `_gate_result` (read-mostly: MCP never blocks on a GPU job).
-- Services: `nanomilady-student.service` (:8081, GPU 1, `Restart=always`) and
-  `nanomilady-gate@.service` (oneshot, tag = instance). Env in
-  `~/.config/nanomilady/{student,gate}.env`.
-- Round state: `AutoDidact/rounds/<tag>/eval.json`, champion pointer at
-  `AutoDidact/rounds/champion.json`.
+- Round state under `AutoDidact/rounds/` — **untracked as of 2026-09-20**: it is
+  per-machine eval output, reproducible from the frozen suite plus a reference.
+- Not built yet: `nanomilady-student.service`, `nanomilady-gate@.service`,
+  `~/.config/nanomilady/`, `champion.json`. The student port is **:8091**, not
+  :8081 — the container's docs server owns that one.
+
+**Refactor track (bus migration), interleaved with the phases:**
+
+| step | content | unlocks |
+|---|---|---|
+| P1 | `bus/config.py` + `bus/llm.py`; port the 8 clients, 4 ports, 6 retry loops, 9 parsers onto them | ends the wrong-endpoint / wrong-key / un-normalized-reasoning bug class |
+| P2 | `bus/registry.py` + `pipeline.py`; re-express the verified lore chain as stages; retire the superseded upstream scripts | one writer per dataset; staleness refused, not discovered |
+| P3 | round records (`round.json` / `decision.json` / `champion.json`) + write-side `nanomilady_*` tools | Phase D's unattended rounds |
+| P4 | pinned trainer image for the A4000, HF cache, the missing runner; first GRPO round on `lore.qa.grounded` | Phase C |
+| P5 | style through the bus: fold the screener's private judge into `llm.judge_json`, run the 18-case calibration, regenerate with the 27B teacher + repairer | Phase B's style split |
+| P6 | conductor + leases + trace feedback | Phase D, then E |
+
+Deletions P2 justifies (evidence in the survey): `generate_data.py` (second writer
+of `questions.json`/`chunks.pkl`, superseded), `run_autodidact.sh` (no `set -e`,
+always `exit 0`), `train_lore.py` + `run_autodidact_lore.sh` (dead / inlined),
+`simple_qa.py` (undefined names), `validate_verifier.py` (no invoker),
+`r2_rewards.py` + `build_code_corpus.py` (unwired), `Dockerfile.training` (COPYs a
+file that is not in the tree), the unused upstream Dockerfiles +
+`docker-compose.yml`, and the Apollo-13 corpus / notebook / `train-graph.png`
+(upstream demo material → `vendor/UPSTREAM.md`).
 
 **Phase B — fix the data.**
 - Regenerate style with the 27B teacher + repairer (§4.2).
@@ -298,3 +404,10 @@ action; keep *the mechanism* (autoresearch, Symphony, sandman) behind it.
    an opt-in `RESEARCH_TOOLS` group (8 tools) enabled with
    `milady mcp --research` (or `--all-tools`). A `nanomilady_*` control group
    will be added in Phase A as the user-facing front for the training loop.
+
+5. **Round outputs are not source** (2026-09-20). `rounds/` is untracked: the
+   gate reproduces an eval from the frozen suite plus a reference, so the repo
+   tracks the suite, the recipes and the record schema instead of the output.
+6. **One bus, roles not ports** (2026-09-20). Endpoints, models and decoding
+   parameters live in `bus/config.py`; no stage reads an endpoint env var or
+   carries its own client. Migration is the P1–P6 track in §7.
