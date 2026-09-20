@@ -6,6 +6,7 @@
 wandb/
 eval/
 data/
+rounds/
 r1_training
 r2_training
 *.bin
