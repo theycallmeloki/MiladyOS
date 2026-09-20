@@ -76,7 +76,7 @@ def main() -> int:
     # sample render for eyeballing
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(
-        "unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit")
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B")
     row = rows[0]
     msgs = row["prompt"]
     text = tok.apply_chat_template(

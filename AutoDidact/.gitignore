@@ -26,3 +26,5 @@ qa_log.txt
 __pycache__/
 data/milady_report.md
 data/MiladyOS_Documentation.md
+# the unsloth-free training runtime (venv is machine-specific; the lock is the contract)
+runtime/venv/

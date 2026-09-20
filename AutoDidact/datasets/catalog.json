@@ -1,0 +1,84 @@
+{
+ "lore.chunks": {
+  "schema": "chunks.v1",
+  "path": "chunks.pkl",
+  "inputs": [
+   "lore.corpus"
+  ],
+  "stage": "stages/lore_qa.py",
+  "description": "the lore corpus cut into ~500-char chunks"
+ },
+ "lore.corpus": {
+  "schema": "markdown.v1",
+  "path": "../data/milady_report.md",
+  "inputs": [],
+  "stage": "stages/lore_corpus.py",
+  "description": "lore corpus rebuilt from the six MiladyOS repo docs"
+ },
+ "lore.identity": {
+  "schema": "qa.verdict.v1",
+  "path": "identity_questions.json",
+  "inputs": [
+   "lore.corpus"
+  ],
+  "stage": "stages/lore_identity.py",
+  "description": "full-corpus synthesis identity QA, judge-verified (faithful >= 0.6)"
+ },
+ "lore.qa": {
+  "schema": "qa.v1",
+  "path": "questions.json",
+  "inputs": [
+   "lore.corpus"
+  ],
+  "stage": "stages/lore_qa.py",
+  "description": "windowed QA pairs generated over the lore chunks"
+ },
+ "lore.qa.grounded": {
+  "schema": "qa.verdict.v1",
+  "path": "questions.filtered.json",
+  "inputs": [
+   "lore.qa",
+   "lore.chunks"
+  ],
+  "stage": "stages/lore_grounded.py",
+  "description": "judge-verified windowed QA: entailed, diegetic, confidence >= 0.6"
+ },
+ "r1.eval": {
+  "schema": "datum.v1",
+  "path": "r1_eval.jsonl",
+  "inputs": [
+   "lore.qa.grounded",
+   "lore.identity"
+  ],
+  "stage": "stages/r1_dataset.py",
+  "description": "the frozen round-1 eval split (10% per source, seed 42)"
+ },
+ "r1.train": {
+  "schema": "datum.v1",
+  "path": "r1_train.jsonl",
+  "inputs": [
+   "lore.qa.grounded",
+   "lore.identity"
+  ],
+  "stage": "stages/r1_dataset.py",
+  "description": "round-1 GRPO rows: windowed + identity QA, frozen 10% eval"
+ },
+ "r1.train.grounded": {
+  "schema": "datum.v1",
+  "path": "r1_train_grounded.jsonl",
+  "inputs": [
+   "r1.train"
+  ],
+  "stage": "stages/r1_grounded.py",
+  "description": "r1 train rows with the target chunk window injected as context"
+ },
+ "r2.warmup": {
+  "schema": "datum.sft.v1",
+  "path": "r2_warmup.jsonl",
+  "inputs": [
+   "r1.train"
+  ],
+  "stage": "stages/r2_warmup.py",
+  "description": "round-2 SFT rows: think -> lore_search call -> result -> answer"
+ }
+}

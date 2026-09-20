@@ -17,7 +17,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-BASE = os.environ.get("BASE_MODEL", "unsloth/DeepSeek-R1-Distill-Qwen-1.5B")
+BASE = os.environ.get("BASE_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B")
 lora_path, out_dir = sys.argv[1], sys.argv[2]
 
 print(f"loading bf16 base {BASE}...", flush=True)
