@@ -92,12 +92,16 @@ ROLES = {
         "retries": 0, "retry_delay": 0.0, "chat_template_kwargs": None,
         "response_format": None,
     },
-    # The served candidate under test: full-context answers, long timeout so the
-    # socket never becomes the limit (measured ceiling 131072 tokens/request).
+    # The served candidate under test. A 1.5B candidate answers in a few thousand
+    # tokens, and asking for more than the server's window makes llama.cpp FAIL
+    # the request ("Context size has been exceeded" -> HTTP 500) rather than
+    # clamping — which silently turned 22 of 104 gate items into "student error"
+    # until it was caught. So the default budget is deliberately modest; raise
+    # MILADY_STUDENT_MAX_TOKENS for a big model served alongside a big window.
     "student": {
         "url": STUDENT_URL, "model": _env("STUDENT_MODEL", "MILADY_STUDENT_MODEL",
                                           default="nanomilady"),
-        "temperature": 0.0, "max_tokens": 32768, "timeout": 1800,
+        "temperature": 0.0, "max_tokens": 4096, "timeout": 1800,
         "reasoning_effort": None, "retries": 0, "retry_delay": 0.0,
         "chat_template_kwargs": None, "response_format": None,
     },
