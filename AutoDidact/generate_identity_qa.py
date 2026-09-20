@@ -167,6 +167,14 @@ def main():
     # resume: generation is expensive (~15 min); if raw pairs already exist
     # (a previous run died in the judge phase), skip straight to judging
     pairs = []
+    stale_inputs = os.environ.get("MILADY_INPUTS_CHANGED") == "1"
+    if stale_inputs and os.path.exists(RAW):
+        # The corpus moved under us: these pairs came from different source text,
+        # so resuming would smuggle the old corpus into a dataset the registry
+        # then records as built from the new one. Keep them, but start over.
+        archived = f"{RAW}.stale-{int(os.path.getmtime(RAW))}"
+        os.replace(RAW, archived)
+        print(f"corpus changed: archived old raw pairs -> {archived}", flush=True)
     if os.path.exists(RAW):
         pairs = json.load(open(RAW))
         print(f"resume: {len(pairs)} raw pairs loaded from {RAW}", flush=True)

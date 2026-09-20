@@ -49,12 +49,25 @@ def parse_args(argv=None):
     ap.add_argument("--report-to", default=os.environ.get("REPORT_TO", "none"),
                     help="'none' by default: a round must not need a wandb account")
     ap.add_argument("--run-name", default=os.environ.get("RUN_NAME", "nanomilady-grpo"))
+    ap.add_argument("--round", default=os.environ.get("ROUND_TAG"),
+                    help="round record to open/finish (rounds/<tag>/round.json)")
+    ap.add_argument("--exclude-source", action="append", default=[],
+                    metavar="SOURCE",
+                    help="drop records whose 'source' matches (repeatable). Used "
+                         "while a slice is being regenerated, so a round cannot "
+                         "train on data that is about to change")
     ap.add_argument("--dry-run", action="store_true",
                     help="load everything and build the trainer, then stop before training")
     return ap.parse_args(argv)
 
 
-def load_dataset_records(dataset_id):
+def load_dataset_records(dataset_id, exclude_sources=()):
+    """Records from the registry, schema-checked before a single GPU byte moves.
+
+    `exclude_sources` drops slices by their `source` field, so a round can be
+    explicit about what it refuses to train on (e.g. a dataset being regenerated).
+    """
+
     """Records from the registry, schema-checked before a single GPU byte moves."""
     records = registry.load(dataset_id)
     if not records:
@@ -63,11 +76,43 @@ def load_dataset_records(dataset_id):
     if missing:
         raise SystemExit(f"{dataset_id}: records lack {missing}; has "
                          f"{sorted(records[0])} (schema drift, fix the producer)")
+    if exclude_sources:
+        before = len(records)
+        records = [r for r in records if r.get("source") not in exclude_sources]
+        dropped = before - len(records)
+        print(f"excluded sources {sorted(exclude_sources)}: dropped {dropped} "
+              f"record(s), {len(records)} left", flush=True)
     questions = sum(1 for r in records if r.get("prompt") and r.get("answer"))
     if questions != len(records):
         raise SystemExit(f"{dataset_id}: {len(records) - questions} records have an "
                          f"empty prompt/answer")
     return records
+
+
+def check_batch_shape(args):
+    """Fail with guidance, not with TRL's one-line complaint.
+
+    TRL generates `num_generations` completions per prompt and requires the
+    generation batch (per_device_batch x grad_accum) to divide by it, so the
+    cheapest valid shapes are batch=4/accum=1 or batch=2/accum=2 with four
+    generations. The cost is real: one step consumes
+    (per_device_batch x grad_accum) x num_generations completions.
+    """
+    generation_batch = args.batch_size * args.grad_accum
+    if generation_batch % args.num_generations:
+        raise SystemExit(
+            f"batch_size({args.batch_size}) x grad_accum({args.grad_accum}) = "
+            f"{generation_batch} must be divisible by num_generations"
+            f"({args.num_generations}); e.g. --batch-size 4 --grad-accum 1, or "
+            f"--batch-size 2 --grad-accum 2 with --num-generations 4")
+    completions = generation_batch * args.num_generations
+    print(f"batch: {args.batch_size}p x {args.grad_accum}a x "
+          f"{args.num_generations}g = {completions} completions/step, "
+          f"<= {args.max_completion_length} tokens each", flush=True)
+    if args.max_completion_length < 768:
+        print("warning: a completion budget under ~768 tokens truncates the "
+              "think block on this student — answers never terminate and the "
+              "format/correctness rewards stay flat", file=sys.stderr)
 
 
 def build_trainer(args, records):
@@ -167,7 +212,20 @@ def main(argv=None):
         print("warning: more than one GPU is visible — the launcher should pin "
               "CUDA_VISIBLE_DEVICES so a round cannot touch the sensei",
               file=sys.stderr, flush=True)
-    records = load_dataset_records(args.dataset)
+    check_batch_shape(args)
+    records = load_dataset_records(args.dataset, args.exclude_source)
+    if args.round:
+        from bus import round as round_record
+        round_record.open_round(args.round, dataset=args.dataset, base_model=args.base_model,
+                          recipe={"max_steps": args.max_steps,
+                                  "num_generations": args.num_generations,
+                                  "batch_size": args.batch_size,
+                                  "grad_accum": args.grad_accum,
+                                  "max_completion_length": args.max_completion_length,
+                                  "learning_rate": args.lr,
+                                  "lora_rank": args.lora_rank,
+                                  "excluded_sources": sorted(args.exclude_source)},
+                          champion_reference=(round_record.champion() or {}).get("tag"))
     print(f"{len(records)} records, {registry.meta(args.dataset)['sha256'][:23]}…",
           flush=True)
     trainer, tokenizer = build_trainer(args, records)
@@ -179,6 +237,15 @@ def main(argv=None):
     trainer.save_model(lora_dir)
     tokenizer.save_pretrained(lora_dir)
     record = write_provenance(args, records, started)
+    if args.round:
+        from bus import round as round_record
+        log = getattr(trainer.state, "log_history", []) or []
+        metrics = {k: v for k, v in (log[-1] if log else {}).items()
+                   if k in ("train_loss", "epoch", "reward", "reward_std",
+                            "grad_norm", "num_tokens", "train_runtime",
+                            "completions/mean_length", "completions/clipped_ratio")}
+        round_record.finish_training(args.round, metrics=metrics, lora_dir=lora_dir,
+                                     seconds=record["seconds"])
     print(f"round complete in {record['seconds']}s — LoRA at {lora_dir}", flush=True)
     print(f"provenance: {os.path.join(args.out, 'run.json')}", flush=True)
     return 0

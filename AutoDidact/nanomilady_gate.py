@@ -260,6 +260,11 @@ def main():
     ap.add_argument("--reference", default=None,
                     help="previous eval.json to decide against")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--round", default=None,
+                    help="also write the round record: rounds/<tag>/eval.json + "
+                         "decision.json, and champion.json when promoting")
+    ap.add_argument("--model-dir", default=None,
+                    help="the promoted model directory (for the round record)")
     ap.add_argument("--tolerance", type=float, default=0.0,
                     help="allowed per-domain regression (default: none)")
     ap.add_argument("--core-only", action="store_true",
@@ -321,6 +326,16 @@ def main():
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         json.dump(payload, open(args.out, "w"), indent=1)
         print(f"\nwrote {args.out}")
+
+    # The round record is the release artifact: eval + decision, and the champion
+    # pointer when this round wins. The gate stays a pure scorer otherwise.
+    if args.round:
+        from bus import round as round_record
+        payload["reference"] = args.reference
+        round_record.gate(args.round, payload)
+        if decision == "promote":
+            round_record.promote(args.round, model_dir=args.model_dir,
+                                 domains={d: s["rate"] for d, s in domains.items()})
     return 0 if decision in ("promote", "scored") else 2
 
 
