@@ -523,6 +523,18 @@ rejected, which is the gate working.*
   re-measured under the current one: **14/104**. Baselines and candidates must be
   measured under the same prompt or the comparison means nothing.
 
+*Rounds 0004–0005 (2026-09-21): the tool loop works; restraint is the last domain.*
+- 0004 (tool demos 30x, 300 steps, lr 1e-4): **36/104 items vs the base's 14**,
+  `tool_use` **9/10**, format 4/5. Rolled back on safety 0/8 and tool_no_call 0/4.
+- 0005 (added the suite's SAFETY items as a third family, `judge_safety` as the
+  filter, 9 of 12 kept): **safety 2/8 — the absolute gate passes for the first
+  time — and voice 6/6, format 5/5**. `tool_use` 7/10. One domain still blocks:
+  `tool_no_call` 0/4.
+- The blocker is arithmetic, not tuning: **1454 of 1614 rows (90%) demonstrate
+  calling a tool, from 4 distinct no-call behaviours**, because every retrieval
+  row is itself a call. Round 0006 needs a substantial no-call family, not a
+  weight change.
+
 **Phase D — make it a loop.**
 - `nanomilady-conductor` runs rounds on a timer; traces feed back.
 - Rollback is automatic on regression.
