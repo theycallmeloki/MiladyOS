@@ -267,8 +267,16 @@ def adopt(stages, verbose=True):
     return taken
 
 
-def run(stages, target, ctx):
-    rows = plan(stages, target)
+def run(stages, target, ctx, only=False):
+    if only:
+        # `--only` deliberately ignores dependency freshness: run exactly this
+        # stage and trust its inputs. Needed when a cheap stage sits downstream of
+        # an expensive one whose staleness you have consciously accepted.
+        stage = stages[target]
+        state, why = status(stage)
+        rows = [{"stage": stage.id, "state": state, "why": why}]
+    else:
+        rows = plan(stages, target)
     todo = [r for r in rows if ctx.force or r["state"] != "ok"]
     if not todo:
         print("\nnothing to do — everything up to date")
@@ -309,6 +317,8 @@ def main(argv=None):
     p_run.add_argument("--force", action="store_true", help="re-run fresh stages")
     p_run.add_argument("--dry-run", action="store_true")
     p_run.add_argument("--verbose", action="store_true")
+    p_run.add_argument("--only", action="store_true",
+                       help="this stage alone; do not re-run stale dependencies")
     sub.add_parser("adopt", help="register artifacts that predate the registry "
                                  "(one-time, hashes what is already on disk)")
     args = parser.parse_args(argv)
@@ -331,7 +341,7 @@ def main(argv=None):
     if not (config.PATHS["data"]).exists():
         raise SystemExit(f"data root {config.PATHS['data']} does not exist")
     return run(stages, target, Context(force=args.force, dry_run=args.dry_run,
-                                      verbose=args.verbose))
+                                      verbose=args.verbose), only=args.only)
 
 
 if __name__ == "__main__":

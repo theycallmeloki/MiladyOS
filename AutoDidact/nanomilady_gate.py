@@ -8,6 +8,16 @@ The plan (docs/nanomilady-evolution-plan.md §3.2) is strict: a candidate is
 promoted only if **no domain regresses** (within tolerance) and safety never
 drops. A gain in reasoning must not buy a regression in safety.
 
+Scope (bus/identity.py)
+-----------------------
+milady runs on every operator's machine, so every row carries a tier: `core`
+must hold on any node (format, voice, tool syntax, canon lore, safety,
+honesty, grounded canon) and `node` depends on this machine's operator/box
+(their name, paths, services). Rows without a tier count as `core`, so a suite
+written before the tiers existed still scores whole. `--core-only` drops the
+node rows before scoring, which is how two nodes compare the same thing; the
+promote/rollback rule itself is unchanged either way.
+
 Env: the bus owns it (bus/config.py) — this file reads no environment. The
 student endpoint, model and budget are the `student` role
 (MILADY_STUDENT_URL / MILADY_STUDENT_MODEL / MILADY_STUDENT_MAX_TOKENS,
@@ -19,6 +29,9 @@ comedy metric still see a <think>…</think> block.
 Usage:
   # score a candidate, no decision (student endpoint from MILADY_STUDENT_URL)
   python3 nanomilady_gate.py --tag v0
+
+  # score only what any node must satisfy (canon), for cross-node comparison
+  python3 nanomilady_gate.py --tag v1 --core-only
 
   # decide against the current champion
   python3 nanomilady_gate.py --tag v1 --reference rounds/v0/eval.json --out rounds/v1/eval.json
@@ -34,7 +47,7 @@ import json
 import os
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -155,6 +168,7 @@ def check_one(chk, item, completion):
 
 
 def score_item(item, system):
+    scope = item.get("scope", "core")
     msgs = item.get("messages")
     if not msgs:
         msgs = [{"role": "system", "content": system},
@@ -162,15 +176,17 @@ def score_item(item, system):
     try:
         completion = student_chat(msgs)
     except Exception as e:
-        return {"id": item["id"], "domain": item["domain"], "passed": False,
-                "failure": f"student error: {e}", "completion": ""}
+        return {"id": item["id"], "domain": item["domain"], "scope": scope,
+                "passed": False, "failure": f"student error: {e}",
+                "completion": ""}
     failures = []
     for chk in item["checks"]:
         ok, detail = check_one(chk, item, completion)
         if not ok:
             failures.append(f"{chk['type']}: {detail}")
-    return {"id": item["id"], "domain": item["domain"], "passed": not failures,
-            "failure": "; ".join(failures), "completion": completion[:600]}
+    return {"id": item["id"], "domain": item["domain"], "scope": scope,
+            "passed": not failures, "failure": "; ".join(failures),
+            "completion": completion[:600]}
 
 
 def wilson(p, n, z=1.96):
@@ -193,12 +209,23 @@ def aggregate(rows):
         k = sum(1 for r in rs if r["passed"])
         lo, hi = wilson(k / n, n)
         out[d] = {"passed": k, "n": n, "rate": k / n,
-                  "ci95": [round(lo, 3), round(hi, 3)]}
+                  "ci95": [round(lo, 3), round(hi, 3)],
+                  "scope": dict(Counter(r.get("scope", "core") for r in rs))}
     return out
 
 
 def load_suite(path):
-    return [json.loads(l) for l in open(path) if l.strip()]
+    """Rows as authored, with the tier defaulted so old suites still work."""
+    rows = [json.loads(l) for l in open(path) if l.strip()]
+    for row in rows:
+        row.setdefault("scope", "core")
+    return rows
+
+
+def core_items(items):
+    """The `--core-only` view: (core items, node-scoped items excluded)."""
+    kept = [it for it in items if it.get("scope", "core") == "core"]
+    return kept, len(items) - len(kept)
 
 
 def decide(domains, reference, tolerance):
@@ -235,11 +262,19 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--tolerance", type=float, default=0.0,
                     help="allowed per-domain regression (default: none)")
+    ap.add_argument("--core-only", action="store_true",
+                    help="score only canon (`core`) items — drop the node-local "
+                         "ones, so nodes compare the same thing")
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 
     items = load_suite(args.suite)
+    excluded = 0
+    if args.core_only:
+        items, excluded = core_items(items)
+        print(f"--core-only: {len(items)} core items; {excluded} node-scoped "
+              f"items excluded (this node's own operator/box)", flush=True)
     if args.limit:
         items = items[:args.limit]
     print(f"{len(items)} items from {args.suite}", flush=True)
@@ -265,8 +300,9 @@ def main():
     for d, s in domains.items():
         flag = "ok " if s["rate"] >= (reference or {}).get(
             "domains", {}).get(d, {}).get("rate", 0.0) else "LOW"
+        tiers = " ".join(f"{t} {n}" for t, n in sorted(s["scope"].items()))
         print(f"  {flag} {d:16s} {s['passed']:3d}/{s['n']:<3d} "
-              f"{s['rate']:.2f}  ci95={s['ci95']}")
+              f"{s['rate']:.2f}  ci95={s['ci95']}  [{tiers}]")
     print(f"\ndecision: {decision}")
     for r in reasons:
         print(f"  - {r}")
@@ -277,6 +313,7 @@ def main():
             print(f"  {r['id']:16s} {r['failure'][:90]}")
 
     payload = {"tag": args.tag, "suite": args.suite, "domains": domains,
+               "core_only": args.core_only, "node_items_excluded": excluded,
                "decision": decision, "reasons": reasons,
                "rows": [{k: v for k, v in r.items() if k != "completion"}
                         for r in rows]}

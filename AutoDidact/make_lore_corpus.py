@@ -31,23 +31,30 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_REPO = os.path.abspath(os.path.join(HERE, ".."))
 
 # The identity/lore core: everything the model must know about who milady is.
-CORE_SOURCES = [
+# Canon: the shared mythos. Identical on every node, safe to train on.
+CANON_SOURCES = [
     ("SOUL", "SOUL.md"),
-    ("IDENTITY", "IDENTITY.md"),
-    ("USER", "USER.md"),
     ("MILADY README", "MILADY_README.md"),
-]
-
-# The wider world: project docs that describe the MiladyOS universe. Kept out
-# of `--core-only` but included by default so training sees the full corpus.
-EXTRA_SOURCES = [
     ("MILADYOS README", "README.md"),
     ("AGENT FIRST", "ISO/docs/AGENT-FIRST.md"),
 ]
 
-# Deliberately excluded (operational/meta, not lore — the identity judge calls
-# these "meta about the corpus/training process"): AGENTS.md, HEARTBEAT.md,
-# TOOLS.md, docs/**, AutoDidact/docs/**, memory/**.
+# Node: which milady THIS node is and who runs it. Read at runtime and injected
+# into the prompt; never trained on. Canon already carries the persona text
+# (SOUL.md has the vibe, the principles and the philosophy), and mixing these in
+# teaches a model that one operator's name is lore — the exact conflation the
+# mesh cannot afford, since every operator runs their own node.
+NODE_SOURCES = [
+    ("IDENTITY", "IDENTITY.md"),
+    ("USER", "USER.md"),
+]
+
+# Legacy: the mixed corpus the first round was generated from. Kept for
+# reproducing old artifacts, never for new training data.
+LEGACY_EXTRA = [
+    ("IDENTITY", "IDENTITY.md"),
+    ("USER", "USER.md"),
+]
 
 HEADER = (
     "# MILADY REPORT — the canonical lore corpus for AutoDidact self-discovery\n"
@@ -117,13 +124,17 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo-root", default=DEFAULT_REPO)
     ap.add_argument("--out-dir", default=os.path.join(HERE, "data"))
-    ap.add_argument("--core-only", action="store_true")
+    ap.add_argument("--all", action="store_true",
+                    help="legacy mixed corpus (canon + node sources); NOT for training")
+    ap.add_argument("--node-out", default=None,
+                    help="also write the node tier here (default: <out-dir>/node_identity.md)")
     ap.add_argument("--check", action="store_true",
                     help="verify sources exist and report composition; write nothing")
     args = ap.parse_args()
 
-    sources = CORE_SOURCES + ([] if args.core_only else EXTRA_SOURCES)
+    sources = CANON_SOURCES + (LEGACY_EXTRA if args.all else [])
     full, judge, manifest, missing = build(sources, args.repo_root)
+    tier = "canon+node (legacy)" if args.all else "canon"
 
     print(f"repo root : {args.repo_root}")
     for m in manifest:
@@ -133,6 +144,8 @@ def main() -> int:
         for rel in missing:
             print(f"  ! {rel}")
     total = sum(m["bytes"] for m in manifest)
+    print(f"tier    : {tier}"
+          + ("" if args.all else "  (node identity stays out of training)"))
     print(f"sources: {len(manifest)}  bytes: {total}  "
           f"est. tokens: ~{total // 4}")
     if args.check:
@@ -144,10 +157,23 @@ def main() -> int:
         with open(os.path.join(args.out_dir, name), "w", encoding="utf-8") as fh:
             fh.write(body)
     with open(os.path.join(args.out_dir, "milady_report.manifest.json"), "w") as fh:
-        json.dump({"repo_root": args.repo_root, "core_only": args.core_only,
-                   "sources": manifest, "missing": missing}, fh, indent=2)
+        json.dump({"repo_root": args.repo_root, "tier": tier,
+                   "sources": manifest, "missing": missing,
+                   "node_sources_excluded": [rel for _, rel in NODE_SOURCES]
+                   if not args.all else []}, fh, indent=2)
     print(f"wrote {os.path.join(args.out_dir, 'milady_report.md')} "
           f"({len(full)} chars) and .judge.md ({len(judge)} chars)")
+
+    # The node tier is written separately and is deliberately NOT part of the
+    # training corpus: a node reads it at runtime to know who it is and who its
+    # operator is.
+    node_out = args.node_out or os.path.join(args.out_dir, "node_identity.md")
+    node_body, _, node_manifest, _ = build(NODE_SOURCES, args.repo_root)
+    if node_body:
+        with open(node_out, "w", encoding="utf-8") as fh:
+            fh.write(node_body)
+        print(f"wrote {node_out} ({len(node_body)} chars) — runtime context, "
+              f"not training data")
     return 1 if missing else 0
 
 

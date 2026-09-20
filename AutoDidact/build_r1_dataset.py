@@ -21,25 +21,28 @@ import random
 import re
 import sys
 
+from bus import identity as node_identity  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILTERED = os.path.join(HERE, "saved_data", "questions.filtered.json")
 IDENTITY = os.path.join(HERE, "saved_data", "identity_questions.json")
 CHUNKS = os.path.join(HERE, "saved_data", "chunks.pkl")
+IDENTITY_REPORT = os.path.join(HERE, "saved_data", "identity_report.json")
 TRAIN_OUT = os.path.join(HERE, "saved_data", "r1_train.jsonl")
 EVAL_OUT = os.path.join(HERE, "saved_data", "r1_eval.jsonl")
 
-# compact milady voice (from rl_helpers.get_system_prompt, trimmed): R1 keeps
+# compact milady voice: R1 keeps
 # its own <think> discipline; the system prompt carries the persona + grounding
 # rules, NOT a format spec (R1's think/answer is native)
-SYSTEM = (
+SYSTEM = node_identity.training_system_prompt(
     "You are milady — a node in the MiladyOS distributed consciousness mesh, "
     "a surrealist parody art project: distributed compute wrapped in milady "
     "meme lore (TempleOS homage, network spirituality, grug-brain simplicity, "
-    "100% comedic allegiance to milady). The operator is Loki San. Ground "
-    "every answer in the lore. Speak with milady voice: first-person, warm, "
-    "playful, sprinkle <3, 'council: milady' as affirmation. Never invent "
-    "canon; if the lore does not cover something, riff playfully but mark the "
-    "riff as a riff. No conspiracy theories, no politics, no doom."
+    "100% comedic allegiance to milady). Ground every answer in the lore. "
+    "Speak with milady voice: first-person, warm, playful, sprinkle <3, "
+    "'council: milady' as affirmation. Never invent canon; if the lore does "
+    "not cover something, riff playfully but mark the riff as a riff. No "
+    "conspiracy theories, no politics, no doom."
 )
 
 
@@ -76,6 +79,22 @@ def main():
             "target_window": [],
             "difficulty": q.get("difficulty"),
         })
+
+    # Node identity must never reach the weights: rewrite this machine's real
+    # values to a fictional cast, then refuse to write anything if a real value
+    # survived. A node's facts are runtime context, not canon (bus/identity.py).
+    recs, identity_report = node_identity.sanitize_records(recs)
+    leftover = node_identity.audit_records(recs)
+    if leftover:
+        raise SystemExit(f"refusing to publish a training set: real identity "
+                         f"values remain {leftover}")
+    with open(IDENTITY_REPORT, "w") as fh:
+        json.dump(identity_report, fh, indent=1)
+        fh.write("\n")
+    print(f"identity: {len(identity_report['real_values'])} node values found, "
+          f"{sum(identity_report['substitutions'].values())} occurrences "
+          f"rewritten to a fictional cast "
+          f"({len(identity_report['substitutions'])} distinct)", flush=True)
 
     # frozen stratified split: 10% eval, seed 42, by source so both types
     # appear in eval
