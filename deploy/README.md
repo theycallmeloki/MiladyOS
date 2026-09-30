@@ -281,6 +281,10 @@ kubectl apply -f deploy/ate/namespaces.yaml
 `podcertificate-controller-system` and `otel-system` are created by the Substrate
 installer itself and need no PSA labels.
 
+For the full Substrate + ax bring-up — object store, the patches the upstream
+manifests need on a non-GCP cluster, worker pools, and the ax control plane —
+see [`ate/README.md`](ate/README.md).
+
 ## Troubleshooting
 
 ### Pod Security Admission (PSA)

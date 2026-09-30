@@ -1,0 +1,30 @@
+# Worker pool for Agent Substrate gVisor actors.
+#
+# WorkerPools are not created by the installer — they are CRs you supply. This
+# one lives in ate-system because worker pods add a dozen capabilities
+# (NET_ADMIN, SYS_ADMIN, ...) and hostPath-mount /var/lib/ate, which baseline
+# PodSecurity forbids; ate-system is the namespace already labelled privileged.
+#
+# The workerImage digest comes from `ate-setup publish worker-images`; re-run
+# that (and bump this digest) whenever the substrate revision changes, because
+# the worker image is version-pinned to the control plane.
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: gvisor-workers
+  namespace: ate-system
+spec:
+  replicas: 1
+  workerImage: miladyosregistry.transparentlyrotatableproxy.site/ate-images/ateom-gvisor@sha256:d3b722ad1bbc331fe7ee835d9647bd867bc6e802f7af117e0d7fe0c226ff970d
+  sandboxClass: gvisor
+  template:
+    # Each worker pod is a standing reservation that hosts actor sandboxes.
+    # Sized to fit the two Talos worker nodes, which also run the rest of the
+    # cluster's workloads.
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
