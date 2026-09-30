@@ -84,3 +84,35 @@ public gVisor releases bucket unchanged.
 - **Do not auto-upgrade or use preemptible worker nodes.** An actor still awake
   when a worker is deleted passes the 30-minute suspend window and becomes
   `ACTOR_STATE_CRASHED`, which is terminal.
+- **gVisor needs user namespaces, which Talos disables.** Talos defaults
+  `user.max_user_namespaces` to 0. The kernel's `create_user_ns()` returns
+  `ENOSPC` when that limit cannot be satisfied, so the failure surfaces as
+  `cannot create gofer process: gofer: fork/exec /proc/self/exe: no space left
+  on device` — which reads like a full disk but is not. Apply
+  `deploy/ate/gvisor-userns-sysctl.yaml` to every node that hosts workers.
+- **The installer rewrites `ate-api-authentication` on every run.** Its
+  generated config omits `certificateAuthorityFile`/`discoveryTokenFile` unless
+  the issuer is the in-cluster default, on the assumption that any other issuer
+  is anonymously discoverable. Talos runs `--anonymous-auth=false`, so the JWKS
+  fetch 401s and every client JWT is rejected as `invalid bearer token`.
+  Re-apply `deploy/ate/authentication-config.yaml` after any
+  `deploy ate-system`.
+
+## Verify
+
+```bash
+# control plane + worker pool
+kubectl -n ate-system get deploy,sts,ds
+kubectl -n ate-system get workerpools
+
+# an actor actually running under gVisor
+ax apply -f deploy/ax/simple-task.yaml
+ax get tasks                      # expect PHASE=Running and a WORKER-IP
+ax describe task simple-task      # expect Ready=True, WorkspaceReady=True
+ax ssh simple-task -- uname -a    # expect: Linux ... 4.19.0-gvisor ...
+ax ssh simple-task -- ls -la /workspace
+```
+
+`uname -r` reporting `4.19.0-gvisor` is the proof that the workload is inside a
+gVisor sandbox rather than the host kernel, and `dmesg` inside the sandbox shows
+gVisor's boot banner.

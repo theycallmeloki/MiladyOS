@@ -1,0 +1,19 @@
+# Allow user namespaces on worker nodes.
+#
+# Talos defaults `user.max_user_namespaces` to 0, disabling unprivileged user
+# namespace creation. gVisor's sandbox still creates a user namespace for its
+# gofer even when running as root, and when the limit cannot be satisfied the
+# kernel returns ENOSPC from create_user_ns(). That surfaces as:
+#
+#   FATAL ERROR: creating container: cannot create gofer process:
+#     gofer: fork/exec /proc/self/exe: no space left on device
+#
+# ...which reads like a disk problem but is not.
+#
+# 15000 matches the common distro default (Debian/Ubuntu). Note this widens the
+# kernel attack surface somewhat: user namespaces are a recurring source of
+# privilege-escalation bugs, and re-enabling them is the price of running
+# gVisor here.
+machine:
+  sysctls:
+    user.max_user_namespaces: "15000"

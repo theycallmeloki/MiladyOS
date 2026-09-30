@@ -1,0 +1,22 @@
+# First end-to-end Task: the smallest useful workload, adapted from ax's
+# examples/simple.yaml. No Workspace and no Model, so nothing here needs a
+# model API key — it proves the ax -> Substrate -> gVisor actor path.
+#
+# The image is built locally from ax's Dockerfile.task-runner because upstream
+# publishes no pullable task-runner image:
+#   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/linux_amd64/ax-task-runner ./cmd/ax-task-runner
+#   docker build --platform linux/amd64 -f Dockerfile.task-runner -t <registry>/ax-images/ax-task-runner:latest .
+#   docker push <registry>/ax-images/ax-task-runner:latest
+#
+# debug: true serves the guest services so `ax ssh` works.
+apiVersion: ax.io/v1alpha1
+kind: Task
+metadata:
+  name: simple-task
+  atespace: default
+spec:
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:43be21c945734ff9151b1d5e7bb65a95dc04b58d0885569cf6778c5f98936c08"
+  env:
+    - name: ENVIRONMENT
+      value: "test"
+  debug: true
