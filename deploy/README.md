@@ -214,6 +214,46 @@ Talos worker nodes must have the following system extensions installed for Longh
 
 These can be added via the Talos machine config or Image Factory schematic.
 
+### Agent Substrate certificate APIs (prerequisite for `ax`)
+
+Agent Substrate's `podcertcontroller` depends on two APIs that are BETA and
+**disabled by default** in Kubernetes v1.35:
+
+- `certificates.k8s.io/v1beta1` `PodCertificateRequest`
+- `certificates.k8s.io/v1beta1` `ClusterTrustBundle`
+
+A stock cluster serves only `CertificateSigningRequest`, so anything referencing
+`clustertrustbundles` or `podcertificaterequests` fails with
+`the server doesn't have a resource type`. Two levers are needed, not one:
+
+- the feature gates `ClusterTrustBundle`, `ClusterTrustBundleProjection` and
+  `PodCertificateRequest`
+- `--runtime-config=certificates.k8s.io/v1beta1=true` on the apiserver, without
+  which the `v1beta1` group version is not served at all
+
+Apply per node. No reboot is required — Talos restarts the apiserver static pod
+and the kubelet service, and running pods are unaffected:
+
+```bash
+# control-plane nodes
+talosctl -n <cp-ip> patch machineconfig --patch-file deploy/talos/ate-feature-gates-controlplane.yaml
+
+# worker nodes
+talosctl -n <worker-ip> patch machineconfig --patch-file deploy/talos/ate-feature-gates-worker.yaml
+```
+
+Verify (expect `clustertrustbundles` and `podcertificaterequests` to appear):
+
+```bash
+kubectl api-resources --api-group=certificates.k8s.io
+kubectl get clustertrustbundles
+```
+
+Note that the cluster's PodSecurity admission defaults to `baseline` enforcement
+with only `kube-system` exempt, so Agent Substrate's namespaces will need the
+privileged PSA labels used by `longhorn-system` and `monitoring` (see the
+Post-Deploy PSA Labeling step above).
+
 ## Troubleshooting
 
 ### Pod Security Admission (PSA)
