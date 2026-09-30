@@ -1,0 +1,31 @@
+# Agent Substrate / Agent Executor namespaces.
+#
+# The cluster enforces PodSecurity "baseline" with only kube-system exempt
+# (see cluster.apiServer.admissionControl in the Talos machine config). Baseline
+# rejects the atelet DaemonSet, which mounts four hostPaths and pins
+# runAsUser: 0, so ate-system needs the privileged PSA labels — the same
+# treatment longhorn-system and monitoring already get.
+#
+# Apply before installing Agent Substrate:
+#   kubectl apply -f deploy/ate/namespaces.yaml
+#
+# Apply is safe to re-run: it will not strip labels from namespaces that already
+# exist, and Substrate's own installer also declares most of these namespaces.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ate-system
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+---
+# ax-system holds only the ax control plane (ax-server + ax-redis), which runs
+# as ordinary unprivileged containers with no hostPath, hostNetwork or
+# capabilities. It deliberately keeps the cluster-default "baseline" policy
+# rather than being granted privileged — the sandboxes that do need privileges
+# run as Substrate actors inside worker pods in ate-system, not here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ax-system
