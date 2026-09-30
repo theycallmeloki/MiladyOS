@@ -1,0 +1,33 @@
+# Enable the certificate APIs Agent Substrate's cmd/podcertcontroller depends on.
+# Apply to CONTROL-PLANE nodes.
+#
+# Source of truth: substrate/hack/create-kind-cluster.sh, which sets exactly:
+#   featureGates: ClusterTrustBundle, ClusterTrustBundleProjection, PodCertificateRequest
+#   runtimeConfig: "certificates.k8s.io/v1beta1": "true"
+#
+# All three gates are BETA and disabled-by-default in Kubernetes v1.35.0, so a
+# stock cluster serves only CertificateSigningRequest:
+#   kubernetes_feature_enabled{name="PodCertificateRequest",stage="BETA"} 0
+#
+# runtime-config is a SEPARATE lever from the gates: without it the apiserver
+# will not serve the certificates.k8s.io/v1beta1 group version at all, which is
+# the "the server doesn't have a resource type \"clustertrustbundles\"" symptom.
+#
+# Kubelet gates go in extraConfig (merged into KubeletConfiguration) rather than
+# --feature-gates, so they union with Talos's generated featureGates map instead
+# of overriding it on the command line.
+#
+# talosctl -n <cp-ip> patch machineconfig --patch-file deploy/talos/ate-feature-gates-controlplane.yaml
+# No reboot: Talos restarts the apiserver static pod and the kubelet service.
+cluster:
+  apiServer:
+    extraArgs:
+      feature-gates: "ClusterTrustBundle=true,ClusterTrustBundleProjection=true,PodCertificateRequest=true"
+      runtime-config: "certificates.k8s.io/v1beta1=true"
+machine:
+  kubelet:
+    extraConfig:
+      featureGates:
+        ClusterTrustBundle: true
+        ClusterTrustBundleProjection: true
+        PodCertificateRequest: true

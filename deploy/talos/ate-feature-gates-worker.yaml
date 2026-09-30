@@ -1,0 +1,17 @@
+# Worker-node variant of the Agent Substrate certificate API gates.
+# Apply to WORKER nodes.
+#
+# Workers do not run kube-apiserver, so the cluster.apiServer section is omitted.
+# The kubelet still needs these gates to project podCertificate and
+# clusterTrustBundle volumes into pods scheduled on the node — Agent Substrate's
+# atelet, atenet router and worker pods all use those projected volumes.
+#
+# talosctl -n <worker-ip> patch machineconfig --patch-file deploy/talos/ate-feature-gates-worker.yaml
+# No reboot: Talos restarts the kubelet service.
+machine:
+  kubelet:
+    extraConfig:
+      featureGates:
+        ClusterTrustBundle: true
+        ClusterTrustBundleProjection: true
+        PodCertificateRequest: true
