@@ -1,9 +1,11 @@
-# Longhorn Values - Generous Default Storage Configuration
+# Longhorn Values - Default Storage Configuration
 
-# Default settings - generous resource allocation
+# Default settings
 defaultSettings:
-  # Use all 3 worker nodes for high availability
-  defaultReplicaCount: 3
+  # Single replica. After talos-ms4-c7v was delisted only two Longhorn storage
+  # nodes remain, and replica-soft-anti-affinity is disabled, so a 3-replica
+  # volume can never place all its replicas and sits in "degraded" forever.
+  defaultReplicaCount: 1
   # Allow generous over-provisioning for flexible storage
   storageOverProvisioningPercentage: 200
   # Only reserve 5% for system (generous allocation)
@@ -20,13 +22,15 @@ storageClass:
   reclaimPolicy: "Delete"
   volumeBindingMode: "WaitForFirstConsumer"
   parameters:
-    numberOfReplicas: "3"
+    # Overrides defaultSettings.defaultReplicaCount for every PVC bound through
+    # this class, so it has to match it or new volumes come back degraded.
+    numberOfReplicas: "1"
     fsType: "ext4"
 
 # Persistence settings
 persistence:
   defaultClass: true
-  defaultClassReplicaCount: 3
+  defaultClassReplicaCount: 1
 
 # UI service configuration
 service:

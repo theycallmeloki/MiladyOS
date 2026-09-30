@@ -194,10 +194,23 @@ Grafana is available via ingress at `grafana.transparentlyrotatableproxy.site`.
 - Disables authentication features (can be enabled later)
 
 ### `longhorn-values.yaml`
-- Sets 3-way replication for high availability
+- Sets single-replica volumes (see the note below)
 - Configures Longhorn as default storage class
 - Allows 200% over-provisioning for flexibility
 - Schedules on all worker nodes automatically (control-plane nodes excluded via taints)
+
+Replica count is 1 in three places — `defaultSettings.defaultReplicaCount`,
+`storageClass.parameters.numberOfReplicas` and
+`persistence.defaultClassReplicaCount` — and they have to agree. After
+`talos-ms4-c7v` was delisted only two Longhorn storage nodes remain, and
+replica-soft-anti-affinity is disabled, so a 3-replica volume can never place
+all its replicas and every volume sits in `degraded` permanently.
+
+Note that `longhorn-manager` owns the default StorageClass and recreates it from
+its own desired state, so a StorageClass's `parameters` cannot be changed in
+place (they are immutable) and deleting the object just makes the manager
+restore it. Changing the replica count requires a `helm upgrade` with these
+values.
 
 ### `monitoring/kube-prometheus-stack-values.yaml`
 - Enables Grafana with anonymous admin access
@@ -249,10 +262,24 @@ kubectl api-resources --api-group=certificates.k8s.io
 kubectl get clustertrustbundles
 ```
 
-Note that the cluster's PodSecurity admission defaults to `baseline` enforcement
-with only `kube-system` exempt, so Agent Substrate's namespaces will need the
-privileged PSA labels used by `longhorn-system` and `monitoring` (see the
-Post-Deploy PSA Labeling step above).
+The cluster's PodSecurity admission defaults to `baseline` enforcement with only
+`kube-system` exempt, which rejects Agent Substrate's `atelet` DaemonSet — it
+mounts four hostPaths and pins `runAsUser: 0`. `deploy/ate/namespaces.yaml`
+creates the namespaces with the labels they actually need:
+
+```bash
+kubectl apply -f deploy/ate/namespaces.yaml
+```
+
+- `ate-system` gets the privileged PSA labels, the same treatment
+  `longhorn-system` and `monitoring` already get.
+- `ax-system` deliberately does **not**: it holds only the ax control plane
+  (`ax-server` + `ax-redis`), which runs as ordinary containers with no
+  hostPath, hostNetwork or extra capabilities. The sandboxes that do need
+  privileges run as Substrate actors inside worker pods in `ate-system`.
+
+`podcertificate-controller-system` and `otel-system` are created by the Substrate
+installer itself and need no PSA labels.
 
 ## Troubleshooting
 
