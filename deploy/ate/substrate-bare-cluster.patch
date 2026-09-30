@@ -1,0 +1,91 @@
+diff --git i/manifests/ate-install/ate-api-server.yaml w/manifests/ate-install/ate-api-server.yaml
+index cde0c42a..323a3db8 100644
+--- i/manifests/ate-install/ate-api-server.yaml
++++ w/manifests/ate-install/ate-api-server.yaml
+@@ -123,7 +123,17 @@ spec:
+         # nothing refers to any more, so it needs the same backend atelet reads
+         # and writes them through.
+         - name: ATE_STORAGE_BACKEND
+-          value: "gcs"
++          value: "s3"
++        - name: AWS_REGION
++          value: "us-east-1"
++        - name: AWS_ENDPOINT_URL
++          value: "http://rustfs.ate-system.svc:9000"
++        - name: AWS_S3_USE_PATH_STYLE
++          value: "true"
++        - name: AWS_ACCESS_KEY_ID
++          value: "rustfsadmin"
++        - name: AWS_SECRET_ACCESS_KEY
++          value: "rustfsadmin"
+         # OTLP exporter settings are shared by every control plane component;
+         # see manifests/ate-install/ate-otel-config.yaml. Listed first so the
+         # per-developer ConfigMap below can still override a key.
+diff --git i/manifests/ate-install/atelet.yaml w/manifests/ate-install/atelet.yaml
+index ef1064a6..88e2e1f1 100644
+--- i/manifests/ate-install/atelet.yaml
++++ w/manifests/ate-install/atelet.yaml
+@@ -151,7 +151,7 @@ spec:
+       - name: atelet
+         image: ko://github.com/agent-substrate/substrate/cmd/atelet
+         args:
+-        - --gcp-auth-for-image-pulls=true
++        - --gcp-auth-for-image-pulls=false
+         - --grpc-server-cred-bundle=/run/podidentity.podcert.ate.dev/credential-bundle.pem
+         - --client-ca-certs=/run/podidentity.podcert.ate.dev/trust-bundle.pem
+         - --ateapi-ca-file=/run/servicedns.podcert.ate.dev/trust-bundle.pem
+@@ -201,7 +201,17 @@ spec:
+         - name: OTEL_RESOURCE_ATTRIBUTES
+           value: k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.pod.uid=$(POD_UID),k8s.node.name=$(NODE_NAME),service.instance.id=$(POD_UID)
+         - name: ATE_STORAGE_BACKEND
+-          value: "gcs"
++          value: "s3"
++        - name: AWS_REGION
++          value: "us-east-1"
++        - name: AWS_ENDPOINT_URL
++          value: "http://rustfs.ate-system.svc:9000"
++        - name: AWS_S3_USE_PATH_STYLE
++          value: "true"
++        - name: AWS_ACCESS_KEY_ID
++          value: "rustfsadmin"
++        - name: AWS_SECRET_ACCESS_KEY
++          value: "rustfsadmin"
+         # OTLP exporter settings are shared by every control plane component;
+         # see manifests/ate-install/ate-otel-config.yaml.
+         envFrom:
+diff --git i/manifests/ate-install/base/kustomization.yaml w/manifests/ate-install/base/kustomization.yaml
+index 4538b613..7e275d1e 100644
+--- i/manifests/ate-install/base/kustomization.yaml
++++ w/manifests/ate-install/base/kustomization.yaml
+@@ -32,5 +32,7 @@ resources:
+   - ../ate-controller.yaml
+   - ../atelet.yaml
+   - ../atenet-router.yaml
+-  - ../atenet-router-monitoring.yaml
++  # ../atenet-router-monitoring.yaml is deliberately absent: it is a
++  # monitoring.googleapis.com/v1 PodMonitoring (Google Managed Prometheus CRD)
++  # that does not exist on a bare cluster, and applying it fails the install.
+   - ../ate-otel-config.yaml
+diff --git i/manifests/ate-install/postgres/postgres.yaml w/manifests/ate-install/postgres/postgres.yaml
+index 14a11ea4..d1f3872f 100644
+--- i/manifests/ate-install/postgres/postgres.yaml
++++ w/manifests/ate-install/postgres/postgres.yaml
+@@ -207,10 +207,10 @@ spec:
+         # down to fit a CI runner.
+         resources:
+           requests:
+-            cpu: "2"
++            cpu: "250m"
+             memory: "1Gi"
+           limits:
+-            cpu: "16"
++            cpu: "2"
+             memory: "2Gi"
+       volumes:
+       - name: config
+@@ -250,4 +250,4 @@ spec:
+           # PANIC that drops every connection. Size also scales provisioned
+           # IOPS/throughput on PD-backed storage classes. The kind overlay
+           # shrinks this claim back down.
+-          storage: 500Gi
++          storage: 20Gi
