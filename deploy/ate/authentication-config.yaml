@@ -1,0 +1,37 @@
+# Fix the ate-api-server authentication ConfigMap for this cluster.
+#
+# The installer GENERATES this ConfigMap and would overwrite it on a re-run of
+# `deploy ate-system`, so re-apply this file afterwards.
+#
+# Why it needs fixing: ate-api-server validates client JWTs (ax-server presents
+# one) via the cluster's OIDC discovery document, then fetches the signing keys
+# from jwks_uri. Substrate's installer only adds `certificateAuthorityFile` and
+# `discoveryTokenFile` when the issuer is the in-cluster default
+# (https://kubernetes.default.svc) — see buildAuthenticationConfig in
+# cmd/ate-setup/internal/steps/create.go. Its comment assumes any other issuer
+# is reachable by anonymous discovery, which is true on GKE but not here:
+# Talos runs kube-apiserver with --anonymous-auth=false, so
+# /openid/v1/jwks returns 401 and every JWT is rejected with the misleading
+# "invalid bearer token".
+#
+# Adding these two fields points the discovery client at the pod's own projected
+# service account CA and token, which the apiserver does accept (verified: the
+# JWKS endpoint returns 200 with a bearer token and 401 without).
+#
+# The issuer must match the apiserver's --service-account-issuer exactly; here
+# that is the Talos VIP. Confirm with:
+#   kubectl get --raw /.well-known/openid-configuration | jq -r .issuer
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ate-api-authentication
+  namespace: ate-system
+data:
+  authentication.yaml: |
+    actorIdentityJWTProvider: kubernetes
+    jwtProviders:
+    - name: kubernetes
+      issuer: https://192.168.1.45:6443
+      audiences: [api.ate-system.svc]
+      certificateAuthorityFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      discoveryTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
