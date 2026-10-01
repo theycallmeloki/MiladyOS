@@ -18,6 +18,13 @@ spec:
   workerImage: miladyosregistry.transparentlyrotatableproxy.site/ate-images/ateom-gvisor@sha256:d3b722ad1bbc331fe7ee835d9647bd867bc6e802f7af117e0d7fe0c226ff970d
   sandboxClass: gvisor
   template:
+    # Worker pods need atelet, which only runs on nodes carrying the substrate
+    # version label. Selecting on the same label keeps workers off any node
+    # that atelet has not stamped -- notably a node that rejoins the cluster
+    # without the label, which would otherwise accept a worker pod that can
+    # never become ready.
+    nodeSelector:
+      ate.dev/substrate-version: v0.2.0-32-gafb62e18-dirty
     # Each worker pod is a standing reservation that hosts actor sandboxes.
     # Sized to fit the two Talos worker nodes, which also run the rest of the
     # cluster's workloads.
@@ -27,4 +34,4 @@ spec:
         memory: 1Gi
       limits:
         cpu: "2"
-        memory: 2Gi
+        memory: 8Gi

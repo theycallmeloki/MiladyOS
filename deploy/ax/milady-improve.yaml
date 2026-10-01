@@ -73,7 +73,7 @@ spec:
       memory: "1Gi"
     limits:
       cpu: "2"
-      memory: "4Gi"
+      memory: "6Gi"
   workspaces:
     - name: miladyos
       path: "/workspace"
