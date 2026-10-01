@@ -1,0 +1,26 @@
+# Egress policy for the milady-improve actor.
+#
+# Substrate v0.2.0 is default-deny: an actor with no policy reaches nothing, and
+# ax exposes no egress surface at all (it is a Substrate API resource, created
+# with `kubectl ate create egress-policy <actor> -f <this file>`).
+#
+# Only what the arc actually needs:
+#   - github.com / codeload.github.com for the workspace git clone (GitHub
+#     redirects clones to codeload, so both are required)
+#   - generativelanguage.googleapis.com for the Gemini API the goal agent calls
+#
+# tls_passthrough rather than http: an http rule makes the egress gateway MITM
+# the connection, which would require projecting the gateway's CA into the
+# sandbox for the client to trust. Passthrough matches on SNI and leaves the
+# upstream certificate intact, so no CA plumbing is needed.
+#
+# Create this only AFTER the actor exists (the policy is addressed by actor):
+#   kubectl-ate create egress-policy milady-improve -f deploy/ax/egress-milady-improve.yaml
+rules:
+  - tls_passthrough:
+      hostnames:
+        - "github.com"
+        - "codeload.github.com"
+        - "generativelanguage.googleapis.com"
+      ports:
+        numbers: [443]
