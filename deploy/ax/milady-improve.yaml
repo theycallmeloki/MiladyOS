@@ -1,0 +1,103 @@
+# MiladyOS-improves-MiladyOS: a self-directed improvement arc.
+#
+# Three resources in one file: the Workspace that clones the repo, the Model
+# that names the LLM, and the Task that runs the agent in a gVisor sandbox.
+#
+#   ax apply -f deploy/ax/milady-improve.yaml
+#   # actor is created suspended; grant egress before waking it:
+#   kubectl-ate create egress-policy milady-improve -f deploy/ax/egress-milady-improve.yaml
+#   ax resume task milady-improve
+#
+# Egress is granted AFTER creation on purpose: Substrate policies are per-actor
+# and default-deny, and the workspace setup (git clone) needs egress too, so the
+# policy has to exist before the actor is first woken — but the actor has to
+# exist before the policy can name it.
+#
+# Why this is a repository-improvement arc rather than MiladyOS's own
+# AutoDidact loop: AutoDidact is a GPU training pipeline (27B sensei on one GPU,
+# 1.5B student trained SFT -> GRPO -> merge -> eval-gate on another). This
+# cluster has no GPU at all, so the training half cannot run here.
+---
+apiVersion: ax.io/v1alpha1
+kind: Workspace
+metadata:
+  name: miladyos
+  atespace: default
+spec:
+  git:
+    - name: miladyos
+      repo: https://github.com/theycallmeloki/MiladyOS
+      branch: main
+      # The checkout on the workstation is 88GB, but only 16MB / 565 files are
+      # actually tracked (AutoDidact/ and ISO/ output is local build data).
+      # Depth 1 keeps the sandbox clone cheap.
+      depth: 1
+---
+apiVersion: ax.io/v1alpha1
+kind: Model
+metadata:
+  name: gemini
+  atespace: default
+spec:
+  provider: google
+  model: gemini-3.8-flash
+  secretKey:
+    name: gemini-api-secret
+    key: GEMINI_API_KEY
+---
+apiVersion: ax.io/v1alpha1
+kind: Task
+metadata:
+  name: milady-improve
+  atespace: default
+spec:
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:43be21c945734ff9151b1d5e7bb65a95dc04b58d0885569cf6778c5f98936c08"
+  env:
+    # GEMINI_API_KEY is what makes the workspace goal run at all: ax-task-runner
+    # only invokes the Antigravity setup agent when a goal is set AND this
+    # variable is present. Note EnvVar is a plain name/value pair in ax's API —
+    # there is no secretKeyRef — so the key is inlined here and therefore lands
+    # in ax's Redis.
+    # The value here is a placeholder. Substitute it at apply time:
+    #   GEMINI_API_KEY=... envsubst < deploy/ax/milady-improve.yaml | ax apply -f -
+    # Never commit a real key: this repository is public and GitHub push
+    # protection rejects commits containing one.
+    - name: GEMINI_API_KEY
+      value: "${GEMINI_API_KEY}"
+    # The goal agent gets 10 minutes by default; a real change needs longer.
+    - name: AX_BOOTSTRAP_TIMEOUT
+      value: "30m"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  workspaces:
+    - name: miladyos
+      path: "/workspace"
+      goal: |
+        This is the MiladyOS repository. Your job is to improve MiladyOS itself.
+
+        1. Read README.md, AGENTS.md and MILADY_README.md first, and follow the
+           conventions you find there.
+        2. Choose ONE small, high-value, self-contained improvement that is
+           clearly within the project's stated direction. Strongly prefer fixing
+           something that is broken, unclear, or inconsistent in the tracked
+           source over adding any new feature.
+        3. Implement it.
+        4. Verify it, using whatever checks or tests the repository documents.
+        5. Commit the change locally with a clear commit message.
+
+        Constraints:
+        - This sandbox has NO GPU and cannot reach any GPU service. Do not
+          attempt GPU-dependent work: no model training or serving, no
+          AutoDidact/autoresearch runs, no SFT/GRPO. Those need hardware this
+          environment does not have.
+        - Work only inside /workspace/miladyos.
+        - Do NOT push, and do not attempt to authenticate to any remote.
+        - Do not touch secrets, credentials, or any file outside the repository.
+        - Keep the change small enough to review in one sitting.
+        - If you cannot verify a change, make no change and explain why instead.
+  debug: true
