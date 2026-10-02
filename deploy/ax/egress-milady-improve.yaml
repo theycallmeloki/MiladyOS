@@ -4,23 +4,69 @@
 # ax exposes no egress surface at all (it is a Substrate API resource, created
 # with `kubectl ate create egress-policy <actor> -f <this file>`).
 #
-# Only what the arc actually needs:
-#   - github.com / codeload.github.com for the workspace git clone (GitHub
-#     redirects clones to codeload, so both are required)
-#   - generativelanguage.googleapis.com for the Gemini API the goal agent calls
+# Free egress. Both legs below use a bare "*", which the pattern syntax defines
+# as matching every name and every address, so the actor reaches any origin.
+# This is a deliberate choice for a research arc, not a hardened default: the
+# gateway still authenticates the actor and still logs every request, but it
+# authorizes all of them. Narrow this when the arc stabilises.
 #
-# tls_passthrough rather than http: an http rule makes the egress gateway MITM
-# the connection, which would require projecting the gateway's CA into the
-# sandbox for the client to trust. Passthrough matches on SNI and leaves the
-# upstream certificate intact, so no CA plumbing is needed.
+# WHY NOT tls_passthrough -- this is the important bit.
+#
+# The obvious rule for "let the sandbox reach github.com over HTTPS" is
+# tls_passthrough: the gateway forwards TLS without decrypting, so no CA has to
+# be trusted inside the sandbox. That rule DOES NOT WORK in this version, and it
+# fails in the most misleading way possible. From
+# cmd/atenet/internal/router/egress/egress.go, handleConnect:
+#
+#   // The tunnel opens for an actor with a policy that has rules, with nothing
+#   // to dial: every connection is decided inside, request by request. Nothing
+#   // is decided at the CONNECT yet, so a tls_passthrough rule cannot allow a
+#   // connection here; until it can, the passthrough chain closes what it gets.
+#
+# The observable symptom is that the tunnel opens, the actor identity
+# authenticates, the SNI is read and logged -- and then the connection is closed
+# with no bytes. The client sees:
+#
+#   git: fatal: unable to access 'https://github.com/...':
+#        GnuTLS, handshake failed: The TLS connection was non-properly terminated.
+#
+# which reads like a network fault and is in fact a policy limitation. Only two
+# legs decide anything: EgressCleartextFilterChainName and
+# EgressTLSMITMFilterChainName (see egresspolicymanifest_test.go, requestLegs).
+# So HTTPS requires the MITM leg, which requires the sdsmint egress gateway
+# (ate-setup deploy atenet --experimental-use-sdsmint) and the sandbox trusting
+# the gateway CA that sdsmint mints. The task-runner image bakes that anchor in
+# (see Dockerfile.task-runner and `make fetch-egress-ca`).
+#
+# Ports use `all` rather than a list: the gateway matches the destination port
+# the actor connected to, and free egress should not stop at 443.
 #
 # Create this only AFTER the actor exists (the policy is addressed by actor):
 #   kubectl-ate create egress-policy milady-improve -f deploy/ax/egress-milady-improve.yaml
 rules:
-  - tls_passthrough:
+  # HTTPS is terminated by the gateway (man-in-the-middle) so it can authorize
+  # each request, and re-originated. This is the leg that works.
+  #
+  # Hostnames here are EXPLICIT, not "*". The CONNECT response publishes this
+  # list to Envoy as dynamic metadata (EgressAllowedSNIsKey) and the egress
+  # dynamic module matches the real SNI from the ClientHello against it to route
+  # the tunnel to the MITM chain. A literal "*" does not route: the tunnel falls
+  # through to the passthrough chain, where nothing was ever dialled, and the
+  # actor sees a TLS connection closed with no bytes -- indistinguishable from
+  # the tls_passthrough bug above. Enumerate what the arc needs.
+  - https:
       hostnames:
         - "github.com"
         - "codeload.github.com"
         - "generativelanguage.googleapis.com"
       ports:
         numbers: [443]
+  # Cleartext HTTP, decided per request on the Host header. Pinned to port 80
+  # on purpose: a bare "*" over `all` ports would tie with the HTTPS rule above
+  # on every port, and the API rejects a tie because neither rule can then be
+  # said to win.
+  - http:
+      hostnames:
+        - "*"
+      ports:
+        numbers: [80]
