@@ -74,4 +74,21 @@ fin, _ = t_apply(drift)
 check("marker line kept from template (metadata un-editable)", 'kaniko-submit"}' in fin and "HACKED" not in fin)
 check("payload still adopted", "T=5" in fin)
 
+# 7. nested START inside block is rejected and reported as an issue
+nested_template = """\
+# EVOLVE-BLOCK-START
+# EVOLVE-BLOCK-START
+inner
+# EVOLVE-BLOCK-END
+"""
+blocks, issues = parse_blocks(nested_template)
+check("nested START skipped as issue", len(issues) == 1 and "nested EVOLVE-BLOCK-START" in issues[0])
+check("inner block parsed without nested marker in payload", len(blocks) == 1 and blocks[0]["payload"] == ["inner"])
+
+# 8. candidate with nested START adopts inner payload without marker leak
+nested_candidate = TEMPLATE.replace("T=1500", "T=1500\n        # EVOLVE-BLOCK-START\n        T=42")
+fin, st = t_apply(nested_candidate)
+check("nested START in candidate clamped to innermost payload", "T=42" in fin and fin.count("EVOLVE-BLOCK-START") == 1)
+check("candidate payload adopted cleanly", st["changed_payloads"] == 1)
+
 print("\nALL FENCE TESTS PASSED")
