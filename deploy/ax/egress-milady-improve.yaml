@@ -59,6 +59,14 @@ rules:
         - "github.com"
         - "codeload.github.com"
         - "generativelanguage.googleapis.com"
+        # The Go module infrastructure. A Go task that adds a dependency cannot
+        # work without these: `go mod download` talks to the module proxy, which
+        # redirects the module zip to storage.googleapis.com, and verifies
+        # checksums against the checksum database. Without them a build fails
+        # with a network error that reads like the toolchain is broken.
+        - "proxy.golang.org"
+        - "sum.golang.org"
+        - "storage.googleapis.com"
       ports:
         numbers: [443]
   # Cleartext HTTP, decided per request on the Host header. Pinned to port 80
