@@ -72,7 +72,7 @@ spec:
   # gateway's MITM CA: under sdsmint the gateway terminates every TLS connection
   # the actor opens, so without the anchor every HTTPS request in the sandbox
   # fails with a certificate error. Rebuild with `make push-task-runner`.
-  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:db94543974cc593b7094a71e51c4478d562d03e5763976106817bbdf5ee10911"
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:902f8a5f8e8b463eea3eccd6dcb7d1f05b30dc1f7569f6ba141e4e0a027dd9cf"
   env:
     # GEMINI_API_KEY is what makes the goal agent run at all. Note EnvVar is a
     # plain name/value pair in ax's API -- there is no secretKeyRef -- so the key

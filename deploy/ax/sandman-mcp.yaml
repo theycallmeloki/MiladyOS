@@ -1,0 +1,160 @@
+# sandman-mcp: give the sandman daemon a first-class MCP endpoint.
+#
+#   ax apply -f deploy/ax/sandman-mcp.yaml
+#   kubectl-ate create egress-policy sandman-mcp -f deploy/ax/egress-milady-improve.yaml
+#   ax resume task sandman-mcp
+#
+# Render with a RESTRICTED envsubst (see milady-improve.yaml for why a bare one
+# is a trap):
+#   GEMINI_API_KEY=... envsubst '${GEMINI_API_KEY}' < deploy/ax/sandman-mcp.yaml | ax apply -f -
+---
+apiVersion: ax.io/v1alpha1
+kind: Workspace
+metadata:
+  name: sandman
+  atespace: default
+spec: {}
+---
+apiVersion: ax.io/v1alpha1
+kind: Task
+metadata:
+  name: sandman-mcp
+  atespace: default
+spec:
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:902f8a5f8e8b463eea3eccd6dcb7d1f05b30dc1f7569f6ba141e4e0a027dd9cf"
+  env:
+    - name: GEMINI_API_KEY
+      value: "${GEMINI_API_KEY}"
+    # A protocol endpoint over an unfamiliar codebase is a much larger job than
+    # the fence fix the MiladyOS arc did, so this gets a longer budget than the
+    # default 10m. The agent walls out at this deadline no matter what.
+    - name: AX_BOOTSTRAP_TIMEOUT
+      value: "45m"
+    - name: SANDMAN_GOAL
+      value: |
+        This is the sandman repository: a peer-to-peer data and compute fabric
+        for a trusted LAN. A single daemon is the only moving part, and it
+        speaks a shell-like job protocol and a versioned-data API over one port.
+        SANDMAN_ADDR selects the control-plane address (default
+        127.0.0.1:4242); the REST surface is /api/v1/... and the CLI verbs are
+        run, ps, ls, cat, put, get, repo, pipeline, nodes, worker, stats,
+        status, logs, attach, cancel and friends.
+
+        YOUR JOB: give the daemon a first-class Model Context Protocol (MCP)
+        endpoint, served by the daemon itself on the control-plane address, so
+        that an agent holding nothing but SANDMAN_ADDR can discover the fabric
+        and drive it — list and inspect repos, commits and branches; read and
+        write files in a commit; start, run, stop and inspect pipelines; list,
+        inspect, wait on, cancel and read logs from jobs; list nodes and
+        workers; read stats.
+
+        Requirements, in priority order:
+
+        1. TRANSPORT. Serve MCP over HTTP with the SSE transport, alongside the
+           existing REST API on the same address:
+             - GET  <base>/mcp/sse       the server->client event stream, which
+                                         opens with an `endpoint` event naming
+                                         the message URL for the session
+             - POST <base>/mcp/messages  client->server JSON-RPC, session-scoped
+           Support multiple concurrent sessions, give each a distinct session
+           id, and clean up a session when its stream disconnects. Send periodic
+           keep-alive comments so idle streams survive intermediaries. Read the
+           protocol rather than guessing: the MCP specification is public, and
+           the initialize handshake, capability negotiation, tool listing and
+           tool invocation must be correct rather than approximately correct.
+
+        2. THE EXISTING PORT IS SHARED. The daemon routes connections on one
+           port by inspecting their first bytes. Your endpoint must slot into
+           that dispatch without disturbing it: every existing protocol and
+           every existing REST route must keep working byte-for-byte. An SSE
+           stream is a long-lived GET, which the HTTP server must be able to
+           hold open — verify that it actually can rather than assuming.
+
+        3. TOOLS. Expose the daemon's real verbs as MCP tools with accurate,
+           narrow JSON Schemas: names, descriptions, required fields and types
+           that a model can use without reading the source. Return the daemon's
+           real data, not a thin HTTP shim that loses it. Long-running tools
+           (running a pipeline, waiting on a job) must not block the protocol
+           past its timeouts — stream progress or return a handle the caller can
+           poll, and say which you chose and why in the tool description.
+
+        4. FAILURE BEHAVIOUR. Errors must be MCP errors with useful messages,
+           not HTTP 500s or hangs. Unknown tool, bad arguments, unknown repo,
+           unknown job: each must produce a distinguishable, actionable error.
+           An MCP client that sends a malformed frame must not take the daemon
+           down or leak a goroutine.
+
+        5. QUALITY BAR. Idiomatic Go that matches this repository's existing
+           conventions and style. Tests that would catch a real regression —
+           a handshake, a tools/list, a tools/call against a real resource, a
+           session that disconnects, a malformed frame. Documentation in the
+           README showing how to point an MCP client at SANDMAN_ADDR. Do not
+           break the existing test suite; run it and report the result.
+
+        Constraints:
+        - This sandbox has NO GPU and cannot reach any GPU service. No model
+          training or serving.
+        - Work only inside the repository (your working directory).
+        - Do NOT push, and do not attempt to authenticate to any remote.
+        - Do not touch secrets or credentials.
+        - Commit the change locally with a clear commit message when, and only
+          when, the work is verified. If you cannot verify it, commit nothing
+          and explain what is unverified instead.
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "6Gi"
+  workspaces:
+    - name: sandman
+      path: "/workspace"
+  command:
+    - "bash"
+    - "-c"
+    - |
+      set -euo pipefail
+
+      REPO=https://github.com/theycallmeloki/sandman
+      DEST=/workspace/sandman
+
+      # Resume-safe: never re-clone over existing work. An agent run can die
+      # mid-flight (a quota 429 is enough), and its uncommitted changes live only
+      # in this workspace. Re-cloning would silently throw them away.
+      if [ -d "${DEST}/.git" ]; then
+        echo "=== workspace already present; reusing, NOT re-cloning ==="
+        git -C "${DEST}" log --oneline -1
+        echo "--- uncommitted work in progress ---"
+        git -C "${DEST}" status --short | head -20
+      else
+        echo "=== cloning ${REPO} ==="
+        for attempt in 1 2 3 4 5; do
+          if git clone --depth 1 --branch main "${REPO}" "${DEST}"; then
+            break
+          fi
+          echo "clone attempt ${attempt} failed"
+          if [ "${attempt}" = "5" ]; then
+            echo "clone failed after 5 attempts; not running the goal agent"
+            exit 1
+          fi
+          sleep 15
+        done
+        echo "HEAD: $(git -C "${DEST}" log --oneline -1)"
+      fi
+
+      echo "=== baseline: does it build and test before the change? ==="
+      (cd "${DEST}" && go build ./... 2>&1 | tail -5) || echo "baseline build had errors"
+      (cd "${DEST}" && go test ./... 2>&1 | tail -12) || echo "baseline tests had failures"
+
+      echo "=== running the goal agent (timeout ${AX_BOOTSTRAP_TIMEOUT}) ==="
+      timeout "${AX_BOOTSTRAP_TIMEOUT}" python3 /usr/local/bin/antigravity_bootstrap.py \
+        --goal "${SANDMAN_GOAL}" \
+        --workspace "${DEST}" \
+        --data-dir /workspace/.antigravity
+
+      echo "=== agent finished; workspace state ==="
+      git -C "${DEST}" --no-pager log --oneline -5
+      git -C "${DEST}" status --short | head -20
+      echo "SANDMAN-MCP-DONE"
+  debug: true
