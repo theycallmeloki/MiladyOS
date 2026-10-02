@@ -76,10 +76,15 @@ def parse_blocks(text: str) -> Tuple[List[Dict[str, object]], List[str]]:
             i += 1
             continue
         # refuse a nested START before the END
+        has_nested = False
         for k in range(i + 1, j):
             if _is_marker(lines[k], START):
                 issues.append(f"line {k + 1}: nested EVOLVE-BLOCK-START inside block; skipped")
+                has_nested = True
                 break
+        if has_nested:
+            i += 1
+            continue
         blocks.append({
             "start": start_idx,
             "end": j,
@@ -127,6 +132,12 @@ def apply_fence(template: str, candidate: str) -> Tuple[str, Dict[str, object]]:
         if e is None:
             new_payloads.append(None)
             continue
+        while True:
+            next_s = _next_marker(c_lines, s + 1, START)
+            if next_s is not None and next_s < e:
+                s = next_s
+            else:
+                break
         new_payloads.append(c_lines[s + 1:e])
         c_i = e + 1
 
