@@ -1,22 +1,28 @@
 # MiladyOS-improves-MiladyOS: a self-directed improvement arc.
 #
-# Three resources in one file: the Workspace that clones the repo, the Model
-# that names the LLM, and the Task that runs the agent in a gVisor sandbox.
+# Three resources in one file: the Workspace the task mounts, the Model that
+# names the LLM, and the Task that runs the agent in a gVisor sandbox.
 #
 #   ax apply -f deploy/ax/milady-improve.yaml
 #   # actor is created suspended; grant egress before waking it:
 #   kubectl-ate create egress-policy milady-improve -f deploy/ax/egress-milady-improve.yaml
 #   ax resume task milady-improve
 #
-# Egress is granted AFTER creation on purpose: Substrate policies are per-actor
-# and default-deny, and the workspace setup (git clone) needs egress too, so the
-# policy has to exist before the actor is first woken — but the actor has to
-# exist before the policy can name it.
+# Render it with a RESTRICTED envsubst, naming the one variable to substitute:
 #
-# Why this is a repository-improvement arc rather than MiladyOS's own
-# AutoDidact loop: AutoDidact is a GPU training pipeline (27B sensei on one GPU,
-# 1.5B student trained SFT -> GRPO -> merge -> eval-gate on another). This
-# cluster has no GPU at all, so the training half cannot run here.
+#   GEMINI_API_KEY=... envsubst '${GEMINI_API_KEY}' < deploy/ax/milady-improve.yaml | ax apply -f -
+#
+# A bare `envsubst` blanks every ${...} it sees, including the shell variables
+# inside the task command below -- ${REPO}, ${DEST}, ${attempt} -- which leaves
+# an arc that applies cleanly and then fails at runtime with empty strings.
+#
+# Egress is granted AFTER creation on purpose: Substrate policies are per-actor
+# and default-deny, and the actor has to exist before a policy can name it.
+#
+# Why this is a repository-improvement arc rather than MiladyOS's own AutoDidact
+# loop: AutoDidact is a GPU training pipeline (27B sensei on one GPU, 1.5B
+# student trained SFT -> GRPO -> merge -> eval-gate on another). This cluster
+# has no GPU at all, so the training half cannot run here.
 ---
 apiVersion: ax.io/v1alpha1
 kind: Workspace
@@ -24,14 +30,25 @@ metadata:
   name: miladyos
   atespace: default
 spec:
-  git:
-    - name: miladyos
-      repo: https://github.com/theycallmeloki/MiladyOS
-      branch: main
-      # The checkout on the workstation is 88GB, but only 16MB / 565 files are
-      # actually tracked (AutoDidact/ and ISO/ output is local build data).
-      # Depth 1 keeps the sandbox clone cheap.
-      depth: 1
+  # No `git:` here, deliberately -- see the task command below.
+  #
+  # ax's maiden workspace setup runs the git clone at actor start, during the
+  # first ~10s of the actor's life, and actor egress is not usable yet in that
+  # window. The clone's five retries span about 9.5s, so every one lands
+  # inside it and the whole clone fails. The symptom is:
+  #
+  #   fatal: unable to access 'https://github.com/...': GnuTLS, handshake
+  #   failed: The TLS connection was non-properly terminated.
+  #
+  # which reads like a network or policy fault and is really a race, and the
+  # gateway logs nothing at all for the actor, which reads like a broken
+  # redirect and is the same race.
+  #
+  # Confirmed by A/B inside one actor: the maiden `git fetch` fails while a
+  # `git clone`, and even a byte-for-byte replay of the maiden sequence
+  # (init + remote add + fetch --depth=1 origin main), succeeds as the task
+  # command seconds later. So the clone is done in the command, where egress
+  # is up, and the workspace is declared here only so the task can mount it.
 ---
 apiVersion: ax.io/v1alpha1
 kind: Model
@@ -51,14 +68,16 @@ metadata:
   name: milady-improve
   atespace: default
 spec:
-  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:43be21c945734ff9151b1d5e7bb65a95dc04b58d0885569cf6778c5f98936c08"
+  # Built from this repo's Dockerfile.task-runner, which bakes in the egress
+  # gateway's MITM CA: under sdsmint the gateway terminates every TLS connection
+  # the actor opens, so without the anchor every HTTPS request in the sandbox
+  # fails with a certificate error. Rebuild with `make push-task-runner`.
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:db94543974cc593b7094a71e51c4478d562d03e5763976106817bbdf5ee10911"
   env:
-    # GEMINI_API_KEY is what makes the workspace goal run at all: ax-task-runner
-    # only invokes the Antigravity setup agent when a goal is set AND this
-    # variable is present. Note EnvVar is a plain name/value pair in ax's API —
-    # there is no secretKeyRef — so the key is inlined here and therefore lands
-    # in ax's Redis.
-    # The value here is a placeholder. Substitute it at apply time:
+    # GEMINI_API_KEY is what makes the goal agent run at all. Note EnvVar is a
+    # plain name/value pair in ax's API -- there is no secretKeyRef -- so the key
+    # is inlined here and therefore lands in ax's Redis. The value here is a
+    # placeholder; substitute it at apply time:
     #   GEMINI_API_KEY=... envsubst < deploy/ax/milady-improve.yaml | ax apply -f -
     # Never commit a real key: this repository is public and GitHub push
     # protection rejects commits containing one.
@@ -67,17 +86,11 @@ spec:
     # The goal agent gets 10 minutes by default; a real change needs longer.
     - name: AX_BOOTSTRAP_TIMEOUT
       value: "30m"
-  resources:
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
-    limits:
-      cpu: "2"
-      memory: "6Gi"
-  workspaces:
-    - name: miladyos
-      path: "/workspace"
-      goal: |
+    # The goal text lives here rather than in the Workspace because the task
+    # command below owns the agent invocation, and env is the only place ax
+    # gives us to carry a multi-line string into the sandbox.
+    - name: MILADY_GOAL
+      value: |
         This is the MiladyOS repository. Your job is to improve MiladyOS itself.
 
         1. Read README.md, AGENTS.md and MILADY_README.md first, and follow the
@@ -95,9 +108,57 @@ spec:
           attempt GPU-dependent work: no model training or serving, no
           AutoDidact/autoresearch runs, no SFT/GRPO. Those need hardware this
           environment does not have.
-        - Work only inside /workspace/miladyos.
+        - Work only inside the repository you were given (your working
+          directory). Do not touch anything outside it.
         - Do NOT push, and do not attempt to authenticate to any remote.
         - Do not touch secrets, credentials, or any file outside the repository.
         - Keep the change small enough to review in one sitting.
         - If you cannot verify a change, make no change and explain why instead.
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "6Gi"
+  workspaces:
+    - name: miladyos
+      path: "/workspace"
+  # The clone and the goal agent both run here, not in the maiden setup: by the
+  # time a task command starts, the actor's egress is live. See the Workspace
+  # comment above for why the maiden path cannot be used.
+  command:
+    - "bash"
+    - "-c"
+    - |
+      set -euo pipefail
+
+      REPO=https://github.com/theycallmeloki/MiladyOS
+      DEST=/workspace/miladyos
+
+      echo "=== cloning ${REPO} ==="
+      rm -rf "${DEST}"
+      for attempt in 1 2 3 4 5; do
+        if git clone --depth 1 --branch main "${REPO}" "${DEST}"; then
+          break
+        fi
+        echo "clone attempt ${attempt} failed"
+        if [ "${attempt}" = "5" ]; then
+          echo "clone failed after 5 attempts; not running the goal agent"
+          exit 1
+        fi
+        sleep 15
+      done
+      echo "HEAD: $(git -C "${DEST}" log --oneline -1)"
+
+      echo "=== running the goal agent (timeout ${AX_BOOTSTRAP_TIMEOUT}) ==="
+      timeout "${AX_BOOTSTRAP_TIMEOUT}" python3 /usr/local/bin/antigravity_bootstrap.py \
+        --goal "${MILADY_GOAL}" \
+        --workspace "${DEST}" \
+        --data-dir /workspace/.antigravity
+
+      echo "=== agent finished; workspace diff ==="
+      git -C "${DEST}" --no-pager log --oneline -3
+      git -C "${DEST}" status --short | head -20
+      echo "MILADY-ARC-DONE"
   debug: true
