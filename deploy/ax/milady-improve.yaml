@@ -72,17 +72,24 @@ spec:
   # gateway's MITM CA: under sdsmint the gateway terminates every TLS connection
   # the actor opens, so without the anchor every HTTPS request in the sandbox
   # fails with a certificate error. Rebuild with `make push-task-runner`.
-  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:902f8a5f8e8b463eea3eccd6dcb7d1f05b30dc1f7569f6ba141e4e0a027dd9cf"
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:c32203a326b959f9e41d1390ae0671b2a57b13619950f4ac42d9534cb1340e39"
   env:
-    # GEMINI_API_KEY is what makes the goal agent run at all. Note EnvVar is a
-    # plain name/value pair in ax's API -- there is no secretKeyRef -- so the key
-    # is inlined here and therefore lands in ax's Redis. The value here is a
-    # placeholder; substitute it at apply time:
+    # GEMINI_API_KEY is what makes the goal agent run at all, and it is now the
+    # LiteLLM gateway's key, not a Google one: the agent talks to the gateway,
+    # which fronts DeepSeek. Note EnvVar is a plain name/value pair in ax's API
+    # -- there is no secretKeyRef -- so the value is inlined here and therefore
+    # lands in ax's Redis. Substitute it at apply time:
     #   GEMINI_API_KEY=... envsubst < deploy/ax/milady-improve.yaml | ax apply -f -
     # Never commit a real key: this repository is public and GitHub push
     # protection rejects commits containing one.
     - name: GEMINI_API_KEY
       value: "${GEMINI_API_KEY}"
+    # Which model the goal agent asks the gateway for. The gateway serves
+    # deepseek-flash and deepseek-v4-pro; this is the same default the
+    # bootstrap falls back to, named here so a task can change it without a
+    # rebuild.
+    - name: AX_AGENT_LLM_MODEL
+      value: "deepseek-flash"
     # The goal agent gets 10 minutes by default; a real change needs longer.
     - name: AX_BOOTSTRAP_TIMEOUT
       value: "30m"

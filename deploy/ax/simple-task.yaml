@@ -15,7 +15,7 @@ metadata:
   name: simple-task
   atespace: default
 spec:
-  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:902f8a5f8e8b463eea3eccd6dcb7d1f05b30dc1f7569f6ba141e4e0a027dd9cf"
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:c32203a326b959f9e41d1390ae0671b2a57b13619950f4ac42d9534cb1340e39"
   env:
     - name: ENVIRONMENT
       value: "test"

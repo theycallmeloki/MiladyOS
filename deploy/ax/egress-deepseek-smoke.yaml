@@ -1,0 +1,15 @@
+# Egress policy for the deepseek-smoke actor: enough to reach the LiteLLM
+# gateway and nothing else. Hostnames are explicit because a literal "*" falls
+# through to the passthrough chain and the actor sees a TLS connection closed
+# with no bytes (see MiladyOS deploy/ax/egress-milady-improve.yaml).
+rules:
+  - https:
+      hostnames:
+        - "litellm.transparentlyrotatableproxy.site"
+      ports:
+        numbers: [443]
+  - http:
+      hostnames:
+        - "*"
+      ports:
+        numbers: [80]
