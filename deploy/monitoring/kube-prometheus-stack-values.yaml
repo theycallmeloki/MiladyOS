@@ -4,17 +4,21 @@
 ## Grafana configuration
 grafana:
   enabled: true
-  # Disable auth - anonymous access
+  # Reached through the ingress, which now requires basic auth (milady). What
+  # gets past that lands here anonymously as a Viewer: enough to read the
+  # dashboards and Explore, not enough to edit datasources, users or dashboards.
+  # Signing in with the admin password still gets Admin, which is why the login
+  # form and the sign-out menu are enabled again.
   grafana.ini:
     auth:
-      disable_login_form: true
-      disable_signout_menu: true
+      disable_login_form: false
+      disable_signout_menu: false
     auth.anonymous:
       enabled: true
-      org_role: Admin
+      org_role: Viewer
     auth.basic:
       enabled: false
-  adminPassword: "admin"  # Won't be used with anonymous access
+  adminPassword: "admin"  # Still the stock password; change it, it gates Admin
   persistence:
     enabled: true
     storageClassName: longhorn
@@ -24,6 +28,9 @@ grafana:
     ingressClassName: nginx
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: grafana-basic-auth
+      nginx.ingress.kubernetes.io/auth-realm: Grafana
     hosts:
     - grafana.transparentlyrotatableproxy.site
     tls:
