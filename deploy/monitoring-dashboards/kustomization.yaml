@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
 - node-overview-dashboard.yaml
 - bc250-fleet-dashboard.yaml
+- ax-agent-trajectory-dashboard.yaml
