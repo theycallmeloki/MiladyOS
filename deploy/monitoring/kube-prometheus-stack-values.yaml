@@ -19,6 +19,12 @@ grafana:
     auth.basic:
       enabled: false
   adminPassword: "admin"  # Still the stock password; change it, it gates Admin
+  # Grafana holds a ReadWriteOnce PVC, so the default RollingUpdate surges a
+  # replacement pod that cannot attach the volume while the old pod still holds
+  # it: the new pod sits in Init with a Multi-Attach error and the rollout never
+  # finishes. Recreate stops the old pod before starting the new one.
+  strategy:
+    type: Recreate
   persistence:
     enabled: true
     storageClassName: longhorn
