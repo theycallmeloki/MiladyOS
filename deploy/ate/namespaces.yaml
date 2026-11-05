@@ -20,12 +20,17 @@ metadata:
     pod-security.kubernetes.io/audit: privileged
     pod-security.kubernetes.io/warn: privileged
 ---
-# ax-system holds only the ax control plane (ax-server + ax-redis), which runs
-# as ordinary unprivileged containers with no hostPath, hostNetwork or
+# ax-system holds the ax control plane (ax-server and its PostgreSQL), which
+# runs as ordinary unprivileged containers with no hostPath, hostNetwork or
 # capabilities. It deliberately keeps the cluster-default "baseline" policy
 # rather than being granted privileged — the sandboxes that do need privileges
 # run as Substrate actors inside worker pods in ate-system, not here.
+#
+# ate.dev/api-access admits this namespace through ate-api-server's ingress
+# NetworkPolicy (ate-system/ate-api-server), which ax needs for every task.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: ax-system
+  labels:
+    ate.dev/api-access: "true"

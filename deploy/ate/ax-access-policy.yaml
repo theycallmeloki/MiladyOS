@@ -1,0 +1,16 @@
+# Global access policy for this cluster.
+#
+# rc.3 enforces authorization against an embedded OpenFGA model. ax creates its
+# own atespaces and manages actor templates/actors inside them, which needs the
+# global owner role (docs/guides/authorization.md: "Authorize
+# system:serviceaccount:ax-system:ax-server with global permission to create
+# atespaces and permission to manage their actors and templates").
+#
+# Apply as the bootstrap owner (ate-client is the default):
+#   kubectl-ate --global create access-policy -f deploy/ate/ax-access-policy.yaml
+# Apply again after any change with `update` (see the authorization guide); the
+# global policy cannot be deleted, only updated with fewer bindings.
+bindings:
+  - role: owner
+    members:
+      - user:system:serviceaccount:ax-system:ax-server

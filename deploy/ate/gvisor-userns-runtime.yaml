@@ -1,0 +1,60 @@
+# Set user.max_user_namespaces on worker nodes without touching Talos config.
+#
+# Talos defaults `user.max_user_namespaces` to 0, which disables unprivileged
+# user namespaces. gVisor creates a user namespace for its gofer even when
+# running as root, and the kernel returns ENOSPC when the limit cannot be
+# satisfied. That surfaces as:
+#
+#   cannot create sandbox process: fork/exec .../gvisor-sentry-prewarmer:
+#     no space left on device
+#
+# which reads like a disk problem but is not.
+#
+# `gvisor-userns-sysctl.yaml` is the persistent fix (a Talos machine-config
+# patch), but this cluster's Talos config is hand-managed and changes to it are
+# out of scope for the Substrate install. This DaemonSet applies the same
+# sysctl at runtime on every node carrying the Substrate version label, so new
+# worker nodes pick it up too. The value is host-global: a privileged container
+# writes the node's /proc/sys/user file.
+#
+# 15000 matches the common distro default (Debian/Ubuntu).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gvisor-userns-sysctl
+  namespace: ate-system
+  labels:
+    app: gvisor-userns-sysctl
+spec:
+  selector:
+    matchLabels:
+      app: gvisor-userns-sysctl
+  template:
+    metadata:
+      labels:
+        app: gvisor-userns-sysctl
+    spec:
+      nodeSelector:
+        ate.dev/substrate-version: v1.0.0-rc.3
+      initContainers:
+        - name: set-sysctl
+          image: busybox:1.36
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              sysctl -w user.max_user_namespaces=15000
+              sysctl user.max_user_namespaces
+      containers:
+        # Nothing to do once the sysctl is set; keep the DaemonSet's pod alive
+        # so it re-runs the init container on every node join/reschedule.
+        - name: hold
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: 1m
+              memory: 8Mi

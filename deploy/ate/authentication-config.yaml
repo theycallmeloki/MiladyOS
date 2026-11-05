@@ -1,13 +1,15 @@
 # Fix the ate-api-server authentication ConfigMap for this cluster.
 #
-# The installer GENERATES this ConfigMap and would overwrite it on a re-run of
-# `deploy ate-system`, so re-apply this file afterwards.
+# The installer GENERATES this ConfigMap and overwrites it whenever the stored
+# one fails strict schema validation, so re-apply this file after any
+# `deploy ate-system` that rewrote it (grep the installer output for
+# "authentication.yaml").
 #
 # Why it needs fixing: ate-api-server validates client JWTs (ax-server presents
 # one) via the cluster's OIDC discovery document, then fetches the signing keys
 # from jwks_uri. Substrate's installer only adds `certificateAuthorityFile` and
 # `discoveryTokenFile` when the issuer is the in-cluster default
-# (https://kubernetes.default.svc) — see buildAuthenticationConfig in
+# (https://kubernetes.default.svc) — see kubernetesJWTProvider in
 # cmd/ate-setup/internal/steps/create.go. Its comment assumes any other issuer
 # is reachable by anonymous discovery, which is true on GKE but not here:
 # Talos runs kube-apiserver with --anonymous-auth=false, so
@@ -21,6 +23,10 @@
 # The issuer must match the apiserver's --service-account-issuer exactly; here
 # that is the Talos VIP. Confirm with:
 #   kubectl get --raw /.well-known/openid-configuration | jq -r .issuer
+#
+# v1.0.0-rc.3 dropped the old `actorIdentityJWTProvider` key from the schema
+# (internal/apiconfig/authn.go parses strictly), which is why the installer
+# rewrote the pre-upgrade ConfigMap.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -28,7 +34,6 @@ metadata:
   namespace: ate-system
 data:
   authentication.yaml: |
-    actorIdentityJWTProvider: kubernetes
     jwtProviders:
     - name: kubernetes
       issuer: https://192.168.1.45:6443

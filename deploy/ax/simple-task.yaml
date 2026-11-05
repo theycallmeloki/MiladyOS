@@ -2,11 +2,12 @@
 # examples/simple.yaml. No Workspace and no Model, so nothing here needs a
 # model API key — it proves the ax -> Substrate -> gVisor actor path.
 #
-# The image is built locally from ax's Dockerfile.task-runner because upstream
-# publishes no pullable task-runner image:
-#   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/linux_amd64/ax-task-runner ./cmd/ax-task-runner
-#   docker build --platform linux/amd64 -f Dockerfile.task-runner -t <registry>/ax-images/ax-task-runner:latest .
-#   docker push <registry>/ax-images/ax-task-runner:latest
+# The image is built from ax's Dockerfile.task-runner; upstream publishes no
+# pullable task-runner image. The host has no docker, so it is built with an
+# in-cluster kaniko Job: a golang stage compiles the binary and a
+# python:3.12-slim stage carries it (see deploy/ate/README.md, "Build the ax
+# images"). A Task image must be digest-pinned; both images are built from ax
+# 2187dd4.
 #
 # debug: true serves the guest services so `ax ssh` works.
 apiVersion: ax.io/v1alpha1
@@ -15,7 +16,7 @@ metadata:
   name: simple-task
   atespace: default
 spec:
-  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:c32203a326b959f9e41d1390ae0671b2a57b13619950f4ac42d9534cb1340e39"
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:934ad7d7b282a8d7823d287bcc481bfcbbd4930a380a7eb381663f71d8622f83"
   env:
     - name: ENVIRONMENT
       value: "test"

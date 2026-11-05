@@ -72,7 +72,7 @@ spec:
   # gateway's MITM CA: under sdsmint the gateway terminates every TLS connection
   # the actor opens, so without the anchor every HTTPS request in the sandbox
   # fails with a certificate error. Rebuild with `make push-task-runner`.
-  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:c32203a326b959f9e41d1390ae0671b2a57b13619950f4ac42d9534cb1340e39"
+  image: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:934ad7d7b282a8d7823d287bcc481bfcbbd4930a380a7eb381663f71d8622f83"
   env:
     # GEMINI_API_KEY is what makes the goal agent run at all, and it is now the
     # LiteLLM gateway's key, not a Google one: the agent talks to the gateway,

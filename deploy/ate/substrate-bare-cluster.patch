@@ -1,10 +1,10 @@
-diff --git i/manifests/ate-install/ate-api-server.yaml w/manifests/ate-install/ate-api-server.yaml
-index cde0c42a..323a3db8 100644
---- i/manifests/ate-install/ate-api-server.yaml
-+++ w/manifests/ate-install/ate-api-server.yaml
-@@ -123,7 +123,17 @@ spec:
-         # nothing refers to any more, so it needs the same backend atelet reads
-         # and writes them through.
+diff --git a/manifests/ate-install/ate-api-server.yaml b/manifests/ate-install/ate-api-server.yaml
+index c055fc30..3e33e383 100644
+--- a/manifests/ate-install/ate-api-server.yaml
++++ b/manifests/ate-install/ate-api-server.yaml
+@@ -140,7 +140,17 @@ spec:
+         # the kind overlay). ate-api-server exits if ATE_STORAGE_BACKEND is
+         # set on it.
          - name: ATE_STORAGE_BACKEND
 -          value: "gcs"
 +          value: "s3"
@@ -18,46 +18,89 @@ index cde0c42a..323a3db8 100644
 +          value: "rustfsadmin"
 +        - name: AWS_SECRET_ACCESS_KEY
 +          value: "rustfsadmin"
-         # OTLP exporter settings are shared by every control plane component;
-         # see manifests/ate-install/ate-otel-config.yaml. Listed first so the
-         # per-developer ConfigMap below can still override a key.
-diff --git i/manifests/ate-install/atelet.yaml w/manifests/ate-install/atelet.yaml
-index ef1064a6..88e2e1f1 100644
---- i/manifests/ate-install/atelet.yaml
-+++ w/manifests/ate-install/atelet.yaml
-@@ -151,7 +151,7 @@ spec:
+         - name: ATE_API_ACTOR_JWT_ISSUER
+           valueFrom:
+             configMapKeyRef:
+diff --git a/manifests/ate-install/atelet.yaml b/manifests/ate-install/atelet.yaml
+index 48cd55d3..48a8394a 100644
+--- a/manifests/ate-install/atelet.yaml
++++ b/manifests/ate-install/atelet.yaml
+@@ -222,7 +222,19 @@ spec:
+         # storage settings of its own and exits if ATE_STORAGE_BACKEND is set
+         # on it.
+         - name: ATE_STORAGE_BACKEND
+-          value: "gcs"
++          value: "s3"
++        - name: AWS_REGION
++          value: "us-east-1"
++        - name: AWS_ENDPOINT_URL
++          value: "http://rustfs.ate-system.svc:9000"
++        - name: AWS_S3_USE_PATH_STYLE
++          value: "true"
++        # TODO: move the rustfs credentials into a Secret, as upstream's kind
++        # overlay does not.
++        - name: AWS_ACCESS_KEY_ID
++          value: "rustfsadmin"
++        - name: AWS_SECRET_ACCESS_KEY
++          value: "rustfsadmin"
+         # On GCS each transfer runs on a token scoped to its actor, from the
+         # credential exchange the control sidecar serves on the ate-api-server
+         # Service. The plugin derives the exchange's address and certificate
+@@ -255,12 +267,10 @@ spec:
        - name: atelet
-         image: ko://github.com/agent-substrate/substrate/cmd/atelet
+         image: ko://go.ate.dev/substrate/cmd/atelet
          args:
--        - --gcp-auth-for-image-pulls=true
-+        - --gcp-auth-for-image-pulls=false
+-        # Pull credentials come from the node's own kubelet credential provider
+-        # plugin (mounted read-only below) rather than a cloud SDK compiled into
+-        # atelet, so the same atelet authenticates to Artifact Registry on GKE
+-        # and to ECR on EKS.
+-        - --image-credential-provider-config=/run/image-credential-provider/config.yaml
+-        - --image-credential-provider-bin-dir=/run/image-credential-provider/bin
++        # This cluster has no kubelet credential provider plugin, and the node
++        # paths those flags name are GKE's (/home/kubernetes/bin,
++        # /etc/srv/kubernetes); Talos has neither, so the flags are left unset
++        # and worker images pull unauthenticated.
          - --grpc-server-cred-bundle=/run/podidentity.podcert.ate.dev/credential-bundle.pem
          - --client-ca-certs=/run/podidentity.podcert.ate.dev/trust-bundle.pem
          - --ateapi-ca-file=/run/servicedns.podcert.ate.dev/trust-bundle.pem
-@@ -201,7 +201,17 @@ spec:
-         - name: OTEL_RESOURCE_ATTRIBUTES
-           value: k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.pod.uid=$(POD_UID),k8s.node.name=$(NODE_NAME),service.instance.id=$(POD_UID)
-         - name: ATE_STORAGE_BACKEND
--          value: "gcs"
-+          value: "s3"
-+        - name: AWS_REGION
-+          value: "us-east-1"
-+        - name: AWS_ENDPOINT_URL
-+          value: "http://rustfs.ate-system.svc:9000"
-+        - name: AWS_S3_USE_PATH_STYLE
-+          value: "true"
-+        - name: AWS_ACCESS_KEY_ID
-+          value: "rustfsadmin"
-+        - name: AWS_SECRET_ACCESS_KEY
-+          value: "rustfsadmin"
-         # OTLP exporter settings are shared by every control plane component;
-         # see manifests/ate-install/ate-otel-config.yaml.
-         envFrom:
-diff --git i/manifests/ate-install/base/kustomization.yaml w/manifests/ate-install/base/kustomization.yaml
-index 4538b613..7e275d1e 100644
---- i/manifests/ate-install/base/kustomization.yaml
-+++ w/manifests/ate-install/base/kustomization.yaml
-@@ -32,5 +32,7 @@ resources:
+@@ -377,12 +387,6 @@ spec:
+         - name: host-dev
+           mountPath: /host/dev
+           readOnly: true
+-        - name: image-credential-provider-bin
+-          mountPath: /run/image-credential-provider/bin
+-          readOnly: true
+-        - name: image-credential-provider-config
+-          mountPath: /run/image-credential-provider/config.yaml
+-          readOnly: true
+       volumes:
+       - name: objectstore-plugin
+         emptyDir: {}
+@@ -415,19 +419,6 @@ spec:
+         hostPath:
+           path: /dev
+           type: Directory
+-      # The kubelet's own credential provider bin dir and config; these paths
+-      # are GKE's, other node distributions differ. The bin dir also holds the
+-      # node's other kubelet-installed binaries -- the plugin contract is
+-      # directory-scoped, so a narrower mount would have to hard-code the
+-      # provider name and give up being cloud-agnostic.
+-      - name: image-credential-provider-bin
+-        hostPath:
+-          path: /home/kubernetes/bin
+-          type: DirectoryOrCreate
+-      - name: image-credential-provider-config
+-        hostPath:
+-          path: /etc/srv/kubernetes/cri_auth_config.yaml
+-          type: FileOrCreate
+       # Identity for mutual TLS with the ate-apiserver. atelet is not behind a
+       # Service, so it uses a podidentity (SPIFFE) cert rather than a servicedns
+       # serving cert (which requires DNS SANs it would not have); the
+diff --git a/manifests/ate-install/base/kustomization.yaml b/manifests/ate-install/base/kustomization.yaml
+index 765aaf93..714fbf73 100644
+--- a/manifests/ate-install/base/kustomization.yaml
++++ b/manifests/ate-install/base/kustomization.yaml
+@@ -32,6 +32,8 @@ resources:
    - ../ate-controller.yaml
    - ../atelet.yaml
    - ../atenet-router.yaml
@@ -66,11 +109,12 @@ index 4538b613..7e275d1e 100644
 +  # monitoring.googleapis.com/v1 PodMonitoring (Google Managed Prometheus CRD)
 +  # that does not exist on a bare cluster, and applying it fails the install.
    - ../ate-otel-config.yaml
-diff --git i/manifests/ate-install/postgres/postgres.yaml w/manifests/ate-install/postgres/postgres.yaml
-index 14a11ea4..d1f3872f 100644
---- i/manifests/ate-install/postgres/postgres.yaml
-+++ w/manifests/ate-install/postgres/postgres.yaml
-@@ -207,10 +207,10 @@ spec:
+   - ../ate-system-networkpolicies.yaml
+diff --git a/manifests/ate-install/postgres/postgres.yaml b/manifests/ate-install/postgres/postgres.yaml
+index f6b3a0a1..0800ecb3 100644
+--- a/manifests/ate-install/postgres/postgres.yaml
++++ b/manifests/ate-install/postgres/postgres.yaml
+@@ -212,10 +212,10 @@ spec:
          # down to fit a CI runner.
          resources:
            requests:
@@ -83,7 +127,7 @@ index 14a11ea4..d1f3872f 100644
              memory: "2Gi"
        volumes:
        - name: config
-@@ -250,4 +250,4 @@ spec:
+@@ -255,4 +255,4 @@ spec:
            # PANIC that drops every connection. Size also scales provisioned
            # IOPS/throughput on PD-backed storage classes. The kind overlay
            # shrinks this claim back down.

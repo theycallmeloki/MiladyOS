@@ -1,17 +1,118 @@
 # ax control plane (Agent Executor) — ax-system.
 #
-# Derived from google/ax deploy/ax-server.yaml + deploy/redis.yaml with two
-# changes for this cluster:
-#   - image pinned to the digest ko built into our registry
-#   - AX_SNAPSHOTS_BUCKET pointed at our rustfs bucket instead of upstream's
-#     gs://dberkov-gke-dev3/ate-env/ (Google-internal dev bucket)
+# Derived from google/ax deploy/ax-server.yaml + deploy/postgres.yaml at
+# 2187dd4 with these changes for this cluster:
+#   - image pinned to the digest kaniko built into our registry
+#   - ax-server flags/env for our object store and Substrate endpoint
+#   - the dev-only PostgreSQL password fixed in a Secret instead of `make
+#     deploy-postgres` generating one
 #
-# Note the bucket URI keeps the gs:// scheme even with the S3 backend: Substrate
-# addresses snapshots as gs://<bucket>/<prefix> and resolves them through the
-# configured object store, which is rustfs here.
+# ax at 2187dd4 stores task/workflow state in PostgreSQL and no longer needs
+# Redis: the Redis Streams queue and its controller were removed upstream, so
+# the ax-redis Deployment/Service this file used to carry are gone.
 #
 # Depends on: deploy/ate/namespaces.yaml (creates ax-system) and a running
 # Substrate control plane in ate-system.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ax-system
+  labels:
+    # Admitted through ate-api-server's ingress NetworkPolicy.
+    ate.dev/api-access: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ax-postgres
+  namespace: ax-system
+type: Opaque
+stringData:
+  # Dev cluster only; upstream's `make deploy-postgres` generates a random one.
+  password: ax-dev-postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ax-postgres
+  namespace: ax-system
+  labels:
+    app.kubernetes.io/name: ax-postgres
+    app.kubernetes.io/part-of: ax
+spec:
+  replicas: 1
+  serviceName: ax-postgres
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ax-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ax-postgres
+    spec:
+      # Give Postgres time for a clean shutdown checkpoint.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          env:
+            - name: POSTGRES_USER
+              value: ax
+            - name: POSTGRES_DB
+              value: ax
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ax-postgres
+                  key: password
+            # A subdirectory, because the volume root may contain lost+found.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "ax", "-d", "ax"]
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: ax-postgres
+          app.kubernetes.io/part-of: ax
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ax-postgres
+  namespace: ax-system
+  labels:
+    app.kubernetes.io/name: ax-postgres
+    app.kubernetes.io/part-of: ax
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app.kubernetes.io/name: ax-postgres
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -61,11 +162,11 @@ spec:
       serviceAccountName: ax-server
       containers:
         - name: ax-server
-          image: miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-server-340c3583cc4a989b584acf55b1619e8e@sha256:25e03b42b3ef8f6fdd63ac5a5a0759e598a5b2b66044e9c678882a3ff8348412
+          image: miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-server@sha256:fed30d335a5fd45bd6bb423cb328b36da47a135e84c393880cfcfbc36207cb81
           imagePullPolicy: IfNotPresent
           args:
             - "--addr=:8080"
-            - "--redis-addr=ax-redis.ax-system.svc.cluster.local:6379"
+            - "--store=postgres://ax@ax-postgres.ax-system.svc.cluster.local:5432/ax?sslmode=disable"
             - "--substrate-endpoint=api.ate-system.svc.cluster.local:443"
             - "--substrate-authority=api.ate-system.svc"
             - "--substrate-token-file=/var/run/secrets/ateapi/token"
@@ -73,10 +174,16 @@ spec:
             - "--template=default-template"
             - "--template-atespace=ax-system"
           env:
+            # libpq fills the password into --store from PGPASSWORD.
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ax-postgres
+                  key: password
             - name: ATENET_ROUTER_ADDR
-              value: "atenet-router.ate-system.svc.cluster.local:80"
-            - name: AX_SNAPSHOTS_BUCKET
-              value: "gs://ate-snapshots/"
+              value: "https://atenet-router.ate-system.svc.cluster.local:443"
+            - name: AX_DEFAULT_TASK_IMAGE
+              value: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:934ad7d7b282a8d7823d287bcc481bfcbbd4930a380a7eb381663f71d8622f83"
           ports:
             - containerPort: 8080
               name: http
@@ -141,51 +248,3 @@ spec:
       name: http
   selector:
     app.kubernetes.io/name: ax-server
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ax-redis
-  namespace: ax-system
-  labels:
-    app.kubernetes.io/name: ax-redis
-    app.kubernetes.io/part-of: ax
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: ax-redis
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: ax-redis
-    spec:
-      containers:
-        - name: redis
-          image: redis:7-alpine
-          ports:
-            - containerPort: 6379
-              name: redis
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 1000m
-              memory: 1Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ax-redis
-  namespace: ax-system
-  labels:
-    app.kubernetes.io/name: ax-redis
-    app.kubernetes.io/part-of: ax
-spec:
-  ports:
-    - port: 6379
-      targetPort: 6379
-      name: redis
-  selector:
-    app.kubernetes.io/name: ax-redis
