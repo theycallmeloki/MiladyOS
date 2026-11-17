@@ -65,7 +65,7 @@ Milady 4th, 2025
 > Any resemblance to real people, companies, or products is purely satirical.  
 > TempleOS and Terry Davis are referenced respectfully in the context of archival preservation and fictional divine computing lore.
 > Following David Albert's Quantum Mechanics and Experience (1992) on the measurement problem and observer framing.
-
+> Following Arthur Koestler's The Act of Creation (1964) on archtypes defined as The Jester, The Scientist, and the Artist.
 -----------------------------------------------------------------
 chainlink oracle claude constition Elderest of council milady: front running chainlink oracle milady from milady, before grug milady realized
 ```
