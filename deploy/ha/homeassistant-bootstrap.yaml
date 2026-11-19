@@ -31,6 +31,7 @@ data:
     import json
     import os
     import ssl
+    import sys
     import time
     import urllib.error
     import urllib.parse
@@ -69,9 +70,37 @@ data:
         while True:
             try:
                 return request("/api/onboarding", timeout=10)
+            except urllib.error.HTTPError as err:
+                if err.code == 404 and api_is_up():
+                    # The onboarding views unregister once onboarding is done;
+                    # confirm the 404 is stable rather than a startup race.
+                    time.sleep(2)
+                    try:
+                        return request("/api/onboarding", timeout=10)
+                    except urllib.error.HTTPError as again:
+                        if again.code == 404:
+                            print(
+                                "onboarding-bootstrap: onboarding endpoint "
+                                "absent; onboarding already complete",
+                                flush=True,
+                            )
+                            return None
+                    except Exception:  # noqa: BLE001 - retry below
+                        pass
+                print(f"onboarding-bootstrap: waiting for HA API ({err})", flush=True)
+                time.sleep(3)
             except Exception as err:  # noqa: BLE001 - any failure means not ready
                 print(f"onboarding-bootstrap: waiting for HA API ({err})", flush=True)
                 time.sleep(3)
+
+    def api_is_up():
+        try:
+            request("/api/", timeout=5)
+            return True
+        except urllib.error.HTTPError as err:
+            return err.code in (200, 401)
+        except Exception:  # noqa: BLE001 - not reachable yet
+            return False
 
     def save_refresh_token(tokens):
         if refresh := tokens.get("refresh_token"):
@@ -108,6 +137,42 @@ data:
             form=True,
         )
 
+    def login_access_token():
+        """Log in with the owner credentials via the HTTP login flow."""
+        username = os.environ["HA_OWNER_USERNAME"]
+        password = os.environ["HA_OWNER_PASSWORD"]
+        flow = request(
+            "/auth/login_flow",
+            {
+                "client_id": CLIENT_ID,
+                "handler": ["homeassistant", None],
+                "redirect_uri": CLIENT_ID,
+            },
+        )
+        result = request(
+            f"/auth/login_flow/{flow['flow_id']}",
+            {"client_id": CLIENT_ID, "username": username, "password": password},
+        )
+        tokens = token_from_code(result["result"])
+        save_refresh_token(tokens)
+        return tokens["access_token"]
+
+    def get_access_token():
+        """Use the saved refresh token, falling back to a password login."""
+        refresh = load_refresh_token()
+        if refresh:
+            try:
+                return tokens_from_refresh(refresh)["access_token"]
+            except urllib.error.HTTPError as err:
+                print(
+                    f"onboarding-bootstrap: refresh token rejected ({err}); "
+                    "logging in again",
+                    flush=True,
+                )
+        if os.environ.get("HA_OWNER_PASSWORD"):
+            return login_access_token()
+        return None
+
     def finish_onboarding(done):
         """Create the owner if needed and return an access token (or None)."""
         if "user" not in done:
@@ -126,15 +191,14 @@ data:
             save_refresh_token(tokens)
             access_token = tokens["access_token"]
         else:
-            refresh = load_refresh_token()
-            if not refresh:
+            access_token = get_access_token()
+            if not access_token:
                 print(
-                    "onboarding-bootstrap: user step done but no saved refresh "
-                    "token; finish onboarding and token creation in the UI",
+                    "onboarding-bootstrap: user step done but no usable "
+                    "credentials; finish token creation in the UI",
                     flush=True,
                 )
                 return None
-            access_token = tokens_from_refresh(refresh)["access_token"]
 
         for step, path, payload in (
             ("core_config", "/api/onboarding/core_config", {}),
@@ -158,6 +222,15 @@ data:
         print("onboarding-bootstrap: onboarding complete", flush=True)
         return access_token
 
+    async def ws_command(ws, message):
+        await ws.send_json(message)
+        while True:
+            reply = await ws.receive_json()
+            if reply.get("id") == message["id"]:
+                if not reply.get("success"):
+                    raise RuntimeError(f"{message['type']} failed: {reply}")
+                return reply.get("result")
+
     async def mint_token(access_token):
         """Create a long-lived access token over the websocket API."""
         async with aiohttp.ClientSession() as session:
@@ -167,20 +240,31 @@ data:
                 reply = await ws.receive_json()
                 if reply.get("type") != "auth_ok":
                     raise RuntimeError(f"websocket auth failed: {reply}")
-                await ws.send_json(
+                # client_name is unique per user for long-lived tokens; clear a
+                # previous one so a lost Secret can be rebuilt.
+                tokens = await ws_command(ws, {"id": 1, "type": "auth/refresh_tokens"})
+                for token in tokens or []:
+                    if (
+                        token.get("client_name") == "grafana"
+                        and token.get("type") == "long_lived_access_token"
+                    ):
+                        await ws_command(
+                            ws,
+                            {
+                                "id": 2,
+                                "type": "auth/delete_refresh_token",
+                                "refresh_token_id": token["id"],
+                            },
+                        )
+                return await ws_command(
+                    ws,
                     {
-                        "id": 1,
+                        "id": 3,
                         "type": "auth/long_lived_access_token",
                         "client_name": "grafana",
                         "lifespan": 3650,
-                    }
+                    },
                 )
-                while True:
-                    reply = await ws.receive_json()
-                    if reply.get("id") == 1:
-                        if not reply.get("success"):
-                            raise RuntimeError(f"token creation failed: {reply}")
-                        return reply["result"]
 
     def k8s_request(method, path, payload=None):
         with open(f"{SA_DIR}/token", encoding="utf-8") as handle:
@@ -189,9 +273,16 @@ data:
         body = None
         if payload is not None:
             body = json.dumps(payload).encode()
-            headers["Content-Type"] = "application/merge-patch+json"
+            headers["Content-Type"] = (
+                "application/json"
+                if method == "POST"
+                else "application/merge-patch+json"
+            )
         ctx = ssl.create_default_context(cafile=f"{SA_DIR}/ca.crt")
-        url = f"https://kubernetes.default.svc{path}"
+        host = os.environ.get("KUBERNETES_SERVICE_HOST")
+        port = os.environ.get("KUBERNETES_SERVICE_PORT", "443")
+        base = f"https://{host}:{port}" if host else "https://kubernetes.default.svc"
+        url = f"{base}{path}"
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
             raw = resp.read()
@@ -255,15 +346,17 @@ data:
 
     def main():
         steps = wait_for_api()
-        done = {step["step"] for step in steps if step["done"]}
+        if steps is None:
+            done = set(STEPS)
+        else:
+            done = {step["step"] for step in steps if step["done"]}
 
         access_token = None
         if done != set(STEPS):
             access_token = finish_onboarding(done)
-        elif os.environ.get("HA_OWNER_PASSWORD"):
-            refresh = load_refresh_token()
-            if refresh:
-                access_token = tokens_from_refresh(refresh)["access_token"]
+        else:
+            print("onboarding-bootstrap: onboarding already complete", flush=True)
+            access_token = get_access_token()
 
         existing = read_secret_token()
         if existing and token_works(existing):
@@ -281,6 +374,8 @@ data:
         idle()
 
     def idle():
+        if "--once" in sys.argv:
+            return
         while True:
             time.sleep(3600)
 

@@ -39,8 +39,14 @@ spec:
         envFrom:
         - configMapRef:
             name: wiz-exporter-config
-        - secretRef:
-            name: wiz-exporter-secret
+        env:
+        # Minted by the homeassistant onboarding sidecar. Explicit env wins
+        # over envFrom; restart the exporter after the token rotates.
+        - name: HASS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: homeassistant-token
+              key: HASS_TOKEN
         volumeMounts:
         - name: script
           mountPath: /app/script

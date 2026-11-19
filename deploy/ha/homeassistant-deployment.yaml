@@ -26,6 +26,9 @@ spec:
         app: homeassistant
     spec:
       hostNetwork: true
+      # hostNetwork pods otherwise inherit the node resolver and cannot resolve
+      # kubernetes.default.svc (needed by the token-provisioning sidecar).
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: homeassistant
       initContainers:
       - name: volume-permissions
