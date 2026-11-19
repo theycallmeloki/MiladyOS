@@ -19,6 +19,9 @@ spec:
       # ConfigMap edits do not restart Home Assistant (and subPath mounts are
       # not live-reloaded): run `kubectl -n homeassistant rollout restart
       # deploy/homeassistant` after changing ha-configuration.
+      # HA 2026.11+ migrates `http:` to /config/.storage/http on first boot and
+      # then ignores the YAML block; later HTTP changes are made in the UI and
+      # promoted from its repair/confirmation flow.
       labels:
         app: homeassistant
     spec:
