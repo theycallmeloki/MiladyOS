@@ -185,6 +185,25 @@ The monitoring stack (Prometheus, Grafana, Alertmanager) is deployed automatical
 Grafana is available via ingress at `grafana.transparentlyrotatableproxy.site`.
 - No login required (anonymous admin access is enabled)
 
+### Google Analytics 4
+
+Grafana loads GA4 through `[analytics] google_analytics_4_id`. The measurement ID is
+not in this public values file: it lives in the `grafana-ga4` Secret (key
+`measurement-id`), projected into the container as
+`GF_ANALYTICS_GOOGLE_ANALYTICS_4_ID`. The Secret is owned by the
+`deploy/monitoring-config` ArgoCD app as a SealedSecret.
+
+To rotate the ID, reseal and commit:
+
+```bash
+kubectl create secret generic grafana-ga4 -n monitoring \
+  --from-literal=measurement-id=G-XXXXXXXXXX --dry-run=client -o yaml \
+  | kubeseal --controller-namespace kube-system \
+      --controller-name sealed-secrets-controller --format yaml \
+  > deploy/monitoring-config/grafana-ga4-sealed.yaml
+```
+
+
 ## Values Files Reference
 
 ### `argocd-values.yaml`
