@@ -26,6 +26,7 @@ spec:
         app: homeassistant
     spec:
       hostNetwork: true
+      serviceAccountName: homeassistant
       initContainers:
       - name: volume-permissions
         image: busybox
@@ -42,6 +43,29 @@ spec:
         volumeMounts:
         - mountPath: /config
           name: homeassistant
+      # Seed HA's HTTP config store on a fresh volume. HA 2026.11+ owns this in
+      # /config/.storage/http; the ConfigMap holds the reverse-proxy settings
+      # (use_x_forwarded_for + trusted_proxies). Never overwrite an existing
+      # store: later changes are made in the UI.
+      - name: http-config-bootstrap
+        image: busybox:1.31.1
+        command: ["sh", "-c"]
+        args:
+          - |
+            if [ ! -s /config/.storage/http ]; then
+              mkdir -p /config/.storage
+              cp /bootstrap/http /config/.storage/http
+              chmod 660 /config/.storage/http
+              echo "http-config-bootstrap: seeded /config/.storage/http"
+            else
+              echo "http-config-bootstrap: existing HTTP store kept"
+            fi
+        volumeMounts:
+        - mountPath: /config
+          name: homeassistant
+        - mountPath: /bootstrap
+          name: http-config
+          readOnly: true
       containers:
       - image: ghcr.io/home-assistant/home-assistant:latest
         imagePullPolicy: Always
@@ -63,6 +87,39 @@ spec:
         - mountPath: /config/configuration.yaml
           subPath: configuration.yaml
           name: ha-config
+      # Completes onboarding headlessly and provisions the HA long-lived token
+      # in the monitoring namespace. Idempotent: valid existing tokens are
+      # reused, and the container idles after finishing so it cannot crash-loop.
+      - name: onboarding-bootstrap
+        image: ghcr.io/home-assistant/home-assistant:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python3", "/bootstrap/onboard.py"]
+        env:
+        - name: HA_OWNER_NAME
+          valueFrom:
+            secretKeyRef:
+              name: homeassistant-owner
+              key: name
+        - name: HA_OWNER_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: homeassistant-owner
+              key: username
+        - name: HA_OWNER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: homeassistant-owner
+              key: password
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        volumeMounts:
+        - mountPath: /config
+          name: homeassistant
+        - mountPath: /bootstrap
+          name: bootstrap
+          readOnly: true
       volumes:
         - name: homeassistant
           persistentVolumeClaim:
@@ -71,3 +128,9 @@ spec:
           configMap:
             name: ha-configuration
             defaultMode: 0644
+        - name: http-config
+          configMap:
+            name: ha-http-config
+        - name: bootstrap
+          configMap:
+            name: ha-bootstrap

@@ -1,0 +1,288 @@
+# Idempotent Home Assistant bootstrap.
+#
+# The `onboarding-bootstrap` sidecar in homeassistant-deployment.yaml runs
+# onboard.py on every pod start:
+#   1. waits for the HTTP API,
+#   2. creates the owner account via the unauthenticated onboarding API,
+#   3. finishes the core_config, analytics and integration steps,
+#   4. mints a long-lived access token and upserts it into the
+#      `homeassistant-token` Secret in the monitoring namespace.
+#
+# The token Secret is what Grafana/wiz-exporter consume; the plaintext token
+# never enters Git. A valid token found in the Secret is reused, so restarts
+# do not accumulate tokens. The refresh token is kept on the PVC so a run
+# interrupted after user creation can resume.
+#
+# Credentials come from the homeassistant-owner Secret (keys: name, username,
+# password). Without a password the sidecar skips onboarding and token
+# creation.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ha-bootstrap
+  namespace: homeassistant
+data:
+  onboard.py: |
+    #!/usr/bin/env python3
+    """Finish Home Assistant onboarding and provision the Grafana token."""
+
+    import asyncio
+    import base64
+    import json
+    import os
+    import ssl
+    import time
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    import aiohttp
+
+    BASE = "http://127.0.0.1:8123"
+    CLIENT_ID = f"{BASE}/"
+    TOKEN_FILE = "/config/.ha-onboarding-refresh-token"
+    STEPS = ("user", "core_config", "analytics", "integration")
+
+    SECRET_NAMESPACE = "monitoring"
+    SECRET_NAME = "homeassistant-token"
+    SECRET_KEYS = ("token", "HASS_TOKEN")
+    SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
+
+    def request(path, data=None, token=None, form=False, timeout=30):
+        headers = {}
+        body = None
+        if data is not None:
+            if form:
+                body = urllib.parse.urlencode(data).encode()
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+            else:
+                body = json.dumps(data).encode()
+                headers["Content-Type"] = "application/json"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        req = urllib.request.Request(BASE + path, data=body, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else {}
+
+    def wait_for_api():
+        while True:
+            try:
+                return request("/api/onboarding", timeout=10)
+            except Exception as err:  # noqa: BLE001 - any failure means not ready
+                print(f"onboarding-bootstrap: waiting for HA API ({err})", flush=True)
+                time.sleep(3)
+
+    def save_refresh_token(tokens):
+        if refresh := tokens.get("refresh_token"):
+            with open(TOKEN_FILE, "w", encoding="utf-8") as handle:
+                handle.write(refresh)
+            os.chmod(TOKEN_FILE, 0o600)
+
+    def load_refresh_token():
+        try:
+            with open(TOKEN_FILE, encoding="utf-8") as handle:
+                return handle.read().strip() or None
+        except FileNotFoundError:
+            return None
+
+    def tokens_from_refresh(refresh):
+        return request(
+            "/auth/token",
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh,
+                "client_id": CLIENT_ID,
+            },
+            form=True,
+        )
+
+    def token_from_code(code):
+        return request(
+            "/auth/token",
+            {
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": CLIENT_ID,
+            },
+            form=True,
+        )
+
+    def finish_onboarding(done):
+        """Create the owner if needed and return an access token (or None)."""
+        if "user" not in done:
+            print("onboarding-bootstrap: creating owner", flush=True)
+            auth = request(
+                "/api/onboarding/users",
+                {
+                    "client_id": CLIENT_ID,
+                    "name": os.environ.get("HA_OWNER_NAME", "Owner"),
+                    "username": os.environ["HA_OWNER_USERNAME"],
+                    "password": os.environ["HA_OWNER_PASSWORD"],
+                    "language": "en",
+                },
+            )
+            tokens = token_from_code(auth["auth_code"])
+            save_refresh_token(tokens)
+            access_token = tokens["access_token"]
+        else:
+            refresh = load_refresh_token()
+            if not refresh:
+                print(
+                    "onboarding-bootstrap: user step done but no saved refresh "
+                    "token; finish onboarding and token creation in the UI",
+                    flush=True,
+                )
+                return None
+            access_token = tokens_from_refresh(refresh)["access_token"]
+
+        for step, path, payload in (
+            ("core_config", "/api/onboarding/core_config", {}),
+            ("analytics", "/api/onboarding/analytics", {}),
+            (
+                "integration",
+                "/api/onboarding/integration",
+                {"client_id": CLIENT_ID, "redirect_uri": CLIENT_ID},
+            ),
+        ):
+            if step in done:
+                continue
+            try:
+                request(path, payload, token=access_token)
+                print(f"onboarding-bootstrap: {step} done", flush=True)
+            except urllib.error.HTTPError as err:
+                if err.code == 403:
+                    print(f"onboarding-bootstrap: {step} already done", flush=True)
+                else:
+                    raise
+        print("onboarding-bootstrap: onboarding complete", flush=True)
+        return access_token
+
+    async def mint_token(access_token):
+        """Create a long-lived access token over the websocket API."""
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(f"{BASE}/api/websocket") as ws:
+                await ws.receive_json()  # auth_required
+                await ws.send_json({"type": "auth", "access_token": access_token})
+                reply = await ws.receive_json()
+                if reply.get("type") != "auth_ok":
+                    raise RuntimeError(f"websocket auth failed: {reply}")
+                await ws.send_json(
+                    {
+                        "id": 1,
+                        "type": "auth/long_lived_access_token",
+                        "client_name": "grafana",
+                        "lifespan": 3650,
+                    }
+                )
+                while True:
+                    reply = await ws.receive_json()
+                    if reply.get("id") == 1:
+                        if not reply.get("success"):
+                            raise RuntimeError(f"token creation failed: {reply}")
+                        return reply["result"]
+
+    def k8s_request(method, path, payload=None):
+        with open(f"{SA_DIR}/token", encoding="utf-8") as handle:
+            bearer = handle.read().strip()
+        headers = {"Authorization": f"Bearer {bearer}"}
+        body = None
+        if payload is not None:
+            body = json.dumps(payload).encode()
+            headers["Content-Type"] = "application/merge-patch+json"
+        ctx = ssl.create_default_context(cafile=f"{SA_DIR}/ca.crt")
+        url = f"https://kubernetes.default.svc{path}"
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else {}
+
+    def read_secret_token():
+        try:
+            secret = k8s_request(
+                "GET",
+                f"/api/v1/namespaces/{SECRET_NAMESPACE}/secrets/{SECRET_NAME}",
+            )
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                return None
+            raise
+        data = secret.get("data", {})
+        if encoded := data.get("token"):
+            return base64.b64decode(encoded).decode()
+        return None
+
+    def write_secret_token(token):
+        data = {
+            key: base64.b64encode(token.encode()).decode() for key in SECRET_KEYS
+        }
+        try:
+            k8s_request(
+                "GET",
+                f"/api/v1/namespaces/{SECRET_NAMESPACE}/secrets/{SECRET_NAME}",
+            )
+        except urllib.error.HTTPError as err:
+            if err.code != 404:
+                raise
+            k8s_request(
+                "POST",
+                f"/api/v1/namespaces/{SECRET_NAMESPACE}/secrets",
+                {
+                    "apiVersion": "v1",
+                    "kind": "Secret",
+                    "metadata": {"name": SECRET_NAME, "namespace": SECRET_NAMESPACE},
+                    "type": "Opaque",
+                    "data": data,
+                },
+            )
+            print("onboarding-bootstrap: created homeassistant-token Secret", flush=True)
+            return
+        k8s_request(
+            "PATCH",
+            f"/api/v1/namespaces/{SECRET_NAMESPACE}/secrets/{SECRET_NAME}",
+            {"data": data},
+        )
+        print("onboarding-bootstrap: updated homeassistant-token Secret", flush=True)
+
+    def token_works(token):
+        try:
+            request("/api/", token=token, timeout=15)
+            return True
+        except urllib.error.HTTPError as err:
+            return err.code != 401
+        except Exception:  # noqa: BLE001 - network hiccup, treat as unusable
+            return False
+
+    def main():
+        steps = wait_for_api()
+        done = {step["step"] for step in steps if step["done"]}
+
+        access_token = None
+        if done != set(STEPS):
+            access_token = finish_onboarding(done)
+        elif os.environ.get("HA_OWNER_PASSWORD"):
+            refresh = load_refresh_token()
+            if refresh:
+                access_token = tokens_from_refresh(refresh)["access_token"]
+
+        existing = read_secret_token()
+        if existing and token_works(existing):
+            print("onboarding-bootstrap: existing HA token is valid", flush=True)
+        elif access_token:
+            token = asyncio.run(mint_token(access_token))
+            write_secret_token(token)
+            print("onboarding-bootstrap: provisioned new HA token", flush=True)
+        else:
+            print(
+                "onboarding-bootstrap: no usable token and no credentials; "
+                "cannot provision homeassistant-token",
+                flush=True,
+            )
+        idle()
+
+    def idle():
+        while True:
+            time.sleep(3600)
+
+    if __name__ == "__main__":
+        main()

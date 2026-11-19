@@ -12,12 +12,8 @@ data:
     tts:
       - platform: google_translate
 
-    # Enhanced HTTP configuration
-    http:
-      use_x_forwarded_for: true
-      trusted_proxies:
-        - 127.0.0.1
-        - ::1
-        - 10.0.0.0/8
-        - 172.16.0.0/12
-        - 192.168.0.0/16
+    # HTTP/reverse-proxy settings are not configured here: HA 2026.11 migrated
+    # them to /config/.storage/http and ignores this file for that integration.
+    # The store is seeded by the http-config-bootstrap init container from the
+    # ha-http-config ConfigMap on a fresh volume; change it in the UI afterwards
+    # (Settings > System > Network).
