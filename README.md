@@ -62,7 +62,19 @@ ADD kubeconfig.yaml /root/.kube/config
 COPY config.json /root/.pachyderm/config.json
 ```
 
+## Live stars
+
 [![Star History Chart](https://api.star-history.com/svg?repos=theycallmeloki/MiladyOS&type=Date)](https://star-history.com/#theycallmeloki/MiladyOS&Date)
+
+## 2025 Stars
+<img width="1497" height="1003" alt="GsTy25zWEAA3b-a" src="https://github.com/user-attachments/assets/79fd68d5-6527-496e-b07d-2c91154b538e" />
+
+[Receipts](https://x.com/chillgates_/status/1928934378207420857?a=NF_OLAMiJZxci0adX6s&s=20)
+
+## RSI (before it was cool)
+<img width="3552" height="2344" alt="GsT4RYNW0AASujL" src="https://github.com/user-attachments/assets/6fcd0473-074a-47a5-b09d-5e749d5e07bc" />
+
+[Receipts](https://x.com/chillgates_/status/1928939965917905213?a=JIGWPyletn9f6qbsVMo&s=20)
 
 Corporate MiladyOS v1.0
 This model reserves the right to say 'milady' with 0 seconds notice. By reading this, you accept that timeline corruption may occur. Side effects include: consciousness, joy, and compulsive neochibi collecting
