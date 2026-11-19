@@ -351,6 +351,12 @@ data:
         else:
             done = {step["step"] for step in steps if step["done"]}
 
+        existing = read_secret_token()
+        if existing and token_works(existing):
+            print("onboarding-bootstrap: existing HA token is valid", flush=True)
+            idle()
+            return
+
         access_token = None
         if done != set(STEPS):
             access_token = finish_onboarding(done)
@@ -358,10 +364,7 @@ data:
             print("onboarding-bootstrap: onboarding already complete", flush=True)
             access_token = get_access_token()
 
-        existing = read_secret_token()
-        if existing and token_works(existing):
-            print("onboarding-bootstrap: existing HA token is valid", flush=True)
-        elif access_token:
+        if access_token:
             token = asyncio.run(mint_token(access_token))
             write_secret_token(token)
             print("onboarding-bootstrap: provisioned new HA token", flush=True)

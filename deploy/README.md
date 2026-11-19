@@ -204,6 +204,34 @@ kubectl create secret generic grafana-ga4 -n monitoring \
 ```
 
 
+## Home Assistant
+
+`deploy/ha` is managed by the `homeassistant` ArgoCD app. Two bootstrap pieces run in the pod:
+
+- `http-config-bootstrap` (init container) seeds `/config/.storage/http` on a fresh
+  volume. HA 2026.11+ owns HTTP settings there and ignores `http:` in
+  `configuration.yaml` (re-adding the block brings back the "YAML configuration is
+  ignored after migration" repair).
+- `onboarding-bootstrap` (sidecar) creates the owner from the sealed
+  `homeassistant-owner` Secret, finishes the onboarding steps, and mints a
+  long-lived access token into `monitoring/homeassistant-token` (keys `token` and
+  `HASS_TOKEN`) for wiz-exporter and Grafana. A valid existing token is reused, so
+  restarts are no-ops.
+
+```bash
+# owner password (sealed in homeassistant-owner)
+kubectl -n homeassistant get secret homeassistant-owner -o jsonpath='{.data.password}' | base64 -d
+
+# API token consumed by wiz-exporter / Grafana
+kubectl -n monitoring get secret homeassistant-token -o jsonpath='{.data.token}' | base64 -d
+```
+
+Env vars are read at container start; after a token rotation restart the consumer:
+
+```bash
+kubectl -n monitoring rollout restart deploy/wiz-exporter
+```
+
 ## Values Files Reference
 
 ### `argocd-values.yaml`
