@@ -94,8 +94,10 @@ data:
                 time.sleep(3)
 
     def api_is_up():
+        # /manifest.json is public; probing /api/ unauthenticated logs a
+        # "Login attempt ... invalid authentication" warning in HA.
         try:
-            request("/api/", timeout=5)
+            request("/manifest.json", timeout=5)
             return True
         except urllib.error.HTTPError as err:
             return err.code in (200, 401)

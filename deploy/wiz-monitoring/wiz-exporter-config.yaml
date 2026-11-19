@@ -11,7 +11,7 @@ data:
   # Entity pattern configuration - used to identify relevant entities
   ENTITY_PATTERNS: "wiz,socket,plug"
   POWER_PATTERNS: "power,energy,consumption,watt"
-  SWITCH_PATTERNS: "switch,outlet,toggle,state"
+  SWITCH_PATTERNS: "switch,outlet,toggle,state,light"
   
   # Device ID regex pattern (for extracting device IDs from entity names)
   DEVICE_ID_PATTERN: "([a-f0-9]{6})"
