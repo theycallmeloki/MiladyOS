@@ -7,11 +7,18 @@ metadata:
   namespace: homeassistant
 spec:
   replicas: 1
+  # RWO PVC + hostNetwork port 8123: a RollingUpdate surges a second pod that
+  # cannot attach the volume; Recreate stops the old pod first.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: homeassistant
   template:
     metadata:
+      # ConfigMap edits do not restart Home Assistant (and subPath mounts are
+      # not live-reloaded): run `kubectl -n homeassistant rollout restart
+      # deploy/homeassistant` after changing ha-configuration.
       labels:
         app: homeassistant
     spec:
