@@ -31,7 +31,7 @@ grafana:
   # replacement pod that cannot attach the volume while the old pod still holds
   # it: the new pod sits in Init with a Multi-Attach error and the rollout never
   # finishes. Recreate stops the old pod before starting the new one.
-  strategy:
+  deploymentStrategy:
     type: Recreate
   persistence:
     enabled: true
