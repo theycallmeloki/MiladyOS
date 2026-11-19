@@ -18,6 +18,14 @@ grafana:
       org_role: Viewer
     auth.basic:
       enabled: true
+  # GA4 measurement ID for the Grafana frontend (gtag.js). The value lives in
+  # the grafana-ga4 Secret (SealedSecret in deploy/monitoring-config) so this
+  # public values file never carries the ID; rotate it there.
+  envValueFrom:
+    GF_ANALYTICS_GOOGLE_ANALYTICS_4_ID:
+      secretKeyRef:
+        name: grafana-ga4
+        key: measurement-id
   adminPassword: "admin"  # Still the stock password; change it, it gates Admin
   # Grafana holds a ReadWriteOnce PVC, so the default RollingUpdate surges a
   # replacement pod that cannot attach the volume while the old pod still holds

@@ -1,0 +1,15 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: grafana-ga4
+  namespace: monitoring
+spec:
+  encryptedData:
+    measurement-id: AgBD3pxRGJux3pKkuAQ2tPqjc5ItuEaR+rVckR7NU/PhmQKdu53IU50tECNzCbLWLkWmYeOD7lVkacdaOR39cdHcTC0t+Yfp3PWOszQQ7aFPTGdsE58QfeEcEAtum5vBcqnBnYpP7zz8tYNZJoWBf8aL74hPa+kQfLJO3t7yXb2bNcaVCrkLtoOeW6aCcOjn4I1lKRpJOER9wVncZE8uNf9RCFcVF4CNCReQ2JdbxB803shjcBMOhtKQiqb4xGsxRqiWvbTpZvlJn6NFgKnwuRiT302YupjL6gFIMwQsnLnB89d72pFXvjnOyciypEiSjyEZJbuJAxoiKLCtmBsyJlQQFjE19t7WlpzEzQafiHZB3ybX7NmLUmW1rIdsUQbRTCRbmmSqwp7Y7knzdJxd9pJZPMu0p5gw7Kuieu04UBpH/f1im3PwU22+xgqczDL2mrxIlAmXinH8MYkDHALvk0m11hWLL+IHj9hvonfKzCqY/7jNO6k3vD/1+2BQJeH+eKkdwHfR9ND2eqSMa0IJpBIrsmDyaCTjscYRmGuiKPruNNJL5F5y5X4ax0QoC9hvXDIE11yeGOyxvidgL5elZlQ/eUyN6hX5LnYdQ1DINl7Ko7rDk2NFWp1K16+ZpiPYdCsb5Izlxr0XeBCKLO+3i2mEipj60jqJEKYy9Nw/AY1SGB79Uk9OvQ/vd0Ic5METkoXwYpjT2tn4gg02gNM=
+  template:
+    metadata:
+      creationTimestamp: null
+      name: grafana-ga4
+      namespace: monitoring
