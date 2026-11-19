@@ -7,6 +7,10 @@ metadata:
     app: wiz-exporter
 spec:
   replicas: 1
+  # RWO PVC: a RollingUpdate surges a pod that cannot attach the volume while
+  # the old one still holds it, leaving the new pod in Init/Multi-Attach.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: wiz-exporter
