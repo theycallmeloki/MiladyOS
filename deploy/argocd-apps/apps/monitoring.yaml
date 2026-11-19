@@ -11,7 +11,7 @@ spec:
     chart: kube-prometheus-stack
     helm:
       valueFiles:
-      - $values/kube-prometheus-stack-values.yaml
+      - $values/deploy/monitoring/kube-prometheus-stack-values.yaml
   - repoURL: https://github.com/theycallmeloki/MiladyOS
     targetRevision: HEAD
     ref: values
