@@ -213,6 +213,9 @@ spec:
             - mountPath: /run/servicedns-ca
               name: servicedns-ca
               readOnly: true
+            - mountPath: /run/podidentity.podcert.ate.dev
+              name: podidentity
+              readOnly: true
       volumes:
         - name: ate-token
           projected:
@@ -232,6 +235,14 @@ spec:
                       podcert.ate.dev/canarying: live
                   path: trust-bundle.pem
                   signerName: servicedns.podcert.ate.dev/identity
+        - name: podidentity
+          projected:
+            defaultMode: 420
+            sources:
+              - podCertificate:
+                  credentialBundlePath: credential-bundle.pem
+                  keyType: ECDSAP256
+                  signerName: podidentity.podcert.ate.dev/identity
 ---
 apiVersion: v1
 kind: Service
