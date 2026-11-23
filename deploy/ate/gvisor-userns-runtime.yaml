@@ -35,7 +35,7 @@ spec:
         app: gvisor-userns-sysctl
     spec:
       nodeSelector:
-        ate.dev/substrate-version: v1.0.0-rc.3
+        ate.dev/substrate-version: v1.0.1
       initContainers:
         - name: set-sysctl
           image: busybox:1.36
