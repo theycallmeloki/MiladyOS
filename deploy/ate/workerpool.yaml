@@ -7,7 +7,7 @@
 #
 # The workerImage comes from the same release as the control plane: it is
 # version-pinned, so bump it together with the ate-setup install (image tag and
-# node label). At v1.0.0-rc.3 the upstream release publishes it to
+# node label). At v1.0.1 the upstream release publishes it to
 # ghcr.io/agent-substrate/substrate/ateworker-gvisor, digest below.
 apiVersion: ate.dev/v1
 kind: WorkerPool
@@ -16,7 +16,7 @@ metadata:
   namespace: ate-system
 spec:
   replicas: 1
-  workerImage: ghcr.io/agent-substrate/substrate/ateworker-gvisor@sha256:31b67c28558b384afc90372f48a8a4f271607e2668d47e66c12db68dc2a9c88a
+  workerImage: ghcr.io/agent-substrate/substrate/ateworker-gvisor@sha256:fd0c6a46d6c69d485856171e632906e774594bea9d00011a4d7038be3e084a2a
   sandboxClasses:
     - name: gvisor
       configRef:
@@ -27,7 +27,7 @@ spec:
     # (see the README); selecting on it keeps workers off the control-plane
     # nodes, which are already excluded by their NoSchedule taint.
     nodeSelector:
-      ate.dev/substrate-version: v1.0.0-rc.3
+      ate.dev/substrate-version: v1.0.1
     # Each worker pod is a standing reservation that hosts actor sandboxes.
     # Sized to fit the workers, which also run the rest of the cluster's
     # workloads.

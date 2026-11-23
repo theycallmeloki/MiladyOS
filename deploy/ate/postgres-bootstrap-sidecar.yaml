@@ -1,0 +1,50 @@
+# Strategic-merge patch for the installer-generated postgres StatefulSet.
+#
+# Adds a sidecar that waits for PostgreSQL, applies the idempotent bootstrap
+# SQL from ate-postgres-bootstrap, then idles. It runs again on every pod
+# restart, so a recreated data volume gets its roles/schema/grants back before
+# ate-api-server gives up retrying.
+#
+#   kubectl apply -f deploy/ate/postgres-bootstrap.yaml
+#   kubectl -n ate-system patch statefulset postgres \
+#     --type=strategic --patch-file deploy/ate/postgres-bootstrap-sidecar.yaml
+#
+# Patching rolls the StatefulSet (PostgreSQL restarts). To repair a live
+# cluster without a restart, run deploy/ate/postgres-bootstrap.sql over the
+# pod's local socket instead:
+#   kubectl -n ate-system exec -i postgres-0 -c postgres -- \
+#     psql -U postgres -d atepg -v ON_ERROR_STOP=1 < deploy/ate/postgres-bootstrap.sql
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: ate-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: bootstrap
+          image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              until pg_isready -h /var/run/postgresql -q; do sleep 2; done
+              psql -h /var/run/postgresql -U postgres -d atepg -v ON_ERROR_STOP=1 -f /bootstrap/bootstrap.sql
+              echo "ate-postgres-bootstrap: applied"
+              exec sleep infinity
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          volumeMounts:
+            - name: bootstrap
+              mountPath: /bootstrap
+              readOnly: true
+            # The postgres container's Unix socket lives in this shared
+            # emptyDir; without it the sidecar looks at an empty image path.
+            - name: socket
+              mountPath: /var/run/postgresql
+      volumes:
+        - name: bootstrap
+          configMap:
+            name: ate-postgres-bootstrap

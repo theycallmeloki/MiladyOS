@@ -1,13 +1,13 @@
 # ax control plane (Agent Executor) — ax-system.
 #
 # Derived from google/ax deploy/ax-server.yaml + deploy/postgres.yaml at
-# 2187dd4 with these changes for this cluster:
-#   - image pinned to the digest kaniko built into our registry
+# v0.4.0-rc.1 with these changes for this cluster:
+#   - image pinned to the digest Docker Buildx pushed to our registry
 #   - ax-server flags/env for our object store and Substrate endpoint
 #   - the dev-only PostgreSQL password fixed in a Secret instead of `make
 #     deploy-postgres` generating one
 #
-# ax at 2187dd4 stores task/workflow state in PostgreSQL and no longer needs
+# ax at v0.4.0-rc.1 stores task/workflow state in PostgreSQL and no longer needs
 # Redis: the Redis Streams queue and its controller were removed upstream, so
 # the ax-redis Deployment/Service this file used to carry are gone.
 #
@@ -162,7 +162,7 @@ spec:
       serviceAccountName: ax-server
       containers:
         - name: ax-server
-          image: miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-server@sha256:fed30d335a5fd45bd6bb423cb328b36da47a135e84c393880cfcfbc36207cb81
+          image: miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-server@sha256:62cb6d44debdf00307c8046da70c94d950a38e1a7d97037847a30aa262e67f79
           imagePullPolicy: IfNotPresent
           args:
             - "--addr=:8080"
@@ -183,7 +183,7 @@ spec:
             - name: ATENET_ROUTER_ADDR
               value: "https://atenet-router.ate-system.svc.cluster.local:443"
             - name: AX_DEFAULT_TASK_IMAGE
-              value: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:934ad7d7b282a8d7823d287bcc481bfcbbd4930a380a7eb381663f71d8622f83"
+              value: "miladyosregistry.transparentlyrotatableproxy.site/ax-images/ax-task-runner@sha256:a7fa1dfd2d8da76e8a6b7eb305338479d3b5c00e1ca48056c9a1da69bf21dadd"
           ports:
             - containerPort: 8080
               name: http

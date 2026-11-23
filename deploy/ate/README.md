@@ -8,8 +8,8 @@ Pinned versions:
 
 | Thing | Revision | Images |
 |---|---|---|
-| Substrate | `0b635b80` (module `go.ate.dev/substrate`) | upstream release **v1.0.0-rc.3**, `ghcr.io/agent-substrate/substrate/<component>:v1.0.0-rc.3` |
-| ax | `2187dd4` | built here with in-cluster kaniko, `ax-images/ax-server`, `ax-images/ax-task-runner` |
+| Substrate | `v1.0.1` (module `go.ate.dev/substrate`) | upstream release **v1.0.1**, `ghcr.io/agent-substrate/substrate/<component>:v1.0.1` |
+| ax | `v0.4.0-rc.1` | built here with Docker Buildx, `ax-images/ax-server`, `ax-images/ax-task-runner` |
 
 Upstream releases images now, so Substrate is **not** built from source. The
 release publishes `ate-idp-server`, `ateapi`, `atecontroller`, `atelet`,
@@ -59,12 +59,19 @@ go build -o bin/kubectl-ate ./cmd/kubectl-ate    # for atespaces and access poli
 #    gcloud get-credentials path.
 ./bin/ate-setup deploy ate-system \
   --kubeconfig ~/.kube/ate-rc3-config --context admin@miladyos --no-dev-env \
-  --image-repo ghcr.io/agent-substrate/substrate --image-tag v1.0.0-rc.3 \
+  --image-repo ghcr.io/agent-substrate/substrate --image-tag v1.0.1 \
   --credential-provider '{"name":"k8s.io"}' \
   --snapshot-location gs://ate-snapshots/ --storage-bucket-name ate-snapshots \
   --snapshot-transfer-gsa-name unused --gcp-project-id unused \
   --sandbox-classes gvisor --rollout-timeout 420s \
   --ingress-allowed-spiffe-ids spiffe://cluster.local/ns/ax-system/sa/ax-server
+
+# 4b. make a recreated PostgreSQL volume self-heal. ate-setup creates the
+#     Substrate/OpenFGA roles and grants once; Longhorn losing the volume leaves
+#     a fresh database and crash-looping ate-api-server until they exist.
+kubectl apply -f deploy/ate/postgres-bootstrap.yaml
+kubectl -n ate-system patch statefulset postgres \
+  --type=strategic --patch-file deploy/ate/postgres-bootstrap-sidecar.yaml
 
 # 5. re-apply the authentication fix if the installer rewrote it (it logs
 #    "Rewriting ate-system/ate-api-authentication" when it does)
@@ -122,22 +129,23 @@ curl -sI -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
   tr -d '\r' | grep -i docker-content-digest
 ```
 
-Current digests (all built from ax `2187dd4`):
+Current digests (all built from ax `v0.4.0-rc.1`):
 
 | Image | Digest |
 |---|---|
-| `ax-images/ax-server` | `sha256:fed30d335a5fd45bd6bb423cb328b36da47a135e84c393880cfcfbc36207cb81` |
-| `ax-images/ax-task-runner` | `sha256:934ad7d7b282a8d7823d287bcc481bfcbbd4930a380a7eb381663f71d8622f83` |
+| `ax-images/ax-server` | `sha256:62cb6d44debdf00307c8046da70c94d950a38e1a7d97037847a30aa262e67f79` |
+| `ax-images/ax-task-runner` | `sha256:a7fa1dfd2d8da76e8a6b7eb305338479d3b5c00e1ca48056c9a1da69bf21dadd` |
 
 `deploy/ax/ax-system.yaml` pins ax-server; `AX_DEFAULT_TASK_IMAGE` there pins
 the task-runner, and the task examples (`simple-task.yaml`,
 `milady-improve.yaml`, `sandman-mcp.yaml`) pin it themselves because a Task
 image must be digest-pinned.
 
-ax at `2187dd4` keeps its state in PostgreSQL (`--store`, `ax-postgres`) and no
-longer uses Redis — the Redis Streams queue was removed upstream. `ax-system`
-also needs the `ate.dev/api-access=true` namespace label so
-ate-api-server's NetworkPolicy admits it.
+ax at `v0.4.0-rc.1` keeps its state in PostgreSQL (`--store`, `ax-postgres`) and
+no longer uses Redis — the Redis Streams queue was removed upstream. Tasks set
+their image under `spec.profile.image`. `ax-system` also needs the
+`ate.dev/api-access=true` namespace label so ate-api-server's NetworkPolicy
+admits it.
 
 ## Why substrate is patched
 

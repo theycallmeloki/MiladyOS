@@ -1,0 +1,47 @@
+# SQL for the postgres bootstrap sidecar (postgres-bootstrap-sidecar.yaml).
+# Keep in sync with postgres-bootstrap.sql, the file to run by hand.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ate-postgres-bootstrap
+  namespace: ate-system
+data:
+  bootstrap.sql: |
+    DO $$ BEGIN
+      CREATE ROLE substrate_owner NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    DO $$ BEGIN
+      CREATE ROLE substrate_readwrite NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    DO $$ BEGIN
+      CREATE ROLE substrate_owner_user LOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    DO $$ BEGIN
+      CREATE ROLE substrate_readwrite_user LOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    GRANT substrate_owner TO substrate_owner_user;
+    GRANT substrate_readwrite TO substrate_readwrite_user;
+
+    GRANT CONNECT, CREATE ON DATABASE atepg TO substrate_owner;
+    GRANT CONNECT ON DATABASE atepg TO substrate_readwrite;
+
+    CREATE SCHEMA IF NOT EXISTS substrate AUTHORIZATION substrate_owner;
+
+    GRANT USAGE ON SCHEMA substrate TO substrate_owner_user, substrate_readwrite, substrate_readwrite_user;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA substrate TO substrate_readwrite;
+    GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA substrate TO substrate_readwrite;
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA substrate TO substrate_readwrite;
+
+    ALTER DEFAULT PRIVILEGES FOR ROLE substrate_owner IN SCHEMA substrate
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO substrate_readwrite;
+    ALTER DEFAULT PRIVILEGES FOR ROLE substrate_owner IN SCHEMA substrate
+      GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO substrate_readwrite;
+    ALTER DEFAULT PRIVILEGES FOR ROLE substrate_owner IN SCHEMA substrate
+      GRANT EXECUTE ON FUNCTIONS TO substrate_readwrite;
+
+    ALTER DATABASE atepg SET search_path TO substrate, public;
+    ALTER ROLE substrate_owner SET search_path TO substrate, public;
+    ALTER ROLE substrate_readwrite SET search_path TO substrate, public;
+    ALTER ROLE substrate_owner_user SET search_path TO substrate, public;
+    ALTER ROLE substrate_readwrite_user SET search_path TO substrate, public;
