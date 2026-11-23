@@ -212,6 +212,20 @@ which reads them anonymously from the public gVisor releases bucket.
   on device` — which reads like a full disk but is not. Apply
   `deploy/ate/gvisor-userns-sysctl.yaml` to every node that hosts workers.
 
+## TrueNAS NFS fallback
+
+When Longhorn attach is degraded, the existing TrueNAS NFS export can hold the
+Substrate and AX PostgreSQL data:
+
+```bash
+kubectl apply -f deploy/ate/truenas-postgres.yaml
+```
+
+This creates static PV/PVC pairs `truenas-ate-postgres` /
+`postgres-data-nfs` and `truenas-ax-postgres` /
+`ax-postgres-data-nfs`. The PVCs must be mounted by the PostgreSQL workloads;
+they do not replace the Longhorn StorageClass for other PVCs.
+
 ## Verify
 
 ```bash

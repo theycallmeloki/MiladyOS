@@ -1,0 +1,83 @@
+# Static TrueNAS NFS volumes for the Substrate and AX PostgreSQL instances.
+#
+# The cluster's default StorageClass is Longhorn. When Longhorn is degraded or
+# its CSI attach path is overloaded, these static volumes let the two databases
+# use the existing TrueNAS export instead.
+#
+# Prerequisite on the TrueNAS host: the export
+# /mnt/neochibistore/k8s-registry already exists with maproot=root. Create the
+# two subdirectories and let the PostgreSQL uid write them:
+#
+#   mkdir -p /mnt/neochibistore/k8s-registry/k8s-ate-postgres \
+#            /mnt/neochibistore/k8s-registry/k8s-ax-postgres
+#   chown 70:70 /mnt/neochibistore/k8s-registry/k8s-{ate,ax}-postgres
+#
+# This is NFS, not a block device. It is suitable for the current development
+# install; it is not a substitute for a production PostgreSQL storage design.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: truenas-ate-postgres
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - timeo=600
+    - retrans=2
+  nfs:
+    server: 192.168.1.99
+    path: /mnt/neochibistore/k8s-registry/k8s-ate-postgres
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data-nfs
+  namespace: ate-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: truenas-ate-postgres
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: truenas-ax-postgres
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - timeo=600
+    - retrans=2
+  nfs:
+    server: 192.168.1.99
+    path: /mnt/neochibistore/k8s-registry/k8s-ax-postgres
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ax-postgres-data-nfs
+  namespace: ax-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: truenas-ax-postgres
+  resources:
+    requests:
+      storage: 10Gi
