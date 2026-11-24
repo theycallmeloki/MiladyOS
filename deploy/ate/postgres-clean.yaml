@@ -1,0 +1,103 @@
+# Single healthy Substrate PostgreSQL primary. The previous cluster had two
+# independent postmasters sharing this NFS export, which split actors/tags.
+# Do not run a second pod against this PGDATA; use a real replicated setup
+# (CloudNativePG/Patroni) for database HA.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: truenas-ate-postgres-clean
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs:
+    server: 192.168.1.99
+    path: /mnt/neochibistore/k8s-registry/k8s-ate-postgres/clean
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-clean-data
+  namespace: ate-system
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  volumeName: truenas-ate-postgres-clean
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-clean
+  namespace: ate-system
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-clean
+      role: postgres-primary
+  template:
+    metadata:
+      labels:
+        app: postgres-clean
+        role: postgres-primary
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: postgres
+        image: postgres:18-alpine
+        imagePullPolicy: IfNotPresent
+        args: ["-c", "listen_addresses=0.0.0.0"]
+        env:
+        - name: POSTGRES_DB
+          value: atepg
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_HOST_AUTH_METHOD
+          value: trust
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        ports:
+        - containerPort: 5432
+          name: postgres
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres", "-d", "atepg"]
+          initialDelaySeconds: 5
+          periodSeconds: 2
+        livenessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres", "-d", "atepg"]
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: postgres-clean-data
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-clean
+  namespace: ate-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: postgres-clean

@@ -1,0 +1,11 @@
+# Keep at least one gVisor worker available during voluntary disruptions.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gvisor-workers
+  namespace: ate-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      ate.dev/worker-pool: gvisor-workers

@@ -1,0 +1,13 @@
+# AX control-plane availability guard. The ax-server pod is a singleton today;
+# this prevents voluntary eviction from taking the task API down without a
+# replacement.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ax-server
+  namespace: ax-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ax-server
