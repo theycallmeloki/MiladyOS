@@ -1,0 +1,29 @@
+# Static TrueNAS NFS volume for the Loki single-binary log store.
+# The old Longhorn volume remains for recovery; new logs use this claim.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: loki-data-nfs
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs:
+    server: 192.168.1.99
+    path: /mnt/neochibistore/k8s-registry/loki
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: storage-loki-nfs
+  namespace: monitoring
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  volumeName: loki-data-nfs
+  resources:
+    requests:
+      storage: 20Gi

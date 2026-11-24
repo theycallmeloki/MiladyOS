@@ -4,7 +4,7 @@ deploymentMode: SingleBinary
 singleBinary:
   replicas: 1
   persistence:
-    storageClass: longhorn
+    existingClaim: storage-loki-nfs
     size: 20Gi
 
 # Disable components not needed in SingleBinary mode

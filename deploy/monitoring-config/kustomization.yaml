@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - grafana-ga4-sealed.yaml
   - grafana-nfs-pvc.yaml
+  - loki-nfs-pvc.yaml
