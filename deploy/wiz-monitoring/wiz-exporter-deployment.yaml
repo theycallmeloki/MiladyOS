@@ -99,7 +99,7 @@ spec:
             path: exporter.py
       - name: data
         persistentVolumeClaim:
-          claimName: wiz-exporter-data
+          claimName: wiz-exporter-data-nfs
 ---
 apiVersion: v1
 kind: Service

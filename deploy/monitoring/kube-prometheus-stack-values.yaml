@@ -66,8 +66,13 @@ prometheus:
     retention: 365d
     storageSpec:
       volumeClaimTemplate:
+        metadata:
+          name: prometheus-data-nfs
         spec:
-          storageClassName: longhorn
+          storageClassName: ""
+          selector:
+            matchLabels:
+              app: prometheus-nfs
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
@@ -82,8 +87,13 @@ alertmanager:
   alertmanagerSpec:
     storage:
       volumeClaimTemplate:
+        metadata:
+          name: alertmanager-data-nfs
         spec:
-          storageClassName: longhorn
+          storageClassName: ""
+          selector:
+            matchLabels:
+              app: alertmanager-nfs
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:

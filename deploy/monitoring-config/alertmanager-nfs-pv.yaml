@@ -1,0 +1,18 @@
+# Static TrueNAS NFS volume for Alertmanager state.
+# The old Longhorn volume remains untouched for recovery.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: monitoring-alertmanager-nfs
+  labels:
+    app: alertmanager-nfs
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs:
+    server: 192.168.1.99
+    path: /mnt/neochibistore/k8s-registry/monitoring-alertmanager

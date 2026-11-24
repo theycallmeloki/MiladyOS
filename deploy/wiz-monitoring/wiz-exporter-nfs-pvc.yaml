@@ -1,0 +1,28 @@
+# Static TrueNAS NFS volume for the Wiz exporter scratch directory.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wiz-exporter-nfs
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs:
+    server: 192.168.1.99
+    path: /mnt/neochibistore/k8s-registry/wiz-exporter
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wiz-exporter-data-nfs
+  namespace: monitoring
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  volumeName: wiz-exporter-nfs
+  resources:
+    requests:
+      storage: 1Gi
