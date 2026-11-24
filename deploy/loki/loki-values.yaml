@@ -4,6 +4,7 @@ deploymentMode: SingleBinary
 singleBinary:
   replicas: 1
   persistence:
+    enabled: true
     existingClaim: storage-loki-nfs
     size: 20Gi
 
