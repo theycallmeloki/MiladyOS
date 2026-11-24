@@ -35,7 +35,8 @@ grafana:
     type: Recreate
   persistence:
     enabled: true
-    storageClassName: longhorn
+    existingClaim: monitoring-grafana-nfs
+    storageClassName: ""
     size: 5Gi
   ingress:
     enabled: true
