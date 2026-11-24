@@ -212,7 +212,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} [1m]))",
+              "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [1m]))",
               "legendFormat": "turns / minute",
               "datasource": { "type": "loki", "uid": "loki" }
             },
@@ -279,7 +279,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (model) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} |= \"has_tool_calls\" [5m]))",
+              "expr": "sum by (model) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | has_tool_calls != \"\" [5m]))",
               "legendFormat": "{{model}}",
               "datasource": { "type": "loki", "uid": "loki" }
             }
