@@ -32,7 +32,7 @@ data:
           "id": 1,
           "type": "logs",
           "title": "Agent trajectory (prompt → tool call → result → answer)",
-          "datasource": { "type": "loki" },
+          "datasource": { "type": "loki", "uid": "loki" },
           "gridPos": { "h": 14, "w": 24, "x": 0, "y": 0 },
           "options": {
             "showTime": true,
@@ -45,7 +45,7 @@ data:
             {
               "refId": "A",
               "expr": "{namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" | conversation_id =~ \"$conversation\"",
-              "datasource": { "type": "loki" }
+              "datasource": { "type": "loki", "uid": "loki" }
             }
           ]
         },
@@ -53,14 +53,14 @@ data:
           "id": 2,
           "type": "timeseries",
           "title": "Completions per model",
-          "datasource": { "type": "loki" },
+          "datasource": { "type": "loki", "uid": "loki" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
           "targets": [
             {
               "refId": "A",
               "expr": "sum by (model) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [5m]))",
               "legendFormat": "{{model}}",
-              "datasource": { "type": "loki" }
+              "datasource": { "type": "loki", "uid": "loki" }
             }
           ]
         },
@@ -68,20 +68,20 @@ data:
           "id": 3,
           "type": "timeseries",
           "title": "Tool calls vs plain turns",
-          "datasource": { "type": "loki" },
+          "datasource": { "type": "loki", "uid": "loki" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
           "targets": [
             {
               "refId": "A",
               "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} |= \"has_tool_calls\" [5m]))",
               "legendFormat": "tool calls",
-              "datasource": { "type": "loki" }
+              "datasource": { "type": "loki", "uid": "loki" }
             },
             {
               "refId": "B",
               "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [5m]))",
               "legendFormat": "all turns",
-              "datasource": { "type": "loki" }
+              "datasource": { "type": "loki", "uid": "loki" }
             }
           ]
         },
@@ -89,14 +89,14 @@ data:
           "id": 4,
           "type": "logs",
           "title": "Model errors",
-          "datasource": { "type": "loki" },
+          "datasource": { "type": "loki", "uid": "loki" },
           "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
           "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
           "targets": [
             {
               "refId": "A",
               "expr": "{namespace=\"default\", pod=~\"litellm-proxy.*\"} |= \"error\" | json | conversation_id != \"\"",
-              "datasource": { "type": "loki" }
+              "datasource": { "type": "loki", "uid": "loki" }
             }
           ]
         }
