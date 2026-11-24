@@ -18,7 +18,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: storage-loki-nfs
+  name: storage-loki-0
   namespace: monitoring
 spec:
   accessModes: ["ReadWriteOnce"]

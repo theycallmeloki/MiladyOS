@@ -5,7 +5,7 @@ singleBinary:
   replicas: 1
   persistence:
     enabled: true
-    existingClaim: storage-loki-nfs
+    storageClass: ""
     size: 20Gi
 
 # Disable components not needed in SingleBinary mode
