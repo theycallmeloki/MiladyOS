@@ -45,7 +45,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: kaniko-registry-data
+            claimName: kaniko-registry-data-nfs
 ---
 apiVersion: v1
 kind: Service

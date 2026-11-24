@@ -1,0 +1,117 @@
+# Static TrueNAS NFS claims for the in-cluster MiladyOS CI stack.
+# RWX is required because the blue/green controller keeps both ReplicaSets alive
+# briefly during staged replacement. Old Longhorn PVCs remain for rollback.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: miladyos-home-nfs
+spec:
+  capacity: { storage: 30Gi }
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs: { server: 192.168.1.99, path: /mnt/neochibistore/k8s-registry/miladyos-home }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: miladyos-home-nfs
+  namespace: miladyos
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: ""
+  volumeName: miladyos-home-nfs
+  resources: { requests: { storage: 30Gi } }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: miladyos-docker-storage-nfs
+spec:
+  capacity: { storage: 20Gi }
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs: { server: 192.168.1.99, path: /mnt/neochibistore/k8s-registry/miladyos-docker-storage }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: miladyos-docker-storage-nfs
+  namespace: miladyos
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: ""
+  volumeName: miladyos-docker-storage-nfs
+  resources: { requests: { storage: 20Gi } }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: miladyos-registry-data-nfs
+spec:
+  capacity: { storage: 10Gi }
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs: { server: 192.168.1.99, path: /mnt/neochibistore/k8s-registry/miladyos-registry }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: miladyos-registry-data-nfs
+  namespace: miladyos
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: ""
+  volumeName: miladyos-registry-data-nfs
+  resources: { requests: { storage: 10Gi } }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: miladyos-kube-config-nfs
+spec:
+  capacity: { storage: 100Mi }
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs: { server: 192.168.1.99, path: /mnt/neochibistore/k8s-registry/miladyos-kube-config }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: miladyos-kube-config-nfs
+  namespace: miladyos
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: ""
+  volumeName: miladyos-kube-config-nfs
+  resources: { requests: { storage: 100Mi } }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: miladyos-pachyderm-config-nfs
+spec:
+  capacity: { storage: 100Mi }
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs: { server: 192.168.1.99, path: /mnt/neochibistore/k8s-registry/miladyos-pachyderm-config }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: miladyos-pachyderm-config-nfs
+  namespace: miladyos
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: ""
+  volumeName: miladyos-pachyderm-config-nfs
+  resources: { requests: { storage: 100Mi } }

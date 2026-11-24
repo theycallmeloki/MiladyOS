@@ -108,11 +108,11 @@ data:
         """Check MiladyOS PVCs"""
         try:
             pvc_names = [
-                "miladyos-home-pvc",
-                "docker-storage-pvc", 
-                "registry-data-pvc",
-                "miladyos-kube-config-pvc",
-                "miladyos-pachyderm-config-pvc"
+                "miladyos-home-nfs",
+                "miladyos-docker-storage-nfs",
+                "miladyos-registry-data-nfs",
+                "miladyos-kube-config-nfs",
+                "miladyos-pachyderm-config-nfs"
             ]
             
             for pvc_name in pvc_names:

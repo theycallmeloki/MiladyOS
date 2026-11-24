@@ -111,10 +111,10 @@ spec:
       volumes:
       - name: miladyos-home
         persistentVolumeClaim:
-          claimName: miladyos-home-pvc
+          claimName: miladyos-home-nfs
       - name: docker-storage
         persistentVolumeClaim:
-          claimName: docker-storage-pvc
+          claimName: miladyos-docker-storage-nfs
       - name: docker-run
         emptyDir: {}
       - name: varlog
@@ -123,13 +123,13 @@ spec:
         emptyDir: {}
       - name: kube-config
         persistentVolumeClaim:
-          claimName: miladyos-kube-config-pvc
+          claimName: miladyos-kube-config-nfs
       - name: pachyderm-config
         persistentVolumeClaim:
-          claimName: miladyos-pachyderm-config-pvc
+          claimName: miladyos-pachyderm-config-nfs
       - name: registry-data
         persistentVolumeClaim:
-          claimName: registry-data-pvc
+          claimName: miladyos-registry-data-nfs
   service:
     metadata:
       name: miladyos
