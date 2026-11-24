@@ -33,6 +33,12 @@ spec:
       containers:
         - name: registry
           image: registry:2.8.3
+          env:
+            # Allow Registry v2 manifest deletion so image tags can be
+            # cleaned up instead of accumulating forever. Blob reclamation
+            # still requires an explicit garbage-collect pass.
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
           ports:
             - containerPort: 5000
           volumeMounts:
