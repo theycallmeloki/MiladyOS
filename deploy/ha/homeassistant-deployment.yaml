@@ -126,7 +126,7 @@ spec:
       volumes:
         - name: homeassistant
           persistentVolumeClaim:
-            claimName: homeassistant
+            claimName: homeassistant-nfs
         - name: ha-config
           configMap:
             name: ha-configuration

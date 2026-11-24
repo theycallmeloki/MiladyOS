@@ -1,0 +1,24 @@
+# Static TrueNAS NFS volume for the Home Assistant /config tree.
+# The old Longhorn PVC remains for rollback.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: homeassistant-nfs
+spec:
+  capacity: { storage: 10Gi }
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: ["nfsvers=4.1", "hard", "timeo=600", "retrans=2"]
+  nfs: { server: 192.168.1.99, path: /mnt/neochibistore/k8s-registry/homeassistant-config }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homeassistant-nfs
+  namespace: homeassistant
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  volumeName: homeassistant-nfs
+  resources: { requests: { storage: 10Gi } }
