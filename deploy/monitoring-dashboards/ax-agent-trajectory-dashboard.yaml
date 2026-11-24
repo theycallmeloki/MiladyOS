@@ -33,7 +33,7 @@ data:
           "type": "logs",
           "title": "Agent trajectory (prompt → tool call → result → answer)",
           "datasource": { "type": "loki", "uid": "loki" },
-          "gridPos": { "h": 14, "w": 24, "x": 0, "y": 0 },
+          "gridPos": { "h": 14, "w": 24, "x": 0, "y": 4 },
           "options": {
             "showTime": true,
             "wrapLogMessage": true,
@@ -54,7 +54,7 @@ data:
           "type": "timeseries",
           "title": "Completions per model",
           "datasource": { "type": "loki", "uid": "loki" },
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
           "targets": [
             {
               "refId": "A",
@@ -69,7 +69,7 @@ data:
           "type": "timeseries",
           "title": "Tool calls vs plain turns",
           "datasource": { "type": "loki", "uid": "loki" },
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
           "targets": [
             {
               "refId": "A",
@@ -90,7 +90,7 @@ data:
           "type": "logs",
           "title": "Model errors",
           "datasource": { "type": "loki", "uid": "loki" },
-          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
           "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
           "targets": [
             {
@@ -98,6 +98,204 @@ data:
               "expr": "{namespace=\"default\", pod=~\"litellm-proxy.*\"} |= \"error\" | json | conversation_id != \"\"",
               "datasource": { "type": "loki", "uid": "loki" }
             }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Turns",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name" },
+          "targets": [
+            {
+              "refId": "A",
+              "instant": true,
+              "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [$__range]))",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Conversations",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name" },
+          "targets": [
+            {
+              "refId": "A",
+              "instant": true,
+              "expr": "count(count by (conversation_id) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [$__range])))",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Tool calls",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name" },
+          "targets": [
+            {
+              "refId": "A",
+              "instant": true,
+              "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} |= \"has_tool_calls\" [$__range]))",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "stat",
+          "title": "Errors",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name" },
+          "targets": [
+            {
+              "refId": "A",
+              "instant": true,
+              "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} |= \"error\" [$__range]))",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "type": "stat",
+          "title": "Average latency",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+          "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name" },
+          "targets": [
+            {
+              "refId": "A",
+              "instant": true,
+              "expr": "avg_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | unwrap duration_ms [$__range])",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "type": "stat",
+          "title": "Tokens processed",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name" },
+          "targets": [
+            {
+              "refId": "A",
+              "instant": true,
+              "expr": "sum_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | unwrap usage_total_tokens [$__range])",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "Parallel activity",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} [1m]))",
+              "legendFormat": "turns / minute",
+              "datasource": { "type": "loki", "uid": "loki" }
+            },
+            {
+              "refId": "B",
+              "expr": "count(count by (conversation_id) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [1m])))",
+              "legendFormat": "conversations active / minute",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "type": "state-timeline",
+          "title": "Conversation concurrency",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+          "options": { "showValue": "never", "mergeValues": true },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (conversation_id) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [1m]))",
+              "legendFormat": "{{conversation_id}}",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "type": "timeseries",
+          "title": "Latency by model",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 42 },
+          "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (model) (avg_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | unwrap duration_ms [5m]))",
+              "legendFormat": "{{model}}",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "type": "timeseries",
+          "title": "Tokens by model",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 42 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (model) (sum_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | unwrap usage_total_tokens [5m]))",
+              "legendFormat": "{{model}}",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Tool calls by model",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 50 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (model) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} |= \"has_tool_calls\" [5m]))",
+              "legendFormat": "{{model}}",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ]
+        },
+        {
+          "id": 16,
+          "type": "table",
+          "title": "Recent conversations",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 50 },
+          "targets": [
+            {
+              "refId": "A",
+              "instant": true,
+              "expr": "count by (conversation_id, model) (count_over_time({namespace=\"default\", pod=~\"litellm-proxy.*\"} | json | conversation_id != \"\" [$__range]))",
+              "datasource": { "type": "loki", "uid": "loki" }
+            }
+          ],
+          "transformations": [
+            { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "turns" } } }
           ]
         }
       ]
